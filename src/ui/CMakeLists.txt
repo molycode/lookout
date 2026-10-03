@@ -30,6 +30,7 @@ target_link_libraries(LktUi
 		Tge::Base
 	PRIVATE
 		Lkt::Browser
+		Lkt::Geo
 		Lkt::Launch
 		Lkt::Query
 		imgui
@@ -51,3 +52,6 @@ LktEmbedFile(LktUi TgeCoreLicence ${PROJECT_SOURCE_DIR}/external/tge-core/LICENS
 LktEmbedFile(LktUi RpmallocLicence ${PROJECT_SOURCE_DIR}/external/tge-core/external/rpmalloc/LICENSE)
 LktEmbedFile(LktUi RobotoLicence ${PROJECT_SOURCE_DIR}/assets/fonts/LICENSE-Roboto.txt)
 LktEmbedFile(LktUi FontAwesomeLicence ${PROJECT_SOURCE_DIR}/assets/fonts/LICENSE-FontAwesome.txt)
+LktEmbedFile(LktUi DbipLicence ${PROJECT_SOURCE_DIR}/assets/licences/dbip-country-lite.txt)
+LktEmbedFile(LktUi FlagIconsLicence ${PROJECT_SOURCE_DIR}/assets/licences/flag-icons.txt)
+LktEmbedFile(LktUi Flags ${PROJECT_SOURCE_DIR}/assets/geo/flags.png)

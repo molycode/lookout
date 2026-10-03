@@ -15,3 +15,4 @@
 #define LKT_ICON_EYE_SLASH "\xef\x81\xb0"
 #define LKT_ICON_TRASH "\xef\x87\xb8"
 #define LKT_ICON_CARET_DOWN "\xef\x83\x97"
+#define LKT_ICON_GLOBE "\xef\x82\xac"

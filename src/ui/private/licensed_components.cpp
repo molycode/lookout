@@ -18,7 +18,9 @@ std::span<SLicensedComponent const> GetLicensedComponents()
 		SLicensedComponent{ "tge-core", "MIT License", Embedded::TgeCoreLicence },
 		SLicensedComponent{ "rpmalloc", "Zero-Clause BSD", Embedded::RpmallocLicence },
 		SLicensedComponent{ "Roboto", "Apache License 2.0", Embedded::RobotoLicence },
-		SLicensedComponent{ "Font Awesome Free", "SIL Open Font License 1.1", Embedded::FontAwesomeLicence }
+		SLicensedComponent{ "Font Awesome Free", "SIL Open Font License 1.1", Embedded::FontAwesomeLicence },
+		SLicensedComponent{ "DB-IP IP to Country Lite", "CC BY 4.0", Embedded::DbipLicence },
+		SLicensedComponent{ "flag-icons", "MIT License", Embedded::FlagIconsLicence }
 	};
 
 	return Components;

@@ -1,4 +1,5 @@
 #include "toolbar.hpp"
+#include "flag_atlas.hpp"
 #include "format_to.hpp"
 #include "frame_intents.hpp"
 #include "icons.hpp"
@@ -7,6 +8,7 @@
 #include "widgets.hpp"
 #include "browser/browser.hpp"
 #include "browser/text_compare.hpp"
+#include "geo/countries.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
@@ -95,6 +97,77 @@ void DrawModFilter(Browser::CBrowser const& browser, Config::SServerFilter const
 		ImGui::EndComboPreview();
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////
+// The caller pushes an ID.
+bool SelectableCountry(uint8_t country, bool isSelected)
+{
+	ImVec2 const position{ ImGui::GetCursorScreenPos() };
+	std::string_view const name{ Geo::GetCountry(country).name };
+	float const textX{ position.x + CFlagAtlas::GetWidth() + ImGui::GetStyle().ItemInnerSpacing.x };
+	bool const isPressed{ ImGui::Selectable("##country", isSelected) };
+	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
+
+	gFlagAtlas.Draw(pDrawList, country, position);
+	pDrawList->AddText(ImVec2{ textX, position.y }, ImGui::GetColorU32(ImGuiCol_Text), name.data(), name.data() + name.size());
+
+	return isPressed;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A saved country that no server is in at the moment still shows, so it can be cleared.
+void DrawCountryFilter(Browser::CBrowser const& browser, Config::SServerFilter const& filter, SFrameIntents& intents)
+{
+	uint8_t const selected{ Geo::FindCountryByCode(filter.country) };
+
+	ImGui::SetNextItemWidth(ImGui::GetFontSize() * 9.0f);
+
+	if (ImGui::BeginCombo("##country", nullptr, static_cast<ImGuiComboFlags>(ImGuiComboFlags_CustomPreview) | ImGuiComboFlags_HeightLarge))
+	{
+		if (ImGui::Selectable("Any country", filter.country.empty()))
+		{
+			Config::SServerFilter changed{ filter };
+
+			changed.country.clear();
+			intents.filter = changed;
+		}
+
+		for (uint8_t const country : browser.GetCountries())
+		{
+			ImGui::PushID(country);
+
+			if (SelectableCountry(country, country == selected))
+			{
+				Config::SServerFilter changed{ filter };
+
+				changed.country = Geo::GetCountry(country).code;
+				intents.filter = changed;
+			}
+
+			ImGui::PopID();
+		}
+
+		ImGui::EndCombo();
+	}
+
+	if (ImGui::BeginComboPreview())
+	{
+		if (selected != Geo::NoCountry)
+		{
+			std::string_view const name{ Geo::GetCountry(selected).name };
+
+			gFlagAtlas.DrawItem(selected);
+			ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+			ImGui::TextUnformatted(name.data(), name.data() + name.size());
+		}
+		else
+		{
+			ImGui::TextUnformatted(filter.country.empty() ? "Any country" : filter.country.c_str());
+		}
+
+		ImGui::EndComboPreview();
+	}
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
@@ -153,6 +226,8 @@ void CToolbar::Draw(Browser::CBrowser const& browser, SFrameIntents& intents)
 	ImGui::SameLine();
 	DrawModFilter(browser, filter, intents);
 	ImGui::SameLine();
+	DrawCountryFilter(browser, filter, intents);
+	ImGui::SameLine();
 
 	bool const wantsSearch{ ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_F, ImGuiInputFlags_RouteGlobal) };
 
@@ -167,7 +242,7 @@ void CToolbar::Draw(Browser::CBrowser const& browser, SFrameIntents& intents)
 
 	ImGui::SetNextItemWidth(hasSearch ? -ImGui::GetFrameHeight() : -FLT_MIN);
 
-	if (ImGui::InputTextWithHint("##search", LKT_ICON_SEARCH "  Names, maps, mods, players", &m_search, ImGuiInputTextFlags_EscapeClearsAll))
+	if (ImGui::InputTextWithHint("##search", LKT_ICON_SEARCH "  Names, maps, mods, countries, players", &m_search, ImGuiInputTextFlags_EscapeClearsAll))
 	{
 		Config::SServerFilter changed{ filter };
 

@@ -22,3 +22,6 @@ container, so that it runs on Ubuntu 22.04, Debian 12 and anything newer. `tools
 ## License
 
 MIT — see `LICENSE`.
+
+Country data: [IP Geolocation by DB-IP](https://db-ip.com), under CC BY 4.0. Flags from
+[flag-icons](https://github.com/lipis/flag-icons), under the MIT License.

@@ -15,4 +15,6 @@ extern std::span<unsigned char const> const TgeCoreLicence;
 extern std::span<unsigned char const> const RpmallocLicence;
 extern std::span<unsigned char const> const RobotoLicence;
 extern std::span<unsigned char const> const FontAwesomeLicence;
+extern std::span<unsigned char const> const DbipLicence;
+extern std::span<unsigned char const> const FlagIconsLicence;
 } // namespace Lkt::Embedded

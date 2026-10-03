@@ -1,4 +1,5 @@
 #include "server_table.hpp"
+#include "flag_atlas.hpp"
 #include "format_to.hpp"
 #include "frame_intents.hpp"
 #include "icons.hpp"
@@ -8,6 +9,7 @@
 #include "theme.hpp"
 #include "theme_colors.hpp"
 #include "browser/browser.hpp"
+#include "geo/countries.hpp"
 #include <tge/assert.hpp>
 #include <imgui.h>
 #include <algorithm>
@@ -18,8 +20,9 @@ namespace Lkt::Ui
 {
 namespace
 {
-constexpr int NumColumns{ 8 };
+constexpr int NumColumns{ 9 };
 constexpr int NameColumn{ 2 };
+constexpr int CountryColumn{ 8 };
 constexpr uint32_t GoodPingMs{ 80 };
 constexpr uint32_t FairPingMs{ 150 };
 
@@ -100,6 +103,8 @@ void SetupColumns(Config::SSortOrder const& saved)
 	// Fitted rather than given a width, so ImGui always saves every column: 1.92.9b misorders a table saved with its sort alone.
 	ImGui::TableSetupColumn("Ping", ImGuiTableColumnFlags_WidthFixed | GetSortFlags(saved, Config::ESortColumn::Ping, true), 0.0f,
 		static_cast<ImGuiID>(Config::ESortColumn::Ping));
+	ImGui::TableSetupColumn(LKT_ICON_GLOBE "##country", iconColumn | GetSortFlags(saved, Config::ESortColumn::Country, true), iconColumnWidth,
+		static_cast<ImGuiID>(Config::ESortColumn::Country));
 	ImGui::TableHeadersRow();
 }
 
@@ -199,11 +204,23 @@ void DrawDetailCells(Browser::SServerEntry const& entry)
 	}
 	else
 	{
-		for (int column{ NameColumn + 1 }; column < NumColumns; ++column)
+		for (int column{ NameColumn + 1 }; column < CountryColumn; ++column)
 		{
 			ImGui::TableNextColumn();
 			DrawText("—", GetThemeColors().textDisabled);
 		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void DrawCountryCell(Browser::SServerEntry const& entry)
+{
+	if (entry.country != Geo::NoCountry)
+	{
+		std::string_view const name{ Geo::GetCountry(entry.country).name };
+
+		gFlagAtlas.DrawItem(entry.country);
+		ImGui::SetItemTooltip("%.*s", static_cast<int>(name.size()), name.data());
 	}
 }
 
@@ -313,6 +330,8 @@ bool DrawRow(Browser::CBrowser const& browser, Browser::SServerEntry const& entr
 	ImGui::TableNextColumn();
 	DrawNameCell(entry);
 	DrawDetailCells(entry);
+	ImGui::TableNextColumn();
+	DrawCountryCell(entry);
 	ImGui::PopID();
 
 	return isDoubleClicked;

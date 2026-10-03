@@ -30,12 +30,11 @@ CELL_WIDTH = 32
 CELL_HEIGHT = 24
 ATLAS_COLUMNS = 16
 
-DBIP_NOTICE = """IP Geolocation by DB-IP (https://db-ip.com)
-
-Lookout's country data is DB-IP's IP to Country Lite database, edition {month}, licensed under the Creative Commons
-Attribution 4.0 International License (https://creativecommons.org/licenses/by/4.0/). Lookout keeps only its IPv4
-ranges, converted to a compact lookup table.
-"""
+# One line per paragraph, as the About dialog wraps them itself.
+DBIP_NOTICE = ("IP Geolocation by DB-IP (https://db-ip.com)\n\n"
+	"Lookout's country data is DB-IP's IP to Country Lite database, edition {month}, licensed under the Creative Commons "
+	"Attribution 4.0 International License (https://creativecommons.org/licenses/by/4.0/). Lookout keeps only its IPv4 "
+	"ranges, converted to a compact lookup table.\n")
 
 FLAGS_NOTICE = """Flags from flag-icons {tag} (https://github.com/lipis/flag-icons), rendered to bitmaps.
 

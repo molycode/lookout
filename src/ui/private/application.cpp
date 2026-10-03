@@ -1,6 +1,7 @@
 #include "ui/application.hpp"
 #include "embedded_fonts.hpp"
 #include "file_dialog.hpp"
+#include "flag_atlas.hpp"
 #include "loggers.hpp"
 #include "main_window.hpp"
 #include "theme.hpp"
@@ -248,6 +249,7 @@ void CApplication::Terminate()
 
 	if (m_pRenderer != nullptr)
 	{
+		gFlagAtlas.Terminate();
 		SDL_DestroyRenderer(m_pRenderer);
 		m_pRenderer = nullptr;
 	}
@@ -301,6 +303,8 @@ bool CApplication::CreateWindowAndRenderer(Config::SWindowSettings const& window
 			{
 				gLog.Warning("Cannot enable vsync, frames are paced by the event timeout only: {}", SDL_GetError());
 			}
+
+			gFlagAtlas.Initialize(m_pRenderer);
 		}
 		else
 		{

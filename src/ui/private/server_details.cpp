@@ -1,4 +1,5 @@
 #include "server_details.hpp"
+#include "flag_atlas.hpp"
 #include "format_to.hpp"
 #include "frame_intents.hpp"
 #include "icons.hpp"
@@ -8,6 +9,7 @@
 #include "theme.hpp"
 #include "theme_colors.hpp"
 #include "browser/browser.hpp"
+#include "geo/countries.hpp"
 #include <imgui.h>
 #include <array>
 #include <string_view>
@@ -77,6 +79,14 @@ void DrawSummary(Browser::SServerEntry const& entry, uint64_t key, SFrameIntents
 	}
 
 	ImGui::SetItemTooltip("Copy the address");
+
+	if (entry.country != Geo::NoCountry)
+	{
+		gFlagAtlas.DrawItem(entry.country);
+		ImGui::SameLine();
+		DrawDisabledText(Geo::GetCountry(entry.country).name);
+		ImGui::SetItemTooltip("IP Geolocation by DB-IP");
+	}
 
 	if (entry.state == Browser::EServerState::Online)
 	{
