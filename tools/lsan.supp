@@ -1,0 +1,7 @@
+# Mesa's EGL driver allocates once under pthread_once and never frees it; it is unloaded by exit, so its own
+# frames are unnamed and only the SDL caller identifies it.
+leak:SDL_EGL_LoadLibrary
+
+# A DNS lookup glibc cannot cancel at shutdown keeps writing into its request, so the engine leaves it to glibc on
+# purpose; this also covers the addrinfo glibc hangs off it.
+leak:Lkt::Net::CQueryPump::ResolveMasters

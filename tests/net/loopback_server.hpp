@@ -1,0 +1,38 @@
+#pragma once
+
+#include "query/server_address.hpp"
+#include <tge/non_copyable.hpp>
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <thread>
+#include <vector>
+
+namespace Lkt::Fixtures
+{
+// A game server on 127.0.0.1 that answers every datagram with one fixed reply, or stays silent without one.
+class CLoopbackServer final : private Tge::SNoCopyNoMove
+{
+public:
+
+	CLoopbackServer() = default;
+	~CLoopbackServer() = default;
+
+	bool Start(std::vector<std::byte> reply);
+	void Stop();
+
+	Query::SServerAddress GetAddress() const;
+	uint32_t GetNumRequests() const;
+
+private:
+
+	void Serve();
+
+	int m_descriptor{ -1 };
+	uint16_t m_port{ 0 };
+	std::vector<std::byte> m_reply;
+	std::atomic<bool> m_isServing{ false };
+	std::atomic<uint32_t> m_numRequests{ 0 };
+	std::thread m_thread;
+};
+} // namespace Lkt::Fixtures

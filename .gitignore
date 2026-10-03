@@ -1,0 +1,46 @@
+# Build directories
+build/
+cmake-build-*/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+CMakeUserPresets.json
+
+# Build output
+*.o
+*.lo
+*.slo
+*.ko
+*.a
+*.la
+*.so
+*.so.*
+*.log
+
+# Release output of tools/build-release.sh
+dist/
+
+# IDE and editor files
+.vscode/
+.idea/
+.qtcreator/
+CMakeLists.txt.user
+*.autosave
+*.user
+*.creator.user*
+*.swp
+*.swo
+*~
+
+# Temporary files
+__pycache__/
+*.tmp
+*.bak
+*.cache
+.cache/

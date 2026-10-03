@@ -1,0 +1,17 @@
+#pragma once
+
+// Font Awesome 6 solid, merged into the UI font. Macros, so labels join them as literals and allocate nothing.
+#define LKT_ICON_STAR "\xef\x80\x85"
+#define LKT_ICON_LOCK "\xef\x80\xa3"
+#define LKT_ICON_ROTATE "\xef\x80\xa1"
+#define LKT_ICON_PLAY "\xef\x81\x8b"
+#define LKT_ICON_COPY "\xef\x83\x85"
+#define LKT_ICON_PLUS "\xef\x81\xa7"
+#define LKT_ICON_SEARCH "\xef\x80\x82"
+#define LKT_ICON_WARNING "\xef\x81\xb1"
+#define LKT_ICON_XMARK "\xef\x80\x8d"
+#define LKT_ICON_GEAR "\xef\x80\x93"
+#define LKT_ICON_EYE "\xef\x81\xae"
+#define LKT_ICON_EYE_SLASH "\xef\x81\xb0"
+#define LKT_ICON_TRASH "\xef\x87\xb8"
+#define LKT_ICON_CARET_DOWN "\xef\x83\x97"

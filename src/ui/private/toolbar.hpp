@@ -1,0 +1,42 @@
+#pragma once
+
+#include "query/game.hpp"
+#include <tge/non_copyable.hpp>
+#include <string>
+
+namespace Lkt
+{
+namespace Browser
+{
+class CBrowser;
+} // namespace Browser
+
+namespace Config
+{
+struct SServerFilter;
+} // namespace Config
+
+namespace Ui
+{
+struct SFrameIntents;
+
+class CToolbar final : private Tge::SNoCopyNoMove
+{
+public:
+
+	CToolbar() = default;
+	~CToolbar() = default;
+
+	void Draw(Browser::CBrowser const& browser, SFrameIntents& intents);
+
+private:
+
+	void DrawClearButton(Config::SServerFilter const& filter, SFrameIntents& intents);
+
+	std::string m_search;
+	Query::EGame m_game{ Query::EGame::Kingpin };
+	bool m_hasGame{ false };
+	bool m_shouldFocusSearch{ false };
+};
+} // namespace Ui
+} // namespace Lkt

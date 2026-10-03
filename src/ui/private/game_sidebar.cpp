@@ -1,0 +1,204 @@
+#include "game_sidebar.hpp"
+#include "format_to.hpp"
+#include "frame_intents.hpp"
+#include "icons.hpp"
+#include "theme.hpp"
+#include "theme_colors.hpp"
+#include "widgets.hpp"
+#include "browser/browser.hpp"
+#include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
+#include <imgui.h>
+#include <imgui_internal.h>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <span>
+#include <string_view>
+
+namespace Lkt::Ui
+{
+namespace
+{
+constexpr float CardRoundingEm{ 0.5f };
+constexpr float SelectedFillAlpha{ 0.16f };
+constexpr float HoveredSelectedFillAlpha{ 0.22f };
+constexpr float ActiveSelectedFillAlpha{ 0.30f };
+
+//////////////////////////////////////////////////////////////////////////
+void DrawGearButton(Query::SGameDefinition const& game, SFrameIntents& intents)
+{
+	std::array<char, 96> buffer{};
+
+	if (IconButton("##settings", LKT_ICON_GEAR))
+	{
+		intents.openGameSettings = game.game;
+	}
+
+	std::string_view const tooltip{ FormatTo(buffer, "How Lookout starts {}", game.name) };
+
+	ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The selected card is a muted amber tint, so its amber name stands out on it.
+ImU32 GetCardFill(bool isSelected, bool isHovered, bool isActive)
+{
+	ImU32 fill{ ImGui::GetColorU32(ImGuiCol_FrameBg) };
+
+	if (isSelected)
+	{
+		ImVec4 const& amber{ GetThemeColors().amber };
+		float alpha{ SelectedFillAlpha };
+
+		if (isActive)
+		{
+			alpha = ActiveSelectedFillAlpha;
+		}
+		else if (isHovered)
+		{
+			alpha = HoveredSelectedFillAlpha;
+		}
+
+		fill = ImGui::GetColorU32(ImVec4{ amber.x, amber.y, amber.z, alpha });
+	}
+	else if (isActive)
+	{
+		fill = ImGui::GetColorU32(ImGuiCol_FrameBgActive);
+	}
+	else if (isHovered)
+	{
+		fill = ImGui::GetColorU32(ImGuiCol_FrameBgHovered);
+	}
+
+	return fill;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A group, so the layout carries on below the card.
+void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const& browser, bool isLastListed, SFrameIntents& intents)
+{
+	SThemeColors const& colors{ GetThemeColors() };
+	ImGuiStyle const& style{ ImGui::GetStyle() };
+	Browser::SGameStatus const& status{ browser.GetStatus(game.game) };
+	bool const isSelected{ game.game == browser.GetSelectedGame() };
+	float const lineHeight{ ImGui::GetTextLineHeight() };
+	ImVec2 const padding{ style.FramePadding };
+	ImVec2 const start{ ImGui::GetCursorScreenPos() };
+	ImVec2 const size{ ImGui::GetContentRegionAvail().x, padding.y * 2.0f + ImGui::GetTextLineHeightWithSpacing() + lineHeight };
+	ImVec2 const text{ start.x + padding.x, start.y + padding.y };
+	float const gearX{ start.x + size.x - padding.x - lineHeight };
+	float const hideX{ gearX - style.ItemInnerSpacing.x - lineHeight };
+	float const spinnerWidth{ status.isRefreshing ? ImGui::CalcTextSize(LKT_ICON_ROTATE).x + style.ItemInnerSpacing.x : 0.0f };
+	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
+	std::array<char, 96> buffer{};
+
+	ImGui::BeginGroup();
+	ImGui::SetNextItemAllowOverlap();
+
+	if (ImGui::InvisibleButton("##game", size, ImGuiButtonFlags_EnableNav) && !isSelected)
+	{
+		intents.selectGame = game.game;
+	}
+
+	bool const isHovered{ ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenOverlappedByItem) };
+
+	pDrawList->AddRectFilled(start, ImVec2{ start.x + size.x, start.y + size.y }, GetCardFill(isSelected, isHovered, ImGui::IsItemActive()),
+		ImGui::GetFontSize() * CardRoundingEm);
+
+	float const nameEnd{ DrawEllipsised(game.name, text, hideX - style.ItemInnerSpacing.x - spinnerWidth, isSelected ? colors.amber : colors.text) };
+
+	if (status.isRefreshing)
+	{
+		pDrawList->AddText(ImVec2{ nameEnd + style.ItemInnerSpacing.x, text.y }, ImGui::GetColorU32(colors.amber), LKT_ICON_ROTATE);
+	}
+
+	std::string_view const counts{ status.hasRefreshed
+		? FormatTo(buffer, "{} servers · {} players", status.numAnswered, status.numPlayers)
+		: std::string_view{ "—" } };
+
+	DrawEllipsised(counts, ImVec2{ text.x, text.y + ImGui::GetTextLineHeightWithSpacing() }, start.x + size.x - padding.x, colors.textDisabled);
+	ImGui::SetCursorScreenPos(ImVec2{ hideX, text.y });
+	ImGui::BeginDisabled(isLastListed);
+
+	if (IconButton("##hide", LKT_ICON_EYE_SLASH))
+	{
+		intents.hideGame = game.game;
+	}
+
+	ImGui::EndDisabled();
+
+	std::string_view const hideTooltip{ isLastListed ? std::string_view{ "One game always stays in the list" } : FormatTo(buffer, "Hide {}", game.name) };
+
+	ImGui::SetItemTooltip("%.*s", static_cast<int>(hideTooltip.size()), hideTooltip.data());
+	ImGui::SetCursorScreenPos(ImVec2{ gearX, text.y });
+	DrawGearButton(game, intents);
+	ImGui::EndGroup();
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Flat and not selectable, since the selected game is always a listed one; inset to line up with the cards' text.
+void DrawHiddenGame(Query::SGameDefinition const& game, SFrameIntents& intents)
+{
+	ImGuiStyle const& style{ ImGui::GetStyle() };
+	float const lineHeight{ ImGui::GetTextLineHeight() };
+	ImVec2 const start{ ImGui::GetCursorScreenPos() };
+	float const gearX{ start.x + ImGui::GetContentRegionAvail().x - style.FramePadding.x - lineHeight };
+	float const showX{ gearX - style.ItemInnerSpacing.x - lineHeight };
+	std::array<char, 96> buffer{};
+
+	DrawEllipsised(game.name, ImVec2{ start.x + style.FramePadding.x, start.y }, showX - style.ItemInnerSpacing.x, GetThemeColors().textDisabled);
+	ImGui::SetCursorScreenPos(ImVec2{ showX, start.y });
+
+	if (IconButton("##show", LKT_ICON_EYE))
+	{
+		intents.showGame = game.game;
+	}
+
+	std::string_view const tooltip{ FormatTo(buffer, "Show {}", game.name) };
+
+	ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
+	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+	DrawGearButton(game, intents);
+}
+} // namespace
+
+//////////////////////////////////////////////////////////////////////////
+void DrawGameSidebar(Browser::CBrowser const& browser, SFrameIntents& intents)
+{
+	std::span<Config::SGameSettings const> const games{ browser.GetSettings().games };
+	size_t const numListed{ static_cast<size_t>(std::ranges::count(games, true, &Config::SGameSettings::isListed)) };
+	size_t const numHidden{ games.size() - numListed };
+
+	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
+	{
+		if (games[static_cast<size_t>(game.game)].isListed)
+		{
+			ImGui::PushID(static_cast<int>(game.game));
+			DrawListedGame(game, browser, numListed == 1, intents);
+			ImGui::PopID();
+		}
+	}
+
+	if (numHidden > 0)
+	{
+		std::array<char, 48> buffer{};
+		std::string_view const label{ (numHidden == 1) ? FormatTo(buffer, "1 hidden game###hidden") : FormatTo(buffer, "{} hidden games###hidden", numHidden) };
+
+		ImGui::Spacing();
+
+		if (ImGui::TreeNodeEx(label.data(), ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth))
+		{
+			for (Query::SGameDefinition const& game : Query::GetGameCatalog())
+			{
+				if (!games[static_cast<size_t>(game.game)].isListed)
+				{
+					ImGui::PushID(static_cast<int>(game.game));
+					DrawHiddenGame(game, intents);
+					ImGui::PopID();
+				}
+			}
+		}
+	}
+}
+} // namespace Lkt::Ui

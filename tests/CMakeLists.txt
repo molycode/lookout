@@ -1,0 +1,31 @@
+file(GLOB_RECURSE LKT_TEST_SOURCES CONFIGURE_DEPENDS "*.cpp" "*.hpp")
+
+LktApp(LookoutTests ${LKT_TEST_SOURCES})
+
+target_compile_definitions(LookoutTests PRIVATE LKT_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+
+# Pure logic private to its module by design, such as the network scheduler or the settings reader; reaching in
+# beats widening an interface for a test.
+target_include_directories(LookoutTests
+	PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		$<TARGET_PROPERTY:LktBrowser,SOURCE_DIR>/private
+		$<TARGET_PROPERTY:LktConfig,SOURCE_DIR>/private
+		$<TARGET_PROPERTY:LktLaunch,SOURCE_DIR>/private
+		$<TARGET_PROPERTY:LktNet,SOURCE_DIR>/private
+		$<TARGET_PROPERTY:LktUi,SOURCE_DIR>/private
+)
+
+target_link_libraries(LookoutTests
+	PRIVATE
+		GTest::gtest
+		Tge::Core
+		Tge::Testing
+		Lkt::Browser
+		Lkt::Config
+		Lkt::Launch
+		Lkt::Net
+		Lkt::Query
+)
+
+add_test(NAME LookoutTests COMMAND LookoutTests)

@@ -1,0 +1,98 @@
+#include "net/loopback_server.hpp"
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <array>
+#include <unistd.h>
+
+namespace Lkt::Fixtures
+{
+namespace
+{
+constexpr uint32_t Loopback{ 0x7F000001 };
+constexpr int PollIntervalMs{ 20 };
+} // namespace
+
+//////////////////////////////////////////////////////////////////////////
+bool CLoopbackServer::Start(std::vector<std::byte> reply)
+{
+	m_reply = std::move(reply);
+	m_descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+
+	sockaddr_in local{};
+
+	local.sin_family = AF_INET;
+	local.sin_addr.s_addr = htonl(Loopback);
+
+	socklen_t localSize{ sizeof(local) };
+	bool const isBound{ m_descriptor >= 0 && bind(m_descriptor, reinterpret_cast<sockaddr const*>(&local), sizeof(local)) == 0
+		&& getsockname(m_descriptor, reinterpret_cast<sockaddr*>(&local), &localSize) == 0 };
+
+	if (isBound)
+	{
+		m_port = ntohs(local.sin_port);
+		m_isServing.store(true, std::memory_order_release);
+		m_thread = std::thread{ [this]() { Serve(); } };
+	}
+
+	return isBound;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CLoopbackServer::Stop()
+{
+	m_isServing.store(false, std::memory_order_release);
+
+	if (m_thread.joinable())
+	{
+		m_thread.join();
+	}
+
+	if (m_descriptor >= 0)
+	{
+		close(m_descriptor);
+		m_descriptor = -1;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+Query::SServerAddress CLoopbackServer::GetAddress() const
+{
+	return Query::SServerAddress{ Loopback, m_port };
+}
+
+//////////////////////////////////////////////////////////////////////////
+uint32_t CLoopbackServer::GetNumRequests() const
+{
+	return m_numRequests.load(std::memory_order_acquire);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Allocates nothing, so it needs no thread setup for tge's allocator.
+void CLoopbackServer::Serve()
+{
+	std::array<std::byte, 2048> buffer{};
+
+	while (m_isServing.load(std::memory_order_acquire))
+	{
+		pollfd descriptor{ m_descriptor, POLLIN, 0 };
+
+		if (poll(&descriptor, 1, PollIntervalMs) > 0)
+		{
+			sockaddr_in sender{};
+			socklen_t senderSize{ sizeof(sender) };
+
+			if (recvfrom(m_descriptor, buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&sender), &senderSize) >= 0)
+			{
+				m_numRequests.fetch_add(1, std::memory_order_acq_rel);
+
+				if (!m_reply.empty())
+				{
+					sendto(m_descriptor, m_reply.data(), m_reply.size(), 0, reinterpret_cast<sockaddr const*>(&sender), senderSize);
+				}
+			}
+		}
+	}
+}
+} // namespace Lkt::Fixtures

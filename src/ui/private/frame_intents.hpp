@@ -1,0 +1,27 @@
+#pragma once
+
+#include "server_action.hpp"
+#include "config/server_filter.hpp"
+#include "config/sort_order.hpp"
+#include "query/game.hpp"
+#include <optional>
+
+namespace Lkt::Ui
+{
+// What the views asked for while drawing. Applied only once every view has drawn, so no span a view holds from the
+// browser changes under it mid-frame.
+struct SFrameIntents final
+{
+	std::optional<Query::EGame> selectGame;
+	std::optional<Query::EGame> hideGame;
+	std::optional<Query::EGame> showGame;
+	std::optional<Query::EGame> openGameSettings;
+	std::optional<Config::SServerFilter> filter;
+	std::optional<Config::SSortOrder> sort;
+	SServerAction action;
+	bool refresh{ false };
+	bool openAddServer{ false };
+	bool openAbout{ false };
+	bool quit{ false };
+};
+} // namespace Lkt::Ui

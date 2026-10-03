@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Lookout
+GenericName=Game Server Browser
+Comment=Find game servers and join them
+Exec=lookout
+TryExec=lookout
+Icon=lookout
+Terminal=false
+Categories=Game;
+Keywords=server;browser;multiplayer;online;
+StartupNotify=true
+StartupWMClass=lookout
