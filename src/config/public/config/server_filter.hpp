@@ -15,6 +15,7 @@ struct SServerFilter final
 	bool showFull{ true };
 	uint32_t maxPingMs{ NoPingLimit };
 	std::string mod;
+	std::string country;
 
 	bool operator==(SServerFilter const&) const = default;
 };

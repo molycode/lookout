@@ -1,5 +1,6 @@
 #include "server_rows.hpp"
 #include "browser/text_compare.hpp"
+#include "geo/countries.hpp"
 #include <algorithm>
 #include <compare>
 
@@ -18,7 +19,23 @@ bool PassesFilter(SServerEntry const& entry, Config::SServerFilter const& filter
 		&& (filter.showEmpty || !isEmpty)
 		&& (filter.showFull || !isFull)
 		&& (filter.maxPingMs == Config::NoPingLimit || entry.pingMs <= filter.maxPingMs)
-		&& (filter.mod.empty() || EqualsIgnoringCase(summary.mod, filter.mod));
+		&& (filter.mod.empty() || EqualsIgnoringCase(summary.mod, filter.mod))
+		&& (filter.country.empty() || (entry.country != Geo::NoCountry && Geo::GetCountry(entry.country).code == filter.country));
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::weak_ordering CompareCountries(uint8_t lhs, uint8_t rhs)
+{
+	bool const isLhsKnown{ lhs != Geo::NoCountry };
+	bool const isRhsKnown{ rhs != Geo::NoCountry };
+	std::weak_ordering order{ isRhsKnown <=> isLhsKnown };
+
+	if (isLhsKnown && isRhsKnown)
+	{
+		order = CompareIgnoringCase(Geo::GetCountry(lhs).name, Geo::GetCountry(rhs).name);
+	}
+
+	return order;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -51,6 +68,9 @@ std::weak_ordering CompareColumn(SServerEntry const& lhs, SServerEntry const& rh
 			break;
 		case Config::ESortColumn::Password:
 			order = lhs.summary.hasPassword <=> rhs.summary.hasPassword;
+			break;
+		case Config::ESortColumn::Country:
+			order = CompareCountries(lhs.country, rhs.country);
 			break;
 	}
 

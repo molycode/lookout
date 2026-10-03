@@ -1,6 +1,7 @@
 #pragma once
 
 #include "browser/server_state.hpp"
+#include "geo/countries.hpp"
 #include "query/server_address.hpp"
 #include "query/server_summary.hpp"
 #include "query/status_reply.hpp"
@@ -16,6 +17,7 @@ struct SServerEntry final
 	Query::SServerAddress address;
 	EServerState state{ EServerState::Pending };
 	uint32_t pingMs{ 0 };
+	uint8_t country{ Geo::NoCountry };
 	Query::SServerSummary summary;
 	Query::SStatusReply reply;
 	std::vector<Query::SStyledText> playerNames;

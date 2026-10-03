@@ -1,6 +1,7 @@
 #include "browser/browser.hpp"
 #include "launcher_choice.hpp"
 #include "loggers.hpp"
+#include "server_countries.hpp"
 #include "server_mods.hpp"
 #include "server_rows.hpp"
 #include "config/first_listed_game.hpp"
@@ -125,6 +126,7 @@ void CBrowser::Update()
 	if (hasChanged[GetSelectedIndex()])
 	{
 		CollectMods(GetEntries(), m_mods);
+		CollectCountries(GetEntries(), m_countries);
 		RebuildRows();
 	}
 
@@ -143,6 +145,7 @@ void CBrowser::SelectGame(Query::EGame game)
 	}
 
 	CollectMods(GetEntries(), m_mods);
+	CollectCountries(GetEntries(), m_countries);
 	RebuildRows();
 }
 
@@ -400,6 +403,12 @@ std::span<uint32_t const> CBrowser::GetRows() const
 std::span<std::string const> CBrowser::GetMods() const
 {
 	return m_mods;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::span<uint8_t const> CBrowser::GetCountries() const
+{
+	return m_countries;
 }
 
 //////////////////////////////////////////////////////////////////////////

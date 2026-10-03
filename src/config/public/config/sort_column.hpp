@@ -14,8 +14,9 @@ enum class ESortColumn : uint8_t
 	Players,
 	Ping,
 	Favourite,
-	Password
+	Password,
+	Country
 };
 
-inline constexpr size_t NumSortColumns{ static_cast<size_t>(ESortColumn::Password) + 1 };
+inline constexpr size_t NumSortColumns{ static_cast<size_t>(ESortColumn::Country) + 1 };
 } // namespace Lkt::Config

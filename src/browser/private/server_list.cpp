@@ -1,4 +1,5 @@
 #include "browser/server_list.hpp"
+#include "geo/countries.hpp"
 #include "query/game_definition.hpp"
 #include "query/styled_text.hpp"
 #include <algorithm>
@@ -21,6 +22,16 @@ std::string BuildSearchText(SServerEntry const& entry)
 	{
 		text += SearchFieldSeparator;
 		text += field;
+	}
+
+	if (entry.country != Geo::NoCountry)
+	{
+		Geo::SCountry const country{ Geo::GetCountry(entry.country) };
+
+		text += SearchFieldSeparator;
+		text += country.code;
+		text += SearchFieldSeparator;
+		text += country.name;
 	}
 
 	for (Query::SStyledText const& name : entry.playerNames)
@@ -148,6 +159,7 @@ SServerEntry& CServerList::AddListed(Query::SServerAddress const& address)
 		SServerEntry entry{};
 
 		entry.address = address;
+		entry.country = Geo::FindCountry(address.ipv4);
 		m_entries.emplace_back(std::move(entry));
 	}
 

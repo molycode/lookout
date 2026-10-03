@@ -65,6 +65,9 @@ constexpr std::string_view ToName(ESortColumn column)
 		case ESortColumn::Password:
 			name = "password";
 			break;
+		case ESortColumn::Country:
+			name = "country";
+			break;
 	}
 
 	return name;
@@ -214,6 +217,7 @@ void ReadFilter(Json const& object, std::string_view path, SServerFilter& filter
 		return isNoLimit || isLimit;
 	});
 	ReadString(object, path, "mod", filter.mod, document);
+	ReadString(object, path, "country", filter.country, document);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -488,6 +492,7 @@ Json WriteFilter(SServerFilter const& filter)
 	object["showFull"] = filter.showFull;
 	object["maxPing"] = std::move(maxPing);
 	object["mod"] = filter.mod;
+	object["country"] = filter.country;
 
 	return object;
 }

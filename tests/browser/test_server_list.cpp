@@ -1,4 +1,5 @@
 #include "browser/server_list.hpp"
+#include "geo/countries.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <gtest/gtest.h>
@@ -10,6 +11,7 @@ namespace
 {
 constexpr Query::SServerAddress First{ 0x2D5E3A3C, 27960 };
 constexpr Query::SServerAddress Second{ 0x2D5E3A3D, 27960 };
+constexpr Query::SServerAddress Resolver{ 0x08080808, 27960 };
 
 //////////////////////////////////////////////////////////////////////////
 Net::SServerAnswered MakeAnswer(Query::EGame game, Query::SServerAddress const& address, std::string gamename)
@@ -319,6 +321,29 @@ TEST(ServerList, SearchTextHoldsDecodedPlayerNames)
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_TRUE(list.GetEntries()[0].searchText.contains("\nBigJoe"));
+}
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerList, ListedServerGetsItsCountry)
+{
+	CServerList list{};
+
+	list.Apply(Query::GetGame(Query::EGame::Quake3), Net::SServersListed{ Query::EGame::Quake3, { Resolver } });
+
+	ASSERT_EQ(list.GetEntries().size(), 1u);
+	EXPECT_EQ(list.GetEntries()[0].country, Geo::FindCountryByCode("US"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerList, SearchTextHoldsTheCountryName)
+{
+	CServerList list{};
+	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+
+	list.Apply(quake3, Net::SServersListed{ Query::EGame::Quake3, { Resolver } });
+	list.Apply(quake3, MakeAnswer(Query::EGame::Quake3, Resolver, "baseq3"));
+
+	ASSERT_EQ(list.GetEntries().size(), 1u);
+	EXPECT_TRUE(list.GetEntries()[0].searchText.contains("\nUnited States of America"));
 }
 } // namespace
 } // namespace Lkt::Browser

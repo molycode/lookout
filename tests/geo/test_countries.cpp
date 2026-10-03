@@ -67,6 +67,22 @@ TEST(Countries, CodesAreUniqueUpperCasePairs)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(Countries, CodesAscend)
+{
+	size_t numUnordered{ 0 };
+
+	for (size_t country{ 1 }; country < GetNumCountries(); ++country)
+	{
+		if (GetCountry(static_cast<uint8_t>(country - 1)).code >= GetCountry(static_cast<uint8_t>(country)).code)
+		{
+			++numUnordered;
+		}
+	}
+
+	EXPECT_EQ(numUnordered, 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(Countries, EveryCountryHasAName)
 {
 	size_t numUnnamed{ 0 };
@@ -89,6 +105,21 @@ TEST(Countries, PublicResolverIsFound)
 
 	ASSERT_NE(country, NoCountry);
 	EXPECT_EQ(GetCountry(country).code, "US");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(Countries, CodeFindsItsCountry)
+{
+	uint8_t const country{ FindCountryByCode("DE") };
+
+	ASSERT_NE(country, NoCountry);
+	EXPECT_EQ(GetCountry(country).name, "Germany");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(Countries, UnknownCodeHasNoCountry)
+{
+	EXPECT_EQ(FindCountryByCode("XX"), NoCountry);
 }
 
 //////////////////////////////////////////////////////////////////////////

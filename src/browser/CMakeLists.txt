@@ -10,6 +10,7 @@ target_include_directories(LktBrowser
 target_link_libraries(LktBrowser
 	PUBLIC
 		Lkt::Config
+		Lkt::Geo
 		Lkt::Launch
 		Lkt::Net
 		Lkt::Query

@@ -38,7 +38,8 @@ SSettings MakeVariedSettings()
 		uint32_t const offset{ static_cast<uint32_t>(index) };
 
 		game.isListed = !isEven;
-		game.filter = SServerFilter{ std::format("search {}", index), isEven, !isEven, 100 + offset, std::format("mod {}", index) };
+		game.filter = SServerFilter{ std::format("search {}", index), isEven, !isEven, 100 + offset, std::format("mod {}", index),
+			std::format("C{}", index) };
 		game.sort = SSortOrder{ SortColumns[index], isEven };
 		game.installs = {
 			SGameInstall{ 1 + offset, std::format("Copy {}", index), EInstallKind::Command, std::format("run-game-{} +connect", index) },
@@ -237,7 +238,8 @@ TEST(SettingsJson, SortColumnNamesAreStable)
 {
 	constexpr std::array<std::pair<std::string_view, ESortColumn>, NumSortColumns> Names{ { { "name", ESortColumn::Name },
 		{ "map", ESortColumn::Map }, { "mod", ESortColumn::Mod }, { "mode", ESortColumn::Mode }, { "players", ESortColumn::Players },
-		{ "ping", ESortColumn::Ping }, { "favourite", ESortColumn::Favourite }, { "password", ESortColumn::Password } } };
+		{ "ping", ESortColumn::Ping }, { "favourite", ESortColumn::Favourite }, { "password", ESortColumn::Password },
+		{ "country", ESortColumn::Country } } };
 
 	for (auto const& [name, column] : Names)
 	{

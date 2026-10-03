@@ -1,4 +1,5 @@
 #include "server_rows.hpp"
+#include "geo/countries.hpp"
 #include <gtest/gtest.h>
 #include <cstdint>
 #include <string>
@@ -146,6 +147,42 @@ TEST(ServerRows, ModFilterIgnoresCase)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(ServerRows, CountryFilterKeepsThatCountry)
+{
+	std::vector<SServerEntry> entries{ MakeOnline(1, "Berlin", 1, 40), MakeOnline(2, "Vienna", 1, 40), MakeOnline(3, "Nowhere", 1, 40) };
+	Config::SServerFilter filter{};
+
+	entries[0].country = Geo::FindCountryByCode("DE");
+	entries[1].country = Geo::FindCountryByCode("AT");
+	filter.country = "DE";
+
+	EXPECT_EQ(Build(entries, filter), (Rows{ 0 }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Switzerland's code sorts before Germany's, its name after.
+TEST(ServerRows, CountrySortsByName)
+{
+	std::vector<SServerEntry> entries{ MakeOnline(1, "Zurich", 1, 40), MakeOnline(2, "Berlin", 1, 40) };
+
+	entries[0].country = Geo::FindCountryByCode("CH");
+	entries[1].country = Geo::FindCountryByCode("DE");
+
+	EXPECT_EQ(Build(entries, {}, Config::SSortOrder{ Config::ESortColumn::Country, true }), (Rows{ 1, 0 }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The unknown one has the lower address, so only the country can put it last.
+TEST(ServerRows, UnknownCountrySortsAfterKnown)
+{
+	std::vector<SServerEntry> entries{ MakeOnline(1, "Nowhere", 1, 40), MakeOnline(2, "Vienna", 1, 40) };
+
+	entries[1].country = Geo::FindCountryByCode("AT");
+
+	EXPECT_EQ(Build(entries, {}, Config::SSortOrder{ Config::ESortColumn::Country, true }), (Rows{ 1, 0 }));
+}
+
+//////////////////////////////////////////////////////////////////////////
 // The second entry has the lower address, so only the column can put the first one ahead.
 TEST(ServerRows, EveryColumnSortsBothWays)
 {
@@ -154,9 +191,11 @@ TEST(ServerRows, EveryColumnSortsBothWays)
 	entries[0].summary.map = "a1";
 	entries[0].summary.mod = "a";
 	entries[0].summary.mode = "Capture";
+	entries[0].country = Geo::FindCountryByCode("AT");
 	entries[1].summary.map = "B2";
 	entries[1].summary.mod = "B";
 	entries[1].summary.mode = "deathmatch";
+	entries[1].country = Geo::FindCountryByCode("DE");
 	entries[1].isFavourite = true;
 	entries[1].summary.hasPassword = true;
 

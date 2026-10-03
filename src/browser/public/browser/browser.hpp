@@ -66,6 +66,7 @@ public:
 	std::span<SServerEntry const> GetEntries() const;
 	std::span<uint32_t const> GetRows() const;
 	std::span<std::string const> GetMods() const;
+	std::span<uint8_t const> GetCountries() const;
 	SServerEntry const* FindEntry(uint64_t key) const;
 	SGameStatus const& GetStatus(Query::EGame game) const;
 	bool IsFavourite(Query::SServerAddress const& address) const;
@@ -94,6 +95,7 @@ private:
 	std::vector<Net::SQueryEvent> m_events;
 	std::vector<uint32_t> m_rows;
 	std::vector<std::string> m_mods;
+	std::vector<uint8_t> m_countries;
 	bool m_isStarted{ false };
 };
 } // namespace Lkt::Browser
