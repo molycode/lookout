@@ -32,6 +32,7 @@ constexpr bool EnsureAscii{ false };
 constexpr bool AllowExceptions{ false };
 constexpr bool IgnoreComments{ true };
 constexpr std::string_view FavouritesKey{ "favourites" };
+constexpr uint32_t MaxAutoRefreshSeconds{ 3600 };
 constexpr std::string_view InstallsKey{ "installs" };
 
 //////////////////////////////////////////////////////////////////////////
@@ -443,6 +444,8 @@ void ReadDocument(Json const& root, SSettingsDocument& document)
 		return pGame != nullptr;
 	});
 
+	ReadUnsigned(root, {}, "autoRefreshSeconds", 0, MaxAutoRefreshSeconds, document.settings.autoRefreshSeconds, document);
+
 	Json const* const pGames{ FindObject(root, {}, "games", document) };
 
 	if (pGames != nullptr)
@@ -555,6 +558,7 @@ std::string WriteSettingsJson(SSettings const& settings)
 	root["window"] = WriteWindow(settings.window);
 	root["game"] = Query::GetGame(settings.selectedGame).key;
 	root["games"] = std::move(games);
+	root["autoRefreshSeconds"] = settings.autoRefreshSeconds;
 
 	// Replacing invalid UTF-8 rather than failing, which without exceptions would be an abort.
 	return root.dump(IndentWidth, IndentCharacter, EnsureAscii, Json::error_handler_t::replace) + '\n';

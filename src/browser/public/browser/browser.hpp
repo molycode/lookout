@@ -1,5 +1,6 @@
 #pragma once
 
+#include "browser/auto_refresh.hpp"
 #include "browser/game_status.hpp"
 #include "browser/install_launcher.hpp"
 #include "browser/launch_state.hpp"
@@ -15,6 +16,7 @@
 #include "launch/launch_environment.hpp"
 #include "launch/launch_error.hpp"
 #include "launch/launch_option.hpp"
+#include "net/clock.hpp"
 #include "net/query_engine.hpp"
 #include "query/game.hpp"
 #include "query/parse_error.hpp"
@@ -54,6 +56,8 @@ public:
 	void SetFilter(Config::SServerFilter const& filter);
 	void SetSort(Config::SSortOrder const& sort);
 	void SetWindowSettings(Config::SWindowSettings const& window);
+	void SetAutoRefresh(uint32_t seconds);
+	void SetAutoRefreshPaused(bool isPaused);
 	void AddInstall(Query::EGame game, Config::EInstallKind kind, std::string_view location);
 	void SetInstallName(Query::EGame game, uint32_t id, std::string_view name);
 	void SetInstallCommand(Query::EGame game, uint32_t id, std::string_view command);
@@ -67,6 +71,8 @@ public:
 	std::span<uint32_t const> GetRows() const;
 	std::span<std::string const> GetMods() const;
 	std::span<uint8_t const> GetCountries() const;
+	// None while off, paused or refreshing: the refresh's end wakes the window anyway.
+	std::optional<Net::Clock::time_point> GetNextAutoRefresh() const;
 	SServerEntry const* FindEntry(uint64_t key) const;
 	SGameStatus const& GetStatus(Query::EGame game) const;
 	bool IsFavourite(Query::SServerAddress const& address) const;
@@ -96,6 +102,8 @@ private:
 	std::vector<uint32_t> m_rows;
 	std::vector<std::string> m_mods;
 	std::vector<uint8_t> m_countries;
+	CAutoRefresh m_autoRefresh;
 	bool m_isStarted{ false };
+	bool m_isAutoRefreshPaused{ false };
 };
 } // namespace Lkt::Browser

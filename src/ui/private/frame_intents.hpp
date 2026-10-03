@@ -4,6 +4,7 @@
 #include "config/server_filter.hpp"
 #include "config/sort_order.hpp"
 #include "query/game.hpp"
+#include <cstdint>
 #include <optional>
 
 namespace Lkt::Ui
@@ -18,6 +19,7 @@ struct SFrameIntents final
 	std::optional<Query::EGame> openGameSettings;
 	std::optional<Config::SServerFilter> filter;
 	std::optional<Config::SSortOrder> sort;
+	std::optional<uint32_t> autoRefreshSeconds;
 	SServerAction action;
 	bool refresh{ false };
 	bool openAddServer{ false };

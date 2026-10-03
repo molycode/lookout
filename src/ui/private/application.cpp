@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <optional>
 #include <string>
 
 namespace Lkt::Ui
@@ -32,6 +33,23 @@ constexpr std::chrono::milliseconds ActiveDuration{ 250 };
 constexpr std::chrono::milliseconds UnsyncedFrameInterval{ 16 };
 constexpr std::chrono::milliseconds DialogPollInterval{ 100 };
 constexpr std::chrono::milliseconds NoTimeout{ -1 };
+
+//////////////////////////////////////////////////////////////////////////
+// Nothing else wakes the window for an auto refresh, so the wait ends at its deadline.
+std::chrono::milliseconds BoundByDeadline(std::chrono::milliseconds wait, std::optional<std::chrono::steady_clock::time_point> deadline)
+{
+	std::chrono::milliseconds bounded{ wait };
+
+	if (deadline.has_value())
+	{
+		std::chrono::milliseconds const untilDeadline{ std::max(std::chrono::ceil<std::chrono::milliseconds>(*deadline - std::chrono::steady_clock::now()),
+			std::chrono::milliseconds{ 0 }) };
+
+		bounded = (wait == NoTimeout) ? untilDeadline : std::min(wait, untilDeadline);
+	}
+
+	return bounded;
+}
 
 //////////////////////////////////////////////////////////////////////////
 std::string_view OrNone(char const* pText)
@@ -177,7 +195,7 @@ void CApplication::Run(Browser::CBrowser& browser)
 		bool const isActive{ std::chrono::steady_clock::now() < m_activeUntil };
 		std::chrono::milliseconds const frameWait{ m_hasVsync ? std::chrono::milliseconds{ 0 } : UnsyncedFrameInterval };
 		// Neither file dialog wakes the loop: the portal answers over D-Bus, which SDL reads only while pumping events.
-		std::chrono::milliseconds const idleWait{ IsFileDialogPending() ? DialogPollInterval : NoTimeout };
+		std::chrono::milliseconds const idleWait{ BoundByDeadline(IsFileDialogPending() ? DialogPollInterval : NoTimeout, browser.GetNextAutoRefresh()) };
 		std::chrono::milliseconds const wait{ isActive ? frameWait : idleWait };
 		bool hasEvent{ SDL_WaitEventTimeout(&event, static_cast<Sint32>(wait.count())) };
 
@@ -193,6 +211,8 @@ void CApplication::Run(Browser::CBrowser& browser)
 			hasEvent = SDL_PollEvent(&event);
 		}
 
+		// No one sees the list of a minimised, hidden or suspended window; an overdue refresh runs once it shows again.
+		browser.SetAutoRefreshPaused((SDL_GetWindowFlags(m_pWindow) & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN | SDL_WINDOW_OCCLUDED)) != 0);
 		browser.Update();
 
 		auto const now{ std::chrono::steady_clock::now() };

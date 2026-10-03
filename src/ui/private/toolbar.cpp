@@ -20,6 +20,71 @@ namespace Lkt::Ui
 namespace
 {
 constexpr std::array<uint32_t, 5> PingLimits{ Config::NoPingLimit, 50, 100, 150, 250 };
+constexpr std::array<uint32_t, 5> AutoRefreshChoices{ 0, 30, 60, 120, 300 };
+constexpr char const* AutoRefreshPopupId{ "##auto-refresh-menu" };
+
+//////////////////////////////////////////////////////////////////////////
+std::string_view DescribeAutoRefresh(uint32_t seconds, std::array<char, 32>& buffer)
+{
+	std::string_view text{};
+
+	if (seconds == 0)
+	{
+		text = FormatTo(buffer, "Off");
+	}
+	else if (seconds % 60 == 0)
+	{
+		text = FormatTo(buffer, "Every {} min", seconds / 60);
+	}
+	else
+	{
+		text = FormatTo(buffer, "Every {} s", seconds);
+	}
+
+	return text;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void DrawRefreshButtons(Browser::CBrowser const& browser, SFrameIntents& intents)
+{
+	uint32_t const autoRefreshSeconds{ browser.GetSettings().autoRefreshSeconds };
+	std::array<char, 32> buffer{};
+	std::array<char, 96> tooltip{};
+
+	if (ImGui::Button(browser.GetStatus(browser.GetSelectedGame()).isRefreshing ? LKT_ICON_ROTATE " Refreshing…###refresh" : LKT_ICON_ROTATE " Refresh###refresh"))
+	{
+		intents.refresh = true;
+	}
+
+	std::string_view const refreshTooltip{ (autoRefreshSeconds == 0) ? FormatTo(tooltip, "Refresh the server list (F5)")
+		: FormatTo(tooltip, "Refresh the server list (F5)\nAuto-refresh: {}", DescribeAutoRefresh(autoRefreshSeconds, buffer)) };
+
+	ImGui::SetItemTooltip("%.*s", static_cast<int>(refreshTooltip.size()), refreshTooltip.data());
+	ImGui::SameLine(0.0f, 1.0f);
+
+	if (ImGui::Button(LKT_ICON_CARET_DOWN "##auto-refresh"))
+	{
+		ImGui::OpenPopup(AutoRefreshPopupId);
+	}
+
+	ImGui::SetItemTooltip("Auto-refresh");
+
+	if (ImGui::BeginPopup(AutoRefreshPopupId))
+	{
+		ImGui::TextDisabled("Auto-refresh");
+		ImGui::Separator();
+
+		for (uint32_t const seconds : AutoRefreshChoices)
+		{
+			if (ImGui::MenuItem(DescribeAutoRefresh(seconds, buffer).data(), nullptr, seconds == autoRefreshSeconds))
+			{
+				intents.autoRefreshSeconds = seconds;
+			}
+		}
+
+		ImGui::EndPopup();
+	}
+}
 
 //////////////////////////////////////////////////////////////////////////
 std::string_view DescribePing(uint32_t maxPingMs, std::array<char, 32>& buffer)
@@ -183,12 +248,7 @@ void CToolbar::Draw(Browser::CBrowser const& browser, SFrameIntents& intents)
 		m_hasGame = true;
 	}
 
-	if (ImGui::Button(browser.GetStatus(game).isRefreshing ? LKT_ICON_ROTATE " Refreshing…###refresh" : LKT_ICON_ROTATE " Refresh###refresh"))
-	{
-		intents.refresh = true;
-	}
-
-	ImGui::SetItemTooltip("Refresh the server list (F5)");
+	DrawRefreshButtons(browser, intents);
 	ImGui::SameLine();
 
 	if (ImGui::Button(LKT_ICON_PLUS "##add-server", ImVec2{ ImGui::GetFrameHeight(), ImGui::GetFrameHeight() }))

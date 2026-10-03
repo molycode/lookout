@@ -130,6 +130,13 @@ void CBrowser::Update()
 		RebuildRows();
 	}
 
+	std::optional<Net::Clock::time_point> const nextAutoRefresh{ GetNextAutoRefresh() };
+
+	if (m_isStarted && nextAutoRefresh.has_value() && Net::Clock::now() >= *nextAutoRefresh)
+	{
+		Refresh();
+	}
+
 	m_launcher.ReapFinished();
 }
 
@@ -155,6 +162,7 @@ void CBrowser::Refresh()
 	size_t const index{ GetSelectedIndex() };
 	uint32_t const refreshId{ m_engine.Refresh(m_settings.selectedGame, m_settings.games[index].favourites) };
 
+	m_autoRefresh.OnRefreshStarted(m_settings.selectedGame, Net::Clock::now());
 	m_lists[index].BeginRefresh(refreshId);
 	m_statuses[index].hasRefreshed = true;
 	m_statuses[index].isRefreshing = true;
@@ -260,6 +268,18 @@ void CBrowser::SetSort(Config::SSortOrder const& sort)
 void CBrowser::SetWindowSettings(Config::SWindowSettings const& window)
 {
 	m_settings.window = window;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CBrowser::SetAutoRefresh(uint32_t seconds)
+{
+	m_settings.autoRefreshSeconds = seconds;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CBrowser::SetAutoRefreshPaused(bool isPaused)
+{
+	m_isAutoRefreshPaused = isPaused;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -409,6 +429,19 @@ std::span<std::string const> CBrowser::GetMods() const
 std::span<uint8_t const> CBrowser::GetCountries() const
 {
 	return m_countries;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::optional<Net::Clock::time_point> CBrowser::GetNextAutoRefresh() const
+{
+	std::optional<Net::Clock::time_point> deadline{};
+
+	if (!m_isAutoRefreshPaused && !m_statuses[GetSelectedIndex()].isRefreshing)
+	{
+		deadline = m_autoRefresh.GetDeadline(m_settings.selectedGame, std::chrono::seconds{ m_settings.autoRefreshSeconds });
+	}
+
+	return deadline;
 }
 
 //////////////////////////////////////////////////////////////////////////

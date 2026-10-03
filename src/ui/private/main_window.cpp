@@ -222,6 +222,11 @@ void CMainWindow::Apply(Browser::CBrowser& browser, SFrameIntents const& intents
 		browser.SetSort(*intents.sort);
 	}
 
+	if (intents.autoRefreshSeconds.has_value())
+	{
+		browser.SetAutoRefresh(*intents.autoRefreshSeconds);
+	}
+
 	if (intents.refresh)
 	{
 		browser.Refresh();

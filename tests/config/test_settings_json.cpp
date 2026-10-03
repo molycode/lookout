@@ -30,6 +30,7 @@ SSettings MakeVariedSettings()
 
 	settings.window = SWindowSettings{ 1600, 1000, true, 360, "[Table][0x1A2B3C4D,8]\nColumn 0  Width=40\n" };
 	settings.selectedGame = Query::EGame::EnemyTerritory;
+	settings.autoRefreshSeconds = 45;
 
 	for (size_t index{ 0 }; index < settings.games.size(); ++index)
 	{
@@ -268,6 +269,25 @@ TEST(SettingsJson, MaxPingNullMeansNoLimit)
 	SSettingsDocument const document{ ReadValid(R"({ "games": { "kingpin": { "filter": { "maxPing": null } } } })") };
 
 	EXPECT_EQ(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].filter.maxPingMs, NoPingLimit);
+	EXPECT_EQ(document.numInvalid, 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, AutoRefreshOutOfRangeKeepsTheDefault)
+{
+	SSettingsDocument const document{ ReadValid(R"({ "autoRefreshSeconds": 86400 })") };
+
+	EXPECT_EQ(document.settings.autoRefreshSeconds, SSettings{}.autoRefreshSeconds);
+	EXPECT_EQ(document.numInvalid, 1u);
+	EXPECT_EQ(document.firstInvalidPath, "autoRefreshSeconds");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, AutoRefreshZeroMeansOff)
+{
+	SSettingsDocument const document{ ReadValid(R"({ "autoRefreshSeconds": 0 })") };
+
+	EXPECT_EQ(document.settings.autoRefreshSeconds, 0u);
 	EXPECT_EQ(document.numInvalid, 0u);
 }
 
