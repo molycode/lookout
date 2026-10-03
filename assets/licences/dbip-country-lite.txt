@@ -1,0 +1,5 @@
+IP Geolocation by DB-IP (https://db-ip.com)
+
+Lookout's country data is DB-IP's IP to Country Lite database, edition 2026-10, licensed under the Creative Commons
+Attribution 4.0 International License (https://creativecommons.org/licenses/by/4.0/). Lookout keeps only its IPv4
+ranges, converted to a compact lookup table.

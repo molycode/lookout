@@ -1,4 +1,5 @@
 add_subdirectory(query)
+add_subdirectory(geo)
 add_subdirectory(launch)
 add_subdirectory(net)
 add_subdirectory(browser)

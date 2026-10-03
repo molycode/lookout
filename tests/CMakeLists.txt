@@ -11,6 +11,7 @@ target_include_directories(LookoutTests
 		${CMAKE_CURRENT_SOURCE_DIR}
 		$<TARGET_PROPERTY:LktBrowser,SOURCE_DIR>/private
 		$<TARGET_PROPERTY:LktConfig,SOURCE_DIR>/private
+		$<TARGET_PROPERTY:LktGeo,SOURCE_DIR>/private
 		$<TARGET_PROPERTY:LktLaunch,SOURCE_DIR>/private
 		$<TARGET_PROPERTY:LktNet,SOURCE_DIR>/private
 		$<TARGET_PROPERTY:LktUi,SOURCE_DIR>/private
@@ -23,6 +24,7 @@ target_link_libraries(LookoutTests
 		Tge::Testing
 		Lkt::Browser
 		Lkt::Config
+		Lkt::Geo
 		Lkt::Launch
 		Lkt::Net
 		Lkt::Query
