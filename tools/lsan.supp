@@ -5,3 +5,6 @@ leak:SDL_EGL_LoadLibrary
 # A DNS lookup glibc cannot cancel at shutdown keeps writing into its request, so the engine leaves it to glibc on
 # purpose; this also covers the addrinfo glibc hangs off it.
 leak:Lkt::Net::CQueryPump::ResolveMasters
+
+# The same for the download fetcher's single host lookup.
+leak:Lkt::Net::CFetchPump::Resolve

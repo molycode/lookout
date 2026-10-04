@@ -36,6 +36,7 @@ if(PROJECT_IS_TOP_LEVEL
 				AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/tge-core/CMakeLists.txt)
 			OR NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/json/single_include/nlohmann/json.hpp
 			OR NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/lua/lua.h
+			OR NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/mbedtls/CMakeLists.txt
 			OR (LKT_BUILD_TESTS AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/googletest/CMakeLists.txt)
 			OR (LKT_BUILD_TESTS AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/lookout-games/index.json)))
 	if(NOT LKT_AUTO_INIT_SUBMODULES)
@@ -109,6 +110,20 @@ endforeach()
 
 add_subdirectory(external/sdl EXCLUDE_FROM_ALL SYSTEM)
 tge_suppress_external_warnings_in_directory(external/sdl)
+
+set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(TF_PSA_CRYPTO_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(DISABLE_PACKAGE_CONFIG_AND_INSTALL ON CACHE BOOL "" FORCE)
+set(MBEDTLS_USER_CONFIG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/cmake/mbedtls/lookout_tls_config.h CACHE FILEPATH "" FORCE)
+set(TF_PSA_CRYPTO_USER_CONFIG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/cmake/mbedtls/lookout_crypto_config.h CACHE FILEPATH "" FORCE)
+
+add_subdirectory(external/mbedtls EXCLUDE_FROM_ALL SYSTEM)
+
+foreach(lktMbedtlsTarget mbedtls mbedx509 tfpsacrypto builtin everest extras p256m)
+	tge_suppress_external_warnings(${lktMbedtlsTarget})
+endforeach()
 
 add_subdirectory(src)
 
