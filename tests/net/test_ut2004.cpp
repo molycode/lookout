@@ -43,7 +43,7 @@ protected:
 	{
 		std::array<uint16_t, 1> const masterPorts{ masterPort };
 
-		return AddGameFile("ut2004", masterPorts);
+		return AddGameFile("ut2004-emulated", masterPorts);
 	}
 
 	Query::SGameDefinition const& GetUt2004Game() const

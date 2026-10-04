@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <expected>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -75,11 +76,14 @@ TEST(GameJson, AcceptsComments)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(GameJson, BuiltinGamesKeepTheirOrder)
+// A position keys a game's saved table layout, so a game added since may only come after these.
+TEST(GameJson, BuiltinGamesKeepTheirPositions)
 {
 	constexpr std::array<std::string_view, 5> Keys{ "kingpin", "quake2", "rtcw", "et", "quake3" };
+	std::span<Query::SGameDefinition const> const games{ Query::GetGameCatalog() };
 
-	EXPECT_TRUE(std::ranges::equal(Query::GetGameCatalog(), Keys, {}, &Query::SGameDefinition::key));
+	ASSERT_GE(games.size(), Keys.size());
+	EXPECT_TRUE(std::ranges::equal(games.first(Keys.size()), Keys, {}, &Query::SGameDefinition::key));
 }
 
 //////////////////////////////////////////////////////////////////////////

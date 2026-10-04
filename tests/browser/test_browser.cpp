@@ -3,6 +3,8 @@
 #include "channels.hpp"
 #include "fixtures.hpp"
 #include "net/loopback_server.hpp"
+#include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <chrono>
@@ -378,7 +380,14 @@ TEST_F(CBrowserTest, LastListedGameStaysListed)
 {
 	CExpectedLog const expected{ BrowserChannel, 1, 0 };
 
-	WriteConfig(R"({ "game": "kingpin", "games": { "quake2": { "listed": false }, "rtcw": { "listed": false }, "et": { "listed": false }, "quake3": { "listed": false } } })");
+	std::string hidden{};
+
+	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
+	{
+		hidden += (game.key == "kingpin") ? std::string{} : std::format(R"({}"{}": {{ "listed": false }})", hidden.empty() ? "" : ", ", game.key);
+	}
+
+	WriteConfig(std::format(R"({{ "game": "kingpin", "games": {{ {} }} }})", hidden));
 	Initialize();
 	m_browser.SetGameListed(Fixtures::GetGameId("kingpin"), false);
 
