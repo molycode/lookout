@@ -1,4 +1,5 @@
 #include "game_json.hpp"
+#include "games/game_fields.hpp"
 #include "json/json.hpp"
 #include "json/syntax_error.hpp"
 #include <algorithm>
@@ -26,22 +27,54 @@ constexpr uint64_t MaxPort{ 65535 };
 // Any larger offset leaves no port that both the query and the join could use.
 constexpr int64_t MaxPortOffset{ 65534 };
 
-constexpr std::array<std::string_view, 12> GameFields{ "format", "name", "protocol", "text", "protocolOptions", "queryPortOffset", "masters",
-	"keys", "join", "modes", "foreignServers", "launch" };
-constexpr std::array<std::string_view, 2> MasterFields{ "host", "port" };
-constexpr std::array<std::string_view, 6> KeyFields{ "hostname", "map", "numPlayers", "maxPlayers", "password", "mods" };
-constexpr std::array<std::string_view, 3> ModeFields{ "key", "value", "label" };
-constexpr std::array<std::string_view, 2> MatchFields{ "key", "value" };
-constexpr std::array<std::string_view, 4> LaunchFields{ "desktopFiles", "installDir", "program", "requiredFiles" };
-
-constexpr std::array<std::string_view, 2> TextFields{ "encoding", "colourCodes" };
-constexpr std::array<std::string_view, 3> JoinFields{ "arguments", "passwordArguments", "password" };
-constexpr std::array<std::string_view, 3> PasswordFields{ "maxLength", "refusedCharacters", "refusedSequences" };
 constexpr std::string_view AddressPlaceholder{ "{address}" };
 constexpr std::string_view PasswordPlaceholder{ "{password}" };
 constexpr uint64_t MaxPasswordLength{ 1024 };
-constexpr std::array<std::string_view, 3> ColourCodeFields{ "escape", "codes", "palette" };
 constexpr size_t MaxPaletteSize{ 256 };
+
+constexpr std::array<SGameField, 40> Fields{ {
+	{ "", "format", "The version of this format: 1." },
+	{ "", "name", "The game's name in the game list." },
+	{ "", "protocol", "The protocol script that queries the game's masters and servers, by name." },
+	{ "", "protocolOptions", "The protocol's options, each a string; optional unless the protocol requires one." },
+	{ "", "queryPortOffset", "Optional: the query port less the join port, for servers that answer queries on another port." },
+	{ "", "text", "How names and maps are encoded and coloured." },
+	{ "text", "encoding", "ascii7 (the high bit is dropped) or utf8OrWindows1252 (UTF-8 where valid, else Windows-1252)." },
+	{ "text", "colourCodes", "Optional: the colour codes in names." },
+	{ "text.colourCodes", "escape", "The ASCII character that starts a colour code, such as \"^\"." },
+	{ "text.colourCodes", "codes", "What follows the escape: alphanumeric (a letter or digit), printable (any printable character but the escape) "
+		"or rgb (three bytes of red, green and blue)." },
+	{ "text.colourCodes", "palette", "The colours the codes pick, each \"#rrggbb\", a power of two of them up to 256; not for rgb." },
+	{ "", "masters", "The master servers that list the game's servers; at least one." },
+	{ "masters[]", "host", "The master's host name or IP address." },
+	{ "masters[]", "port", "The master's port, 1 to 65535." },
+	{ "", "keys", "Which of a server's rules hold what the list shows." },
+	{ "keys", "hostname", "The rule holding the server's name." },
+	{ "keys", "map", "The rule holding the map." },
+	{ "keys", "numPlayers", "Optional: the rule holding the number of players; without it, the listed players are counted." },
+	{ "keys", "maxPlayers", "The rule holding how many players fit." },
+	{ "keys", "password", "The rule whose lowest bit says joining needs a password." },
+	{ "keys", "mods", "Optional: the rules that may name the mod; the first a server has is shown." },
+	{ "", "modes", "Optional: the game's modes; the first that matches a server's rules is shown." },
+	{ "modes[]", "key", "The rule to look at." },
+	{ "modes[]", "value", "The value the rule holds in this mode." },
+	{ "modes[]", "label", "The mode's name in the list." },
+	{ "", "foreignServers", "Optional: rule values that mark another game's servers on the same masters, which are left out." },
+	{ "foreignServers[]", "key", "The rule to look at." },
+	{ "foreignServers[]", "value", "The value that marks another game's server." },
+	{ "", "launch", "Optional: how to find the installed game, to join with it." },
+	{ "launch", "desktopFiles", "Desktop entries that start the game, by file name, in order of preference." },
+	{ "launch", "installDir", "The game's usual install folder, under the home folder." },
+	{ "launch", "program", "The program to run, inside the install folder." },
+	{ "launch", "requiredFiles", "Files inside the install folder that show the game is there." },
+	{ "", "join", "The arguments the game is started with to join a server." },
+	{ "join", "arguments", "To join a server; {address} is its address." },
+	{ "join", "passwordArguments", "To join a server with a password; {address} is its address and {password} the password." },
+	{ "join", "password", "The passwords the game can take." },
+	{ "join.password", "maxLength", "The longest password, 1 to 1024 characters." },
+	{ "join.password", "refusedCharacters", "Optional: characters a password cannot hold." },
+	{ "join.password", "refusedSequences", "Optional: character sequences a password cannot hold." }
+} };
 
 constexpr std::array<std::pair<std::string_view, Query::ETextEncoding>, 2> Encodings{ {
 	{ "ascii7", Query::ETextEncoding::Ascii7 },
@@ -108,18 +141,41 @@ void CheckComment(JsonValue const& object, std::string_view path, std::string_vi
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A field format 1 does not know is a typo or a later format's, so it is never skipped silently.
-void CheckFields(JsonValue const& object, std::string_view path, std::span<std::string_view const> fields, std::string& problem)
+// "masters[2]" is held by "masters[]": the table names an array's objects without an index.
+std::string ToParent(std::string_view path)
 {
+	std::string parent{};
+	bool isIndex{ false };
+
+	for (char const c : path)
+	{
+		isIndex = (c == '[') || (isIndex && c != ']');
+
+		if (!isIndex || c == '[')
+		{
+			parent += c;
+		}
+	}
+
+	return parent;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A field format 1 does not know is a typo or a later format's, so it is never skipped silently.
+void CheckFields(JsonValue const& object, std::string_view path, std::string& problem)
+{
+	std::string const parent{ ToParent(path) };
+
 	for (auto const& item : object.items())
 	{
 		std::string_view const key{ item.key() };
+		bool const isField{ std::ranges::any_of(Fields, [&parent, key](SGameField const& field) { return field.parent == parent && field.name == key; }) };
 
 		if (IsComment(key))
 		{
 			CheckComment(object, path, key, item.value(), problem);
 		}
-		else if (!std::ranges::contains(fields, key))
+		else if (!isField)
 		{
 			Fail(problem, JoinPath(path, key), "is not a field of format 1");
 		}
@@ -227,7 +283,7 @@ JsonValue const* FindObject(JsonValue const& object, std::string_view key, bool 
 
 //////////////////////////////////////////////////////////////////////////
 template<typename TRead>
-void ReadObjects(JsonValue const& json, std::string_view path, std::span<std::string_view const> fields, std::string& problem, TRead&& read)
+void ReadObjects(JsonValue const& json, std::string_view path, std::string& problem, TRead&& read)
 {
 	if (json.is_array())
 	{
@@ -239,7 +295,7 @@ void ReadObjects(JsonValue const& json, std::string_view path, std::span<std::st
 
 			if (element.is_object())
 			{
-				CheckFields(element, elementPath, fields, problem);
+				CheckFields(element, elementPath, problem);
 				read(element, elementPath);
 			}
 			else
@@ -304,7 +360,7 @@ void ReadMasters(JsonValue const& root, Query::SGameDefinition& game, std::strin
 
 	if (it != root.cend())
 	{
-		ReadObjects(*it, "masters", MasterFields, problem, [&game, &problem](JsonValue const& object, std::string_view path)
+		ReadObjects(*it, "masters", problem, [&game, &problem](JsonValue const& object, std::string_view path)
 		{
 			Query::SMasterEndpoint& master{ game.masters.emplace_back() };
 
@@ -330,7 +386,7 @@ void ReadKeys(JsonValue const& root, Query::SServerKeys& keys, std::string& prob
 
 	if (pKeys != nullptr)
 	{
-		CheckFields(*pKeys, "keys", KeyFields, problem);
+		CheckFields(*pKeys, "keys", problem);
 		ReadRequiredString(*pKeys, "keys", "hostname", keys.hostname, problem);
 		ReadRequiredString(*pKeys, "keys", "map", keys.map, problem);
 		ReadRequiredString(*pKeys, "keys", "maxPlayers", keys.maxPlayers, problem);
@@ -358,7 +414,7 @@ void ReadModes(JsonValue const& root, std::vector<Query::SModeRule>& modes, std:
 
 	if (it != root.cend())
 	{
-		ReadObjects(*it, "modes", ModeFields, problem, [&modes, &problem](JsonValue const& object, std::string_view path)
+		ReadObjects(*it, "modes", problem, [&modes, &problem](JsonValue const& object, std::string_view path)
 		{
 			Query::SModeRule& mode{ modes.emplace_back() };
 
@@ -376,7 +432,7 @@ void ReadForeignServers(JsonValue const& root, std::vector<Query::SKeyMatch>& ma
 
 	if (it != root.cend())
 	{
-		ReadObjects(*it, "foreignServers", MatchFields, problem, [&matches, &problem](JsonValue const& object, std::string_view path)
+		ReadObjects(*it, "foreignServers", problem, [&matches, &problem](JsonValue const& object, std::string_view path)
 		{
 			Query::SKeyMatch& match{ matches.emplace_back() };
 
@@ -394,7 +450,7 @@ void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, std::string&
 
 	if (pLaunch != nullptr)
 	{
-		CheckFields(*pLaunch, "launch", LaunchFields, problem);
+		CheckFields(*pLaunch, "launch", problem);
 		ReadRequiredStrings(*pLaunch, "launch", "desktopFiles", launch.desktopFiles, problem);
 		ReadRequiredString(*pLaunch, "launch", "installDir", launch.installDir, problem);
 		ReadRequiredString(*pLaunch, "launch", "program", launch.program, problem);
@@ -472,7 +528,7 @@ void ReadColourCodes(JsonValue const& text, Query::STextStyle& style, std::strin
 	{
 		std::string escape{};
 
-		CheckFields(*it, Path, ColourCodeFields, problem);
+		CheckFields(*it, Path, problem);
 		ReadRequiredString(*it, Path, "escape", escape, problem);
 
 		if (escape.size() == 1 && static_cast<unsigned char>(escape.front()) < 0x80)
@@ -504,7 +560,7 @@ void ReadText(JsonValue const& root, Query::STextStyle& style, std::string& prob
 
 	if (pText != nullptr)
 	{
-		CheckFields(*pText, "text", TextFields, problem);
+		CheckFields(*pText, "text", problem);
 		ReadName(*pText, "text", "encoding", Encodings, style.encoding, problem);
 		ReadColourCodes(*pText, style, problem);
 	}
@@ -561,7 +617,7 @@ void ReadPasswordRules(JsonValue const& join, Query::SPasswordRules& rules, std:
 		JsonValue::const_iterator const refusedCharacters{ it->find("refusedCharacters") };
 		JsonValue::const_iterator const refusedSequences{ it->find("refusedSequences") };
 
-		CheckFields(*it, Path, PasswordFields, problem);
+		CheckFields(*it, Path, problem);
 
 		if (maxLength != it->cend() && maxLength->is_number_unsigned() && maxLength->get<uint64_t>() >= 1 && maxLength->get<uint64_t>() <= MaxPasswordLength)
 		{
@@ -591,7 +647,7 @@ void ReadJoin(JsonValue const& root, Query::SJoinCommand& join, std::string& pro
 
 	if (pJoin != nullptr)
 	{
-		CheckFields(*pJoin, "join", JoinFields, problem);
+		CheckFields(*pJoin, "join", problem);
 		ReadRequiredStrings(*pJoin, "join", "arguments", join.arguments, problem);
 		ReadRequiredStrings(*pJoin, "join", "passwordArguments", join.passwordArguments, problem);
 		CheckPlaceholders(join.arguments, "join.arguments", false, problem);
@@ -694,7 +750,7 @@ void ReadQueryPortOffset(JsonValue const& root, int32_t& offset, std::string& pr
 //////////////////////////////////////////////////////////////////////////
 void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::SGameDefinition& game, std::string& problem)
 {
-	CheckFields(root, {}, GameFields, problem);
+	CheckFields(root, {}, problem);
 	ReadRequiredString(root, {}, "name", game.name, problem);
 
 	Query::SProtocolDefinition const* const pProtocol{ ReadProtocol(root, protocols, game.protocol, problem) };
@@ -714,6 +770,12 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 	ReadLaunch(root, game.launch, problem);
 }
 } // namespace
+
+//////////////////////////////////////////////////////////////////////////
+std::span<SGameField const> GetGameFields()
+{
+	return Fields;
+}
 
 //////////////////////////////////////////////////////////////////////////
 std::expected<Query::SGameDefinition, std::string> ReadGameJson(std::string_view text, std::span<Query::SProtocolDefinition const> protocols)
