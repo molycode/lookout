@@ -113,5 +113,29 @@ TEST(ServerAddress, PortZeroIsNotQueryable)
 {
 	EXPECT_FALSE(IsQueryable(SServerAddress{ 0x2D5E3A3C, 0 }));
 }
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerAddress, PublicMasterListsOnlyPublicServers)
+{
+	SServerAddress const master{ 0x2D5E3A3C, 27950 };
+
+	EXPECT_TRUE(MayList(master, SServerAddress{ 0x2D5E3A3D, 27960 }));
+	EXPECT_FALSE(MayList(master, SServerAddress{ 0x7F000001, 27960 }));
+	EXPECT_FALSE(MayList(master, SServerAddress{ 0xC0A80001, 27960 }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerAddress, PrivateMasterListsPrivateServers)
+{
+	SServerAddress const master{ 0xC0A80002, 27950 };
+
+	EXPECT_TRUE(MayList(master, SServerAddress{ 0xC0A80001, 27960 }));
+	EXPECT_TRUE(MayList(master, SServerAddress{ 0x2D5E3A3D, 27960 }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerAddress, NoMasterListsPortZero)
+{
+	EXPECT_FALSE(MayList(SServerAddress{ 0x7F000001, 27950 }, SServerAddress{ 0x7F000001, 0 }));
+}
 } // namespace
 } // namespace Lkt::Query

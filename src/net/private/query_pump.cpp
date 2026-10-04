@@ -79,6 +79,14 @@ uint64_t ToConversationKey(SMasterId const& master)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Nothing the script made of the datagram: it may answer an earlier step, or wait for the rest of a reply.
+bool IsEmpty(Script::SScriptAction const& action)
+{
+	return action.send.empty() && action.servers.empty() && !action.reply.has_value() && !action.reason.has_value() && !action.quiet.has_value()
+		&& !action.isDone;
+}
+
+//////////////////////////////////////////////////////////////////////////
 void RecordScriptFailure(SRefreshStats& stats, std::string_view failure)
 {
 	if (stats.numScriptFailures == 0)
@@ -143,8 +151,14 @@ void CQueryPump::Terminate()
 	m_loop.Terminate();
 	AbandonLookups();
 	m_socket.Terminate();
-	m_serverConversations.clear();
+
+	for (auto& [key, conversation] : m_masterConversations)
+	{
+		conversation.socket.Terminate();
+	}
+
 	m_masterConversations.clear();
+	m_serverConversations.clear();
 
 	for (Script::CProtocolScript& script : m_scripts)
 	{
@@ -209,7 +223,7 @@ void CQueryPump::Update(Clock::time_point now)
 	CollectLookups(now);
 	UpdateMasters(now);
 	SendDueRequests(now);
-	ExpireRequests(now);
+	EndRequests(now);
 	FinishRefreshes();
 	NotifyIfNeeded();
 	ArmTimer(now);
@@ -242,8 +256,7 @@ void CQueryPump::StartRefresh(Query::EGame game, std::span<Query::SServerAddress
 	TGE_ASSERT(generation > refresh.generation, "A refresh id that is not newer than the game's last one");
 
 	m_scheduler.Cancel(game);
-	CloseConversations(m_serverConversations, game);
-	CloseConversations(m_masterConversations, game);
+	CloseConversations(game);
 	refresh = SRefreshState{};
 	refresh.isActive = true;
 	refresh.generation = generation;
@@ -290,8 +303,7 @@ void CQueryPump::CancelRefresh(Query::EGame game)
 
 	m_scheduler.Cancel(game);
 	m_masters.Cancel(game);
-	CloseConversations(m_serverConversations, game);
-	CloseConversations(m_masterConversations, game);
+	CloseConversations(game);
 
 	if (refresh.isActive)
 	{
@@ -301,31 +313,47 @@ void CQueryPump::CancelRefresh(Query::EGame game)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Polled, not notified: a notification would run on a glibc thread and race the loop.
+// A literal address needs no lookup, nor the glibc thread a lookup starts.
 void CQueryPump::ResolveMasters(Query::EGame game, uint32_t generation, Clock::time_point now)
 {
 	std::span<Query::SMasterEndpoint const> const masters{ Query::GetGame(game).masters };
 
 	for (size_t index{ 0 }; index < masters.size(); ++index)
 	{
-		auto lookup{ std::make_unique<SDnsLookup>(game, generation, index, std::string{ masters[index].host }) };
+		in_addr literal{};
 
-		lookup->hints.ai_family = AF_INET;
-		lookup->hints.ai_socktype = SOCK_DGRAM;
-		lookup->request.ar_name = lookup->host.c_str();
-		lookup->request.ar_request = &lookup->hints;
-
-		std::array<gaicb*, 1> requests{ &lookup->request };
-		int const status{ getaddrinfo_a(GAI_NOWAIT, requests.data(), static_cast<int>(requests.size()), nullptr) };
-
-		if (status == 0)
+		if (inet_pton(AF_INET, masters[index].host.c_str(), &literal) == 1)
 		{
-			m_lookups.emplace_back(std::move(lookup));
+			m_masters.OnResolved(game, generation, index, ntohl(literal.s_addr), now);
 		}
 		else
 		{
-			m_masters.OnResolved(game, generation, index, std::unexpected{ std::string{ gai_strerror(status) } }, now);
+			Resolve(game, generation, index, now);
 		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Polled, not notified: a notification would run on a glibc thread and race the loop.
+void CQueryPump::Resolve(Query::EGame game, uint32_t generation, size_t index, Clock::time_point now)
+{
+	auto lookup{ std::make_unique<SDnsLookup>(game, generation, index, std::string{ Query::GetGame(game).masters[index].host }) };
+
+	lookup->hints.ai_family = AF_INET;
+	lookup->hints.ai_socktype = SOCK_DGRAM;
+	lookup->request.ar_name = lookup->host.c_str();
+	lookup->request.ar_request = &lookup->hints;
+
+	std::array<gaicb*, 1> requests{ &lookup->request };
+	int const status{ getaddrinfo_a(GAI_NOWAIT, requests.data(), static_cast<int>(requests.size()), nullptr) };
+
+	if (status == 0)
+	{
+		m_lookups.emplace_back(std::move(lookup));
+	}
+	else
+	{
+		m_masters.OnResolved(game, generation, index, std::unexpected{ std::string{ gai_strerror(status) } }, now);
 	}
 }
 
@@ -372,28 +400,18 @@ void CQueryPump::UpdateMasters(Clock::time_point now)
 
 	for (SMasterQuery const& query : m_masterQueries)
 	{
-		Query::SGameDefinition const& game{ Query::GetGame(query.master.game) };
-		std::expected<SConversationRecord const*, std::string> const conversation{ OpenConversation(m_masterConversations,
-			ToConversationKey(query.master), query.master.game, Script::EConversationKind::Master) };
+		auto const it{ m_masterConversations.find(ToConversationKey(query.master)) };
+		std::expected<void, std::string> const asked{ (it != m_masterConversations.end()) ? SendToMaster(it->second) : OpenMaster(query) };
 
-		if (conversation.has_value())
+		if (!asked.has_value())
 		{
-			std::expected<void, int> const sent{ Send(query.address, (*conversation)->send) };
-
-			if (!sent.has_value())
-			{
-				gLog.Warning("{}: cannot ask master {}: {}", game.name, Query::FormatAddress(query.address), std::strerror(sent.error()));
-			}
-		}
-		else
-		{
-			m_masters.Fail(query.master, std::format("cannot be asked: {}", conversation.error()), m_masterOutcomes);
+			m_masters.Fail(query.master, asked.error(), m_masterOutcomes);
 		}
 	}
 
 	for (SMasterOutcome const& outcome : m_masterOutcomes)
 	{
-		CloseConversation(m_masterConversations, ToConversationKey(outcome.master));
+		CloseMaster(ToConversationKey(outcome.master));
 
 		if (!outcome.failure.empty())
 		{
@@ -407,6 +425,192 @@ void CQueryPump::UpdateMasters(Clock::time_point now)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// A failure leaves whatever was opened for the outcome to close.
+std::expected<void, std::string> CQueryPump::OpenMaster(SMasterQuery const& query)
+{
+	SMasterConversation& conversation{ m_masterConversations.try_emplace(ToConversationKey(query.master)).first->second };
+	std::expected<void, std::string> result{};
+
+	conversation.record.game = query.master.game;
+	conversation.record.conversation.kind = Script::EConversationKind::Master;
+	conversation.address = query.address;
+
+	if (!conversation.socket.Initialize())
+	{
+		result = std::unexpected{ std::string{ "cannot be asked: no socket can be created for it" } };
+	}
+	else if (std::expected<void, int> const connected{ conversation.socket.Connect(query.address) }; !connected.has_value())
+	{
+		result = std::unexpected{ std::format("cannot be asked: {}", std::strerror(connected.error())) };
+	}
+	else
+	{
+		conversation.watch = m_loop.Watch(conversation.socket.GetDescriptor(), [this, master = query.master]()
+		{
+			ReceiveMasterDatagrams(master);
+			Update(Clock::now());
+		});
+
+		result = conversation.watch.has_value() ? StartConversation(conversation.record)
+			: std::unexpected{ std::string{ "its socket cannot be watched" } };
+		result = result.transform_error([](std::string const& failure) { return std::format("cannot be asked: {}", failure); });
+	}
+
+	if (result.has_value())
+	{
+		result = SendToMaster(conversation);
+	}
+
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::expected<void, std::string> CQueryPump::SendToMaster(SMasterConversation const& conversation) const
+{
+	std::expected<void, std::string> result{};
+
+	for (std::vector<std::byte> const& datagram : conversation.record.send)
+	{
+		std::expected<void, int> const sent{ conversation.socket.Send(conversation.address, datagram) };
+
+		if (result.has_value() && !sent.has_value())
+		{
+			result = std::unexpected{ std::format("cannot be asked: {}", std::strerror(sent.error())) };
+		}
+	}
+
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Stops at a master that ended meanwhile; its outcome, handled by the update after this, closes the socket.
+void CQueryPump::ReceiveMasterDatagrams(SMasterId const& master)
+{
+	uint64_t const key{ ToConversationKey(master) };
+	bool isDraining{ true };
+	size_t numReceived{ 0 };
+
+	while (isDraining && numReceived < MaxDatagramsPerWake)
+	{
+		auto const it{ m_masterConversations.find(key) };
+
+		isDraining = it != m_masterConversations.end() && m_masters.IsAsking(master);
+
+		if (isDraining)
+		{
+			Query::SServerAddress source{};
+			std::expected<size_t, int> const received{ it->second.socket.Receive(m_buffer, source) };
+
+			if (received.has_value())
+			{
+				ReadMasterDatagram(master, it->second, std::span<std::byte const>{ m_buffer.data(), *received }, Clock::now());
+				++numReceived;
+			}
+			else
+			{
+				isDraining = false;
+
+				if (received.error() != EAGAIN && received.error() != EWOULDBLOCK)
+				{
+					m_masters.Fail(master, (received.error() == ECONNREFUSED) ? std::string{ "refused the query" }
+						: std::format("cannot be read: {}", std::strerror(received.error())), m_masterOutcomes);
+				}
+			}
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A failing script ends the master: what it would make of the rest cannot be trusted.
+void CQueryPump::ReadMasterDatagram(SMasterId const& master, SMasterConversation& conversation, std::span<std::byte const> datagram, Clock::time_point now)
+{
+	SRefreshStats& stats{ GetRefresh(master.game).stats };
+
+	m_masters.OnDatagram(master, now);
+
+	std::expected<Script::SScriptAction, std::string> action{ GetScript(master.game).Receive(conversation.record.conversation, datagram) };
+
+	if (!action.has_value())
+	{
+		m_masters.Fail(master, std::format("cannot be read: {}", action.error()), m_masterOutcomes);
+	}
+	else
+	{
+		size_t const numAdmitted{ m_masters.AdmitEntries(master, action->servers.size()) };
+
+		if (!IsEmpty(*action))
+		{
+			m_masters.MarkStepAnswered(master);
+		}
+
+		if (action->reason.has_value())
+		{
+			stats.firstBadMasterDatagramError = (stats.numBadMasterDatagrams == 0) ? *action->reason : stats.firstBadMasterDatagramError;
+			++stats.numBadMasterDatagrams;
+		}
+
+		for (Query::SServerAddress const& address : std::span<Query::SServerAddress const>{ action->servers }.first(numAdmitted))
+		{
+			if (Query::MayList(conversation.address, address))
+			{
+				m_listed.emplace_back(address);
+			}
+			else
+			{
+				stats.firstUnqueryable = (stats.numUnqueryable == 0) ? address : stats.firstUnqueryable;
+				++stats.numUnqueryable;
+			}
+		}
+
+		ListServers(master.game, m_listed);
+		m_listed.clear();
+
+		if (numAdmitted < action->servers.size())
+		{
+			m_masters.Fail(master, "listed more servers than one master may; the rest were left out", m_masterOutcomes);
+		}
+		else if (action->isDone)
+		{
+			m_masters.Finish(master, m_masterOutcomes);
+		}
+		else if (!action->send.empty())
+		{
+			conversation.record.send = std::move(action->send);
+			m_masters.BeginStep(master, now);
+
+			if (std::expected<void, std::string> const sent{ SendToMaster(conversation) }; !sent.has_value())
+			{
+				m_masters.Fail(master, sent.error(), m_masterOutcomes);
+			}
+		}
+		else if (action->quiet.has_value())
+		{
+			m_masters.SetQuiet(master, *action->quiet);
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Unwatched before it closes: a stale watch would keep a descriptor number the next socket may be given.
+void CQueryPump::CloseMaster(uint64_t key)
+{
+	auto const it{ m_masterConversations.find(key) };
+
+	if (it != m_masterConversations.end())
+	{
+		if (it->second.watch.has_value())
+		{
+			m_loop.Unwatch(*it->second.watch);
+		}
+
+		it->second.socket.Terminate();
+		GetScript(it->second.record.game).End(it->second.record.conversation);
+		m_masterConversations.erase(it);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A server whose script cannot start is out of flight at once, so it is never also reported as silent.
 void CQueryPump::SendDueRequests(Clock::time_point now)
 {
 	m_scheduler.TakeDue(now, m_requests);
@@ -417,25 +621,25 @@ void CQueryPump::SendDueRequests(Clock::time_point now)
 
 		TGE_ASSERT(m_serverConversations.contains(key) == (request.numAttempts > 1), "A server's conversation must span exactly its attempts");
 
-		std::expected<SConversationRecord const*, std::string> const conversation{ OpenConversation(m_serverConversations, key, request.game,
-			Script::EConversationKind::Server) };
-		SRefreshStats& stats{ GetRefresh(request.game).stats };
+		auto it{ m_serverConversations.find(key) };
+		std::expected<void, std::string> started{};
 
-		if (!conversation.has_value())
+		if (it == m_serverConversations.end())
 		{
-			RecordScriptFailure(stats, conversation.error());
-			m_scheduler.Abandon(request);
-			Emit(SServerFailed{ request.game, request.address, EServerFailure::BadReply });
+			it = m_serverConversations.try_emplace(key, SConversationRecord{ request.game, Script::SConversation{ Script::EConversationKind::Server, 0 }, {} }).first;
+			started = StartConversation(it->second);
 		}
-		else if (std::expected<void, int> const sent{ Send(request.address, (*conversation)->send) }; !sent.has_value())
-		{
-			if (stats.numSendFailures == 0)
-			{
-				stats.firstSendFailure = request.address;
-				stats.firstSendError = sent.error();
-			}
 
-			++stats.numSendFailures;
+		if (started.has_value())
+		{
+			SendToServer(request, it->second);
+		}
+		else
+		{
+			m_serverConversations.erase(it);
+			m_scheduler.Remove(request);
+			RecordScriptFailure(GetRefresh(request.game).stats, started.error());
+			Emit(SServerFailed{ request.game, request.address, EServerFailure::BadReply });
 		}
 	}
 
@@ -443,21 +647,49 @@ void CQueryPump::SendDueRequests(Clock::time_point now)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CQueryPump::ExpireRequests(Clock::time_point now)
+void CQueryPump::SendToServer(SServerRequest const& request, SConversationRecord const& record)
 {
-	m_scheduler.TakeExpired(now, m_requests);
+	SRefreshStats& stats{ GetRefresh(request.game).stats };
+	bool hasFailed{ false };
 
-	for (SServerRequest const& request : m_requests)
+	for (std::vector<std::byte> const& datagram : record.send)
 	{
-		SRefreshStats& stats{ GetRefresh(request.game).stats };
+		std::expected<void, int> const sent{ m_socket.Send(request.address, datagram) };
 
-		CloseConversation(m_serverConversations, ToConversationKey(request.game, request.address));
-		stats.firstNoAnswer = (stats.numNoAnswer == 0) ? request.address : stats.firstNoAnswer;
-		++stats.numNoAnswer;
-		Emit(SServerFailed{ request.game, request.address, EServerFailure::NoAnswer });
+		if (!sent.has_value() && !hasFailed)
+		{
+			stats.firstSendFailure = (stats.numSendFailures == 0) ? request.address : stats.firstSendFailure;
+			stats.firstSendError = (stats.numSendFailures == 0) ? sent.error() : stats.firstSendError;
+			++stats.numSendFailures;
+			hasFailed = true;
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A server that said something is given its finish; one that never did did not answer.
+void CQueryPump::EndRequests(Clock::time_point now)
+{
+	m_scheduler.TakeEnded(now, m_endedRequests);
+
+	for (SEndedRequest const& ended : m_endedRequests)
+	{
+		SRefreshStats& stats{ GetRefresh(ended.request.game).stats };
+
+		if (ended.hasAnswered)
+		{
+			FinishServer(ended.request, ended.roundTrip);
+		}
+		else
+		{
+			CloseServer(ended.request);
+			stats.firstNoAnswer = (stats.numNoAnswer == 0) ? ended.request.address : stats.firstNoAnswer;
+			++stats.numNoAnswer;
+			Emit(SServerFailed{ ended.request.game, ended.request.address, EServerFailure::NoAnswer });
+		}
 	}
 
-	m_requests.clear();
+	m_endedRequests.clear();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -471,7 +703,7 @@ void CQueryPump::FinishRefreshes()
 		if (refresh.isActive && !m_masters.HasWork(game) && !m_scheduler.HasWork(game))
 		{
 			TGE_ASSERT(std::ranges::none_of(m_serverConversations, [game](auto const& entry) { return entry.second.game == game; })
-				&& std::ranges::none_of(m_masterConversations, [game](auto const& entry) { return entry.second.game == game; }),
+				&& std::ranges::none_of(m_masterConversations, [game](auto const& entry) { return entry.second.record.game == game; }),
 				"A finished refresh left a conversation open");
 
 			refresh.isActive = false;
@@ -496,20 +728,11 @@ void CQueryPump::ReceiveDatagrams()
 		{
 			Clock::time_point const now{ Clock::now() };
 			std::span<std::byte const> const datagram{ m_buffer.data(), received.value() };
-			std::optional<SMasterId> const master{ m_masters.OnDatagram(source, now) };
+			std::optional<SAnsweredRequest> const answered{ m_scheduler.OnDatagram(source, datagram.size(), now) };
 
-			if (master.has_value())
+			if (answered.has_value())
 			{
-				ReadMasterDatagram(*master, datagram);
-			}
-			else
-			{
-				std::optional<SAnsweredRequest> const answered{ m_scheduler.Answer(source, now) };
-
-				if (answered.has_value())
-				{
-					ReadStatusDatagram(answered.value(), datagram);
-				}
+				ReadStatusDatagram(answered.value(), datagram, now);
 			}
 
 			++numReceived;
@@ -541,78 +764,77 @@ void CQueryPump::CountReceiveError(int error)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CQueryPump::ReadMasterDatagram(SMasterId const& master, std::span<std::byte const> datagram)
+// A datagram past the caps never reaches the script: the conversation ends with what it has.
+void CQueryPump::ReadStatusDatagram(SAnsweredRequest const& answered, std::span<std::byte const> datagram, Clock::time_point now)
 {
-	SRefreshStats& stats{ GetRefresh(master.game).stats };
-	auto const it{ m_masterConversations.find(ToConversationKey(master)) };
+	SServerRequest const& request{ answered.request };
+	auto const it{ m_serverConversations.find(ToConversationKey(request.game, request.address)) };
 
-	TGE_ASSERT(it != m_masterConversations.end(), "A datagram from a master that was never asked");
+	TGE_ASSERT(it != m_serverConversations.end(), "A datagram for a server without a conversation");
 
-	std::expected<Script::SScriptAction, std::string> const action{ GetScript(master.game).Receive(it->second.conversation, datagram) };
-	std::span<Query::SServerAddress const> const servers{ action.has_value() ? std::span<Query::SServerAddress const>{ action->servers }
-		: std::span<Query::SServerAddress const>{} };
-	std::optional<Query::EParseError> const error{ action.has_value() ? action->reason : Query::EParseError::ScriptFailed };
-
-	if (!action.has_value())
+	if (answered.isOverCap)
 	{
-		RecordScriptFailure(stats, action.error());
+		SRefreshStats& stats{ GetRefresh(request.game).stats };
+
+		stats.firstOverCap = (stats.numOverCap == 0) ? request.address : stats.firstOverCap;
+		++stats.numOverCap;
+		FinishServer(request, answered.roundTrip);
 	}
-
-	if (error.has_value())
+	else
 	{
-		stats.firstBadMasterDatagramError = (stats.numBadMasterDatagrams == 0) ? *error : stats.firstBadMasterDatagramError;
-		++stats.numBadMasterDatagrams;
-	}
+		std::expected<Script::SScriptAction, std::string> action{ GetScript(request.game).Receive(it->second.conversation, datagram) };
 
-	size_t const numAdmitted{ m_masters.AdmitEntries(master, servers.size()) };
-
-	stats.numCappedEntries += servers.size() - numAdmitted;
-
-	for (Query::SServerAddress const& address : servers.first(numAdmitted))
-	{
-		if (Query::IsQueryable(address))
+		if (!action.has_value() || action->reply.has_value() || action->reason.has_value())
 		{
-			m_listed.emplace_back(address);
+			EndServer(request, answered.roundTrip, std::move(action));
 		}
 		else
 		{
-			stats.firstUnqueryable = (stats.numUnqueryable == 0) ? address : stats.firstUnqueryable;
-			++stats.numUnqueryable;
+			if (!IsEmpty(*action))
+			{
+				m_scheduler.MarkStepAnswered(request);
+			}
+
+			if (!action->send.empty())
+			{
+				it->second.send = std::move(action->send);
+				m_scheduler.BeginStep(request, now);
+				SendToServer(request, it->second);
+			}
+			else if (action->quiet.has_value())
+			{
+				m_scheduler.SetQuiet(request, *action->quiet);
+			}
 		}
 	}
-
-	ListServers(master.game, m_listed);
-	m_listed.clear();
 }
 
 //////////////////////////////////////////////////////////////////////////
-// One datagram is all this engine takes, so a reply the script still waits on is finished right away.
-void CQueryPump::ReadStatusDatagram(SAnsweredRequest const& answered, std::span<std::byte const> datagram)
+void CQueryPump::FinishServer(SServerRequest const& request, Clock::duration roundTrip)
 {
-	Query::EGame const game{ answered.request.game };
-	SRefreshStats& stats{ GetRefresh(game).stats };
-	Script::CProtocolScript& script{ GetScript(game) };
-	auto const it{ m_serverConversations.find(ToConversationKey(game, answered.request.address)) };
+	auto const it{ m_serverConversations.find(ToConversationKey(request.game, request.address)) };
 
-	TGE_ASSERT(it != m_serverConversations.end(), "An answered request without a conversation");
+	TGE_ASSERT(it != m_serverConversations.end(), "Finishing a server without a conversation");
 
-	std::expected<Script::SScriptAction, std::string> action{ script.Receive(it->second.conversation, datagram) };
+	EndServer(request, roundTrip, GetScript(request.game).Finish(it->second.conversation));
+}
 
-	if (action.has_value() && !action->reply.has_value() && !action->reason.has_value())
-	{
-		action = script.Finish(it->second.conversation);
-	}
+//////////////////////////////////////////////////////////////////////////
+// A conversation that ends with neither reply nor reason left its reply unfinished.
+void CQueryPump::EndServer(SServerRequest const& request, Clock::duration roundTrip, std::expected<Script::SScriptAction, std::string> action)
+{
+	SRefreshStats& stats{ GetRefresh(request.game).stats };
 
-	script.End(it->second.conversation);
-	m_serverConversations.erase(it);
+	CloseServer(request);
+	m_scheduler.Remove(request);
 
 	if (action.has_value() && action->reply.has_value())
 	{
-		uint32_t const pingMs{ static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(answered.roundTrip).count()) };
+		uint32_t const pingMs{ static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(roundTrip).count()) };
 
 		++stats.numAnswered;
 		stats.numMalformedPlayerLines += action->reply->numMalformedPlayerLines;
-		Emit(SServerAnswered{ game, answered.request.address, pingMs, std::move(*action->reply) });
+		Emit(SServerAnswered{ request.game, request.address, pingMs, std::move(*action->reply) });
 	}
 	else
 	{
@@ -623,10 +845,22 @@ void CQueryPump::ReadStatusDatagram(SAnsweredRequest const& answered, std::span<
 			RecordScriptFailure(stats, action.error());
 		}
 
-		stats.firstBadReply = (stats.numBadReplies == 0) ? answered.request.address : stats.firstBadReply;
+		stats.firstBadReply = (stats.numBadReplies == 0) ? request.address : stats.firstBadReply;
 		stats.firstBadReplyError = (stats.numBadReplies == 0) ? error : stats.firstBadReplyError;
 		++stats.numBadReplies;
-		Emit(SServerFailed{ game, answered.request.address, EServerFailure::BadReply });
+		Emit(SServerFailed{ request.game, request.address, EServerFailure::BadReply });
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CQueryPump::CloseServer(SServerRequest const& request)
+{
+	auto const it{ m_serverConversations.find(ToConversationKey(request.game, request.address)) };
+
+	if (it != m_serverConversations.end())
+	{
+		GetScript(request.game).End(it->second.conversation);
+		m_serverConversations.erase(it);
 	}
 }
 
@@ -653,75 +887,48 @@ void CQueryPump::ListServers(Query::EGame game, std::span<Query::SServerAddress 
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A retry finds its conversation open and resends what it started with.
-std::expected<SConversationRecord const*, std::string> CQueryPump::OpenConversation(std::unordered_map<uint64_t, SConversationRecord>& conversations,
-	uint64_t key, Query::EGame game, Script::EConversationKind kind)
+void CQueryPump::CloseConversations(Query::EGame game)
 {
-	auto const it{ conversations.find(key) };
-	std::expected<SConversationRecord const*, std::string> result{ (it != conversations.end()) ? &it->second : nullptr };
-
-	if (it == conversations.end())
-	{
-		SConversationRecord record{ game, Script::SConversation{ kind, 0 }, {} };
-		std::expected<Script::SScriptAction, std::string> started{ GetScript(game).Start(record.conversation, Query::GetGame(game).protocolOptions) };
-
-		if (started.has_value())
-		{
-			record.send = std::move(started->send);
-			result = &conversations.emplace(key, std::move(record)).first->second;
-		}
-		else
-		{
-			result = std::unexpected{ std::move(started.error()) };
-		}
-	}
-
-	return result;
-}
-
-//////////////////////////////////////////////////////////////////////////
-void CQueryPump::CloseConversation(std::unordered_map<uint64_t, SConversationRecord>& conversations, uint64_t key)
-{
-	auto const it{ conversations.find(key) };
-
-	if (it != conversations.end())
-	{
-		GetScript(it->second.game).End(it->second.conversation);
-		conversations.erase(it);
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-void CQueryPump::CloseConversations(std::unordered_map<uint64_t, SConversationRecord>& conversations, Query::EGame game)
-{
-	for (auto it{ conversations.begin() }; it != conversations.end();)
+	for (auto it{ m_serverConversations.begin() }; it != m_serverConversations.end();)
 	{
 		if (it->second.game == game)
 		{
 			GetScript(game).End(it->second.conversation);
-			it = conversations.erase(it);
+			it = m_serverConversations.erase(it);
 		}
 		else
 		{
 			++it;
 		}
 	}
+
+	for (auto it{ m_masterConversations.begin() }; it != m_masterConversations.end();)
+	{
+		uint64_t const key{ it->first };
+		bool const isGame{ it->second.record.game == game };
+
+		++it;
+
+		if (isGame)
+		{
+			CloseMaster(key);
+		}
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Every datagram is sent; the first failure is the one reported.
-std::expected<void, int> CQueryPump::Send(Query::SServerAddress const& address, std::span<std::vector<std::byte> const> datagrams) const
+std::expected<void, std::string> CQueryPump::StartConversation(SConversationRecord& record)
 {
-	std::expected<void, int> result{};
+	std::expected<Script::SScriptAction, std::string> started{ GetScript(record.game).Start(record.conversation, Query::GetGame(record.game).protocolOptions) };
+	std::expected<void, std::string> result{};
 
-	for (std::vector<std::byte> const& datagram : datagrams)
+	if (started.has_value())
 	{
-		std::expected<void, int> const sent{ m_socket.Send(address, datagram) };
-
-		if (result.has_value() && !sent.has_value())
-		{
-			result = sent;
-		}
+		record.send = std::move(started->send);
+	}
+	else
+	{
+		result = std::unexpected{ std::move(started.error()) };
 	}
 
 	return result;
@@ -767,9 +974,9 @@ void CQueryPump::ReportRefresh(Query::EGame game) const
 		gLog.Warning("{}: {} master datagrams were unreadable ({}); their complete entries were kept", name, stats.numBadMasterDatagrams, Query::ToString(stats.firstBadMasterDatagramError));
 	}
 
-	if (stats.numCappedEntries > 0)
+	if (stats.numOverCap > 0)
 	{
-		gLog.Warning("{}: a master listed {} more servers than one master may; they were ignored", name, stats.numCappedEntries);
+		gLog.Warning("{}: {} servers sent more than one server may; each was cut short, first {}", name, stats.numOverCap, Query::FormatAddress(stats.firstOverCap));
 	}
 
 	if (stats.numSendFailures > 0)

@@ -1,0 +1,72 @@
+#include "catalog_fixture.hpp"
+#include "query/game_catalog.hpp"
+#include "script/protocol_script.hpp"
+#include <expected>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <iterator>
+#include <span>
+#include <string>
+#include <vector>
+#include <utility>
+
+namespace Lkt::Fixtures
+{
+//////////////////////////////////////////////////////////////////////////
+void CCatalogTest::SetUp()
+{
+	std::span<Query::SProtocolDefinition const> const protocols{ Query::GetProtocolCatalog() };
+	std::span<Query::SGameDefinition const> const games{ Query::GetGameCatalog() };
+
+	m_protocols.assign(protocols.begin(), protocols.end());
+	m_games.assign(games.begin(), games.end());
+	m_numBuiltinProtocols = m_protocols.size();
+	m_numBuiltinGames = m_games.size();
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CCatalogTest::TearDown()
+{
+	m_protocols.resize(m_numBuiltinProtocols);
+	m_games.resize(m_numBuiltinGames);
+	Install();
+}
+
+//////////////////////////////////////////////////////////////////////////
+Query::EProtocol CCatalogTest::AddProtocol(std::string_view name)
+{
+	std::filesystem::path const path{ std::filesystem::path{ LKT_TEST_SCRIPTS_DIR } / std::format("{}.lua", name) };
+	std::ifstream file{ path, std::ios::binary };
+	std::string const source{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} };
+	Script::CProtocolScript script{};
+	std::expected<void, std::string> const loaded{ script.Initialize(name, source) };
+
+	EXPECT_TRUE(file.is_open()) << path;
+	EXPECT_TRUE(loaded.has_value()) << loaded.error_or("");
+
+	std::span<Query::SProtocolOption const> const options{ script.GetOptions() };
+
+	m_protocols.emplace_back(std::string{ name }, source, std::vector<Query::SProtocolOption>{ options.begin(), options.end() });
+	script.Terminate();
+	Install();
+
+	return static_cast<Query::EProtocol>(m_protocols.size() - 1);
+}
+
+//////////////////////////////////////////////////////////////////////////
+Query::EGame CCatalogTest::AddGame(Query::SGameDefinition game)
+{
+	m_games.emplace_back(std::move(game));
+	Install();
+
+	return static_cast<Query::EGame>(m_games.size() - 1);
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CCatalogTest::Install()
+{
+	Query::TerminateGameCatalog();
+	Query::InitializeGameCatalog(m_protocols, m_games);
+}
+} // namespace Lkt::Fixtures

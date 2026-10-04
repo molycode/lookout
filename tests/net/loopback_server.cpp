@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <span>
 #include <unistd.h>
+#include <utility>
 
 namespace Lkt::Fixtures
 {
@@ -20,7 +21,20 @@ constexpr int PollIntervalMs{ 20 };
 //////////////////////////////////////////////////////////////////////////
 bool CLoopbackServer::Start(std::vector<std::byte> reply)
 {
-	m_reply = std::move(reply);
+	SLoopbackExchange exchange{};
+
+	if (!reply.empty())
+	{
+		exchange.replies.emplace_back(std::move(reply));
+	}
+
+	return StartExchanges({ std::move(exchange) });
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool CLoopbackServer::StartExchanges(std::vector<SLoopbackExchange> exchanges)
+{
+	m_exchanges = std::move(exchanges);
 	m_descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 
 	sockaddr_in local{};
@@ -116,9 +130,17 @@ void CLoopbackServer::Serve()
 
 				m_numRequests.fetch_add(1, std::memory_order_acq_rel);
 
-				if (!m_reply.empty())
+				auto const exchange{ std::ranges::find_if(m_exchanges, [request](SLoopbackExchange const& candidate)
 				{
-					sendto(m_descriptor, m_reply.data(), m_reply.size(), 0, reinterpret_cast<sockaddr const*>(&sender), senderSize);
+					return candidate.request.empty() || std::ranges::equal(candidate.request, request);
+				}) };
+
+				if (exchange != m_exchanges.end())
+				{
+					for (std::vector<std::byte> const& reply : exchange->replies)
+					{
+						sendto(m_descriptor, reply.data(), reply.size(), 0, reinterpret_cast<sockaddr const*>(&sender), senderSize);
+					}
 				}
 			}
 		}

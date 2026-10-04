@@ -9,29 +9,76 @@ namespace
 {
 constexpr uint32_t MaxAttempts{ 2 };
 constexpr Clock::duration ResolveTimeout{ std::chrono::seconds{ 5 } };
-constexpr Clock::duration ReplyTimeout{ std::chrono::seconds{ 2 } };
-constexpr Clock::duration QuietPeriod{ std::chrono::milliseconds{ 1500 } };
+constexpr Clock::duration StepTimeout{ std::chrono::seconds{ 2 } };
+constexpr Clock::duration Deadline{ std::chrono::seconds{ 30 } };
 
 // The busiest master measured lists about 1,000 servers; anything far beyond that is broken or hostile.
 constexpr size_t MaxEntriesPerMaster{ 4096 };
 
 //////////////////////////////////////////////////////////////////////////
-bool IsListening(SMasterRecord const& record)
-{
-	return record.state == EMasterState::Querying || record.state == EMasterState::Receiving;
-}
-
-//////////////////////////////////////////////////////////////////////////
-// A datagram from a master not yet asked answers nothing Lookout sent.
 bool IsAsked(SMasterRecord const& record)
 {
-	return IsListening(record) && record.numAttempts > 0;
+	return record.state == EMasterState::Querying && record.numAttempts > 0;
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool IsWaiting(SMasterRecord const& record)
+bool IsStepExhausted(SMasterRecord const& record, Clock::time_point now)
 {
-	return IsListening(record) || record.state == EMasterState::Resolving;
+	return !record.isStepAnswered && record.numAttempts >= MaxAttempts && now - record.stepSentAt >= StepTimeout;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Empty when the list is complete, the failure when it was cut short; none while the conversation goes on.
+std::optional<std::string> FindEnding(SMasterRecord const& record, Clock::time_point now)
+{
+	std::optional<std::string> ending{};
+
+	if (now - record.startedAt >= Deadline)
+	{
+		ending = record.hasAnswered ? std::format("did not finish its list in {} s, after {} servers", Deadline / std::chrono::seconds{ 1 }, record.numEntries)
+			: std::string{ "did not answer" };
+	}
+	else if (record.quiet.has_value() && now - record.lastDatagramAt >= *record.quiet)
+	{
+		ending = std::string{};
+	}
+	else if (IsStepExhausted(record, now))
+	{
+		ending = record.hasAnswered ? std::format("stopped answering after listing {} servers", record.numEntries) : std::string{ "did not answer" };
+	}
+
+	return ending;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::optional<Clock::time_point> GetDeadline(SMasterRecord const& record)
+{
+	std::optional<Clock::time_point> deadline{};
+
+	if (record.state == EMasterState::Resolving)
+	{
+		deadline = record.resolveDeadline;
+	}
+	else if (record.state == EMasterState::Querying && record.numAttempts == 0)
+	{
+		deadline = record.stepSentAt;
+	}
+	else if (record.state == EMasterState::Querying)
+	{
+		deadline = record.startedAt + Deadline;
+
+		if (record.quiet.has_value())
+		{
+			deadline = std::min(*deadline, record.lastDatagramAt + *record.quiet);
+		}
+
+		if (!record.isStepAnswered)
+		{
+			deadline = std::min(*deadline, record.stepSentAt + StepTimeout);
+		}
+	}
+
+	return deadline;
 }
 } // namespace
 
@@ -50,7 +97,7 @@ void CMasterTracker::Begin(Query::EGame game, uint32_t generation, std::span<Que
 		record.generation = generation;
 		record.host = master.host;
 		record.port = master.port;
-		record.deadline = now + ResolveTimeout;
+		record.resolveDeadline = now + ResolveTimeout;
 		m_records.emplace_back(std::move(record));
 	}
 }
@@ -66,7 +113,7 @@ void CMasterTracker::OnResolved(Query::EGame game, uint32_t generation, size_t i
 			{
 				record.address = Query::SServerAddress{ result.value(), record.port };
 				record.state = EMasterState::Querying;
-				record.deadline = now;
+				record.stepSentAt = now;
 			}
 			else
 			{
@@ -82,92 +129,119 @@ void CMasterTracker::Update(Clock::time_point now, std::vector<SMasterQuery>& qu
 {
 	for (SMasterRecord& record : m_records)
 	{
-		if (record.state == EMasterState::Resolving && record.deadline <= now)
+		if (record.state == EMasterState::Resolving && record.resolveDeadline <= now)
 		{
 			record.failure = "could not be resolved in time";
 			record.state = EMasterState::Failed;
 		}
 
-		if (record.state == EMasterState::Querying && record.deadline <= now)
+		if (record.state == EMasterState::Querying && record.numAttempts == 0)
 		{
-			if (record.numAttempts < MaxAttempts)
-			{
-				++record.numAttempts;
-				record.deadline = now + ReplyTimeout;
-				queries.emplace_back(SMasterId{ record.game, record.index }, record.address);
-			}
-			else
-			{
-				record.failure = "did not answer";
-				record.state = EMasterState::Failed;
-			}
+			record.numAttempts = 1;
+			record.startedAt = now;
+			record.stepSentAt = now;
+			queries.emplace_back(SMasterId{ record.game, record.index }, record.address);
 		}
-
-		if (record.state == EMasterState::Receiving && record.deadline <= now)
+		else if (std::optional<std::string> ending{ IsAsked(record) ? FindEnding(record, now) : std::nullopt }; ending.has_value())
 		{
-			record.state = EMasterState::Done;
-			outcomes.emplace_back(SMasterId{ record.game, record.index }, record.host, std::string{});
+			End(record, std::move(*ending), outcomes);
+		}
+		else if (IsAsked(record) && !record.isStepAnswered && record.numAttempts < MaxAttempts && now - record.stepSentAt >= StepTimeout)
+		{
+			++record.numAttempts;
+			record.stepSentAt = now;
+			queries.emplace_back(SMasterId{ record.game, record.index }, record.address);
 		}
 
 		if (record.state == EMasterState::Failed)
 		{
-			record.state = EMasterState::Done;
-			outcomes.emplace_back(SMasterId{ record.game, record.index }, record.host, record.failure);
+			End(record, record.failure, outcomes);
 		}
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Two names of one game can resolve to the same master, so every record there stays alive while it talks.
-std::optional<SMasterId> CMasterTracker::OnDatagram(Query::SServerAddress const& source, Clock::time_point now)
+void CMasterTracker::OnDatagram(SMasterId const& master, Clock::time_point now)
 {
-	std::optional<SMasterId> master{};
+	SMasterRecord* const pRecord{ Find(master) };
 
-	for (SMasterRecord& record : m_records)
+	if (pRecord != nullptr && IsAsked(*pRecord))
 	{
-		if (IsAsked(record) && record.address == source)
-		{
-			record.state = EMasterState::Receiving;
-			record.deadline = now + QuietPeriod;
-			master = master.has_value() ? master : SMasterId{ record.game, record.index };
-		}
+		pRecord->hasAnswered = true;
+		pRecord->lastDatagramAt = now;
 	}
+}
 
-	return master;
+//////////////////////////////////////////////////////////////////////////
+void CMasterTracker::MarkStepAnswered(SMasterId const& master)
+{
+	SMasterRecord* const pRecord{ Find(master) };
+
+	if (pRecord != nullptr)
+	{
+		pRecord->isStepAnswered = true;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CMasterTracker::BeginStep(SMasterId const& master, Clock::time_point now)
+{
+	SMasterRecord* const pRecord{ Find(master) };
+
+	if (pRecord != nullptr)
+	{
+		pRecord->numAttempts = 1;
+		pRecord->stepSentAt = now;
+		pRecord->isStepAnswered = false;
+		pRecord->quiet.reset();
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CMasterTracker::SetQuiet(SMasterId const& master, Clock::duration quiet)
+{
+	SMasterRecord* const pRecord{ Find(master) };
+
+	if (pRecord != nullptr)
+	{
+		pRecord->quiet = quiet;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
 size_t CMasterTracker::AdmitEntries(SMasterId const& master, size_t numEntries)
 {
+	SMasterRecord* const pRecord{ Find(master) };
 	size_t numAdmitted{ 0 };
 
-	auto const it{ std::ranges::find_if(m_records, [&master](SMasterRecord const& record)
+	if (pRecord != nullptr && IsAsked(*pRecord))
 	{
-		return IsAsked(record) && SMasterId{ record.game, record.index } == master;
-	}) };
-
-	if (it != m_records.end())
-	{
-		numAdmitted = std::min(numEntries, MaxEntriesPerMaster - it->numEntries);
-		it->numEntries += numAdmitted;
+		numAdmitted = std::min(numEntries, MaxEntriesPerMaster - pRecord->numEntries);
+		pRecord->numEntries += numAdmitted;
 	}
 
 	return numAdmitted;
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Reported at once: a failed record arms no timer, so waiting for the next update could leave the refresh hanging.
+void CMasterTracker::Finish(SMasterId const& master, std::vector<SMasterOutcome>& outcomes)
+{
+	SMasterRecord* const pRecord{ Find(master) };
+
+	if (pRecord != nullptr && pRecord->state != EMasterState::Done)
+	{
+		End(*pRecord, std::string{}, outcomes);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 void CMasterTracker::Fail(SMasterId const& master, std::string failure, std::vector<SMasterOutcome>& outcomes)
 {
-	auto const it{ std::ranges::find_if(m_records, [&master](SMasterRecord const& record)
-	{
-		return record.state != EMasterState::Done && SMasterId{ record.game, record.index } == master;
-	}) };
+	SMasterRecord* const pRecord{ Find(master) };
 
-	if (it != m_records.end())
+	if (pRecord != nullptr && pRecord->state != EMasterState::Done)
 	{
-		it->state = EMasterState::Done;
-		outcomes.emplace_back(master, it->host, std::move(failure));
+		End(*pRecord, std::move(failure), outcomes);
 	}
 }
 
@@ -175,6 +249,15 @@ void CMasterTracker::Fail(SMasterId const& master, std::string failure, std::vec
 void CMasterTracker::Cancel(Query::EGame game)
 {
 	std::erase_if(m_records, [game](SMasterRecord const& record) { return record.game == game; });
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool CMasterTracker::IsAsking(SMasterId const& master) const
+{
+	return std::ranges::any_of(m_records, [&master](SMasterRecord const& record)
+	{
+		return IsAsked(record) && SMasterId{ record.game, record.index } == master;
+	});
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -190,12 +273,29 @@ std::optional<Clock::time_point> CMasterTracker::GetNextDeadline() const
 
 	for (SMasterRecord const& record : m_records)
 	{
-		if (IsWaiting(record))
+		std::optional<Clock::time_point> const recordDeadline{ GetDeadline(record) };
+
+		if (recordDeadline.has_value())
 		{
-			deadline = deadline.has_value() ? std::min(deadline.value(), record.deadline) : record.deadline;
+			deadline = deadline.has_value() ? std::min(*deadline, *recordDeadline) : recordDeadline;
 		}
 	}
 
 	return deadline;
+}
+
+//////////////////////////////////////////////////////////////////////////
+SMasterRecord* CMasterTracker::Find(SMasterId const& master)
+{
+	auto const it{ std::ranges::find_if(m_records, [&master](SMasterRecord const& record) { return SMasterId{ record.game, record.index } == master; }) };
+
+	return (it != m_records.end()) ? &*it : nullptr;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CMasterTracker::End(SMasterRecord& record, std::string failure, std::vector<SMasterOutcome>& outcomes)
+{
+	record.state = EMasterState::Done;
+	outcomes.emplace_back(SMasterId{ record.game, record.index }, record.host, std::move(failure));
 }
 } // namespace Lkt::Net

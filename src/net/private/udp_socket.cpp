@@ -46,6 +46,18 @@ void CUdpSocket::Terminate()
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::expected<void, int> CUdpSocket::Connect(Query::SServerAddress const& peer) const
+{
+	sockaddr_in target{};
+
+	target.sin_family = AF_INET;
+	target.sin_port = htons(peer.port);
+	target.sin_addr.s_addr = htonl(peer.ipv4);
+
+	return (connect(m_descriptor, reinterpret_cast<sockaddr const*>(&target), sizeof(target)) == 0) ? std::expected<void, int>{} : std::unexpected{ errno };
+}
+
+//////////////////////////////////////////////////////////////////////////
 std::expected<void, int> CUdpSocket::Send(Query::SServerAddress const& destination, std::span<std::byte const> datagram) const
 {
 	sockaddr_in target{};

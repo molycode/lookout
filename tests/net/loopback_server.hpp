@@ -1,5 +1,6 @@
 #pragma once
 
+#include "net/loopback_exchange.hpp"
 #include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
 #include <array>
@@ -11,7 +12,7 @@
 
 namespace Lkt::Fixtures
 {
-// A game server on 127.0.0.1 that answers every datagram with one fixed reply, or stays silent without one.
+// A game server or master on 127.0.0.1 that answers each datagram with the replies of the first exchange it matches.
 class CLoopbackServer final : private Tge::SNoCopyNoMove
 {
 public:
@@ -19,7 +20,9 @@ public:
 	CLoopbackServer() = default;
 	~CLoopbackServer() = default;
 
+	// The same reply to every request; none stays silent.
 	bool Start(std::vector<std::byte> reply);
+	bool StartExchanges(std::vector<SLoopbackExchange> exchanges);
 	void Stop();
 
 	Query::SServerAddress GetAddress() const;
@@ -36,7 +39,7 @@ private:
 
 	int m_descriptor{ -1 };
 	uint16_t m_port{ 0 };
-	std::vector<std::byte> m_reply;
+	std::vector<SLoopbackExchange> m_exchanges;
 	std::atomic<bool> m_isServing{ false };
 	std::atomic<uint32_t> m_numRequests{ 0 };
 	std::array<std::byte, MaxRequestSize> m_firstRequest{};

@@ -27,8 +27,8 @@ void DrawStatusBar(Browser::CBrowser const& browser, std::string_view message)
 
 	if (status.numMastersFailed > 0)
 	{
-		std::string_view const failed{ FormatTo(buffer, LKT_ICON_WARNING " {} {} not answer", status.numMastersFailed,
-			(status.numMastersFailed == 1) ? "master did" : "masters did") };
+		std::string_view const failed{ FormatTo(buffer, LKT_ICON_WARNING " {} {} failed", status.numMastersFailed,
+			(status.numMastersFailed == 1) ? "master" : "masters") };
 
 		ImGui::SameLine();
 		ImGui::PushStyleColor(ImGuiCol_Text, colors.amber);

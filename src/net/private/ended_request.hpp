@@ -5,11 +5,11 @@
 
 namespace Lkt::Net
 {
-// A datagram from a server in flight; the round trip is that of its first datagram.
-struct SAnsweredRequest final
+// A conversation the clock ended: a step that never got an answer, a quiet period, or the overall deadline.
+struct SEndedRequest final
 {
 	SServerRequest request;
 	Clock::duration roundTrip{};
-	bool isOverCap{ false };
+	bool hasAnswered{ false };
 };
 } // namespace Lkt::Net

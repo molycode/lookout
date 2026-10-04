@@ -28,6 +28,9 @@ std::string_view FormatAddressTo(SServerAddress const& address, std::span<char, 
 // False for what no public game server can be: a master listing loopback, private, link-local, multicast or
 // broadcast addresses would otherwise make the browser probe the user's own network.
 bool IsQueryable(SServerAddress const& address);
+// A master on the user's own network may list servers there too, which is what makes a LAN master, or one on
+// loopback in a test, usable; a public master still cannot point the browser inward.
+bool MayList(SServerAddress const& master, SServerAddress const& server);
 
 constexpr uint64_t ToKey(SServerAddress const& address)
 {

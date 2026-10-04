@@ -6,11 +6,13 @@
 #include "query/server_address.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
 namespace Lkt::Net
 {
+// numAttempts counts the sends of the current step; none yet means the master is resolved and waits to be asked.
 struct SMasterRecord final
 {
 	Query::EGame game{ Query::NoGame };
@@ -20,9 +22,15 @@ struct SMasterRecord final
 	uint16_t port{ 0 };
 	EMasterState state{ EMasterState::Resolving };
 	Query::SServerAddress address;
-	Clock::time_point deadline{};
+	Clock::time_point resolveDeadline{};
+	Clock::time_point startedAt{};
+	Clock::time_point stepSentAt{};
+	Clock::time_point lastDatagramAt{};
+	std::optional<Clock::duration> quiet;
 	uint32_t numAttempts{ 0 };
 	size_t numEntries{ 0 };
+	bool isStepAnswered{ false };
+	bool hasAnswered{ false };
 	std::string failure;
 };
 } // namespace Lkt::Net

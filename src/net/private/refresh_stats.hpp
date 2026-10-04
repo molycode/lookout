@@ -23,11 +23,12 @@ struct SRefreshStats final
 	Query::SServerAddress firstUnqueryable;
 	size_t numBadMasterDatagrams{ 0 };
 	Query::EParseError firstBadMasterDatagramError{ Query::EParseError::Malformed };
-	size_t numCappedEntries{ 0 };
 	size_t numSendFailures{ 0 };
 	Query::SServerAddress firstSendFailure;
 	int firstSendError{ 0 };
 	size_t numReceiveErrors{ 0 };
 	int firstReceiveError{ 0 };
+	size_t numOverCap{ 0 };
+	Query::SServerAddress firstOverCap;
 };
 } // namespace Lkt::Net

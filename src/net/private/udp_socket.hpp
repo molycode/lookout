@@ -19,6 +19,8 @@ public:
 	bool Initialize();
 	void Terminate();
 
+	// Afterwards only that peer's datagrams arrive, and a refusal it reports comes back from Receive as ECONNREFUSED.
+	std::expected<void, int> Connect(Query::SServerAddress const& peer) const;
 	std::expected<void, int> Send(Query::SServerAddress const& destination, std::span<std::byte const> datagram) const;
 	std::expected<size_t, int> Receive(std::span<std::byte> buffer, Query::SServerAddress& source) const;
 

@@ -81,6 +81,12 @@ bool IsQueryable(SServerAddress const& address)
 }
 
 //////////////////////////////////////////////////////////////////////////
+bool MayList(SServerAddress const& master, SServerAddress const& server)
+{
+	return server.port != 0 && (IsQueryable(server) || !IsQueryable(master));
+}
+
+//////////////////////////////////////////////////////////////////////////
 std::string FormatAddress(SServerAddress const& address)
 {
 	std::array<char, MaxFormattedAddress> buffer{};
