@@ -211,6 +211,7 @@ TEST(GameJson, WrongTypeIsRejected)
 
 	EXPECT_TRUE(ReadProblem(game).starts_with("name:"));
 }
+
 //////////////////////////////////////////////////////////////////////////
 TEST(GameJson, ColourCodesAreRead)
 {
@@ -272,6 +273,7 @@ TEST(GameJson, EscapeMustBeOneCharacter)
 
 	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.escape:"));
 }
+
 //////////////////////////////////////////////////////////////////////////
 TEST(GameJson, UnknownPlaceholderIsRejected)
 {
@@ -321,6 +323,7 @@ TEST(GameJson, PasswordLengthIsRequired)
 
 	EXPECT_TRUE(ReadProblem(game).starts_with("join.password.maxLength:"));
 }
+
 //////////////////////////////////////////////////////////////////////////
 TEST(GameJson, PlayerCountKeyIsRead)
 {

@@ -223,6 +223,7 @@ TEST_F(CUt2004Test, MasterListsItsServersEndToEnd)
 	EXPECT_EQ(Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()).size(), 2u);
 	EXPECT_EQ(m_master.GetNumConnections(), 1u);
 }
+
 //////////////////////////////////////////////////////////////////////////
 // The script makes nothing of the first bytes, a frame still incomplete, yet the master has answered: no step timeout.
 TEST_F(CUt2004Test, MasterPausingMidFrameIsStillAnswering)

@@ -125,6 +125,7 @@ TEST(ServerSummary, BaseQuake3IsNotForeign)
 {
 	EXPECT_FALSE(Summarize(Fixtures::GetGameByKey("quake3"), MakeReply({ { "gamename", "baseq3" } })).isForeign);
 }
+
 //////////////////////////////////////////////////////////////////////////
 TEST(ServerSummary, PlayerCountRuleWinsOverTheList)
 {

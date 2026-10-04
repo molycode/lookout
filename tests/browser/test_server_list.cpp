@@ -337,6 +337,7 @@ TEST(ServerList, SearchTextHoldsDecodedPlayerNames)
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_TRUE(list.GetEntries()[0].searchText.contains("\nBigJoe"));
 }
+
 //////////////////////////////////////////////////////////////////////////
 TEST(ServerList, ListedServerGetsItsCountry)
 {

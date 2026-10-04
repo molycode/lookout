@@ -116,6 +116,7 @@ TEST(ConnectArgs, OtherPunctuationIsAccepted)
 {
 	EXPECT_FALSE(IsRefused("it's%~#/!"));
 }
+
 //////////////////////////////////////////////////////////////////////////
 TEST(ConnectArgs, PasswordUpToTheLimitIsCarried)
 {

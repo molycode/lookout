@@ -113,6 +113,7 @@ TEST(ServerAddress, PortZeroIsNotQueryable)
 {
 	EXPECT_FALSE(IsQueryable(SServerAddress{ 0x2D5E3A3C, 0 }));
 }
+
 //////////////////////////////////////////////////////////////////////////
 TEST(ServerAddress, PublicMasterListsOnlyPublicServers)
 {

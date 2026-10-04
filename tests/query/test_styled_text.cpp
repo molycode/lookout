@@ -175,6 +175,7 @@ TEST(StyledText, EmptyTextHasNoRuns)
 {
 	EXPECT_TRUE(DecodeText(Quake3Style(), "^1").runs.empty());
 }
+
 //////////////////////////////////////////////////////////////////////////
 TEST(StyledText, RgbCodeCarriesItsColour)
 {
