@@ -1,12 +1,12 @@
 #pragma once
 
-#include <string_view>
+#include <string>
 
 namespace Lkt::Query
 {
 struct SKeyMatch final
 {
-	std::string_view key;
-	std::string_view value;
+	std::string key;
+	std::string value;
 };
 } // namespace Lkt::Query

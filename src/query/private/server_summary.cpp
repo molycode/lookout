@@ -1,13 +1,16 @@
 #include "query/server_summary.hpp"
 #include <algorithm>
 #include <charconv>
+#include <span>
+#include <string>
+#include <string_view>
 
 namespace Lkt::Query
 {
 namespace
 {
 //////////////////////////////////////////////////////////////////////////
-std::string_view FindFirstRule(SStatusReply const& reply, std::span<std::string_view const> keys)
+std::string_view FindFirstRule(SStatusReply const& reply, std::span<std::string const> keys)
 {
 	std::string_view value{};
 

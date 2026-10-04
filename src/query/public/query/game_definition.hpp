@@ -8,23 +8,23 @@
 #include "query/protocol_family.hpp"
 #include "query/server_keys.hpp"
 #include "query/text_style.hpp"
-#include <span>
-#include <string_view>
+#include <string>
+#include <vector>
 
 namespace Lkt::Query
 {
 struct SGameDefinition final
 {
 	EGame game{ NoGame };
-	std::string_view key;
-	std::string_view name;
+	std::string key;
+	std::string name;
 	EProtocolFamily family{ EProtocolFamily::Quake2 };
 	ETextStyle textStyle{ ETextStyle::Ascii7 };
-	std::span<SMasterEndpoint const> masters;
-	std::string_view masterQueryArgs;
+	std::vector<SMasterEndpoint> masters;
+	std::string masterQueryArgs;
 	SServerKeys keys;
-	std::span<SModeRule const> modes;
-	std::span<SKeyMatch const> foreignServers;
+	std::vector<SModeRule> modes;
+	std::vector<SKeyMatch> foreignServers;
 	SLaunchHints launch;
 };
 } // namespace Lkt::Query

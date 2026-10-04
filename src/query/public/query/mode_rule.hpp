@@ -1,13 +1,13 @@
 #pragma once
 
 #include "query/key_match.hpp"
-#include <string_view>
+#include <string>
 
 namespace Lkt::Query
 {
 struct SModeRule final
 {
 	SKeyMatch match;
-	std::string_view label;
+	std::string label;
 };
 } // namespace Lkt::Query

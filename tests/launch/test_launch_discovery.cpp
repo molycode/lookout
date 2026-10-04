@@ -3,7 +3,6 @@
 #include "launch/launcher_ids.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
-#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -20,9 +19,6 @@ using Fixtures::LaunchChannel;
 using Tge::Testing::CExpectedLog;
 
 constexpr std::string_view DesktopId{ "kingpin-native.desktop" };
-constexpr std::array<std::string_view, 1> DesktopFiles{ DesktopId };
-constexpr std::array<std::string_view, 2> RequiredFiles{ "kingpin.x86", "main/pak0.pak" };
-constexpr Query::SLaunchHints Hints{ DesktopFiles, "Games/Kingpin", "run-game.sh", RequiredFiles };
 constexpr std::string_view GameName{ "Kingpin: Life of Crime" };
 
 constexpr std::filesystem::perms Executable{ std::filesystem::perms::owner_all | std::filesystem::perms::group_read | std::filesystem::perms::others_read };
@@ -57,6 +53,7 @@ protected:
 
 		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
 		m_root = pattern;
+		m_hints = Query::SLaunchHints{ { std::string{ DesktopId } }, "Games/Kingpin", "run-game.sh", { "kingpin.x86", "main/pak0.pak" } };
 		m_game = m_root / "games" / "Kingpin";
 		m_program = m_game / "run-game.sh";
 		m_environment.dataHome = m_root / "home" / ".local" / "share";
@@ -87,18 +84,19 @@ protected:
 
 	void WriteInstallFolder() const
 	{
-		std::filesystem::path const folder{ m_environment.home / Hints.installDir };
+		std::filesystem::path const folder{ m_environment.home / m_hints.installDir };
 
-		WriteProgram(folder / Hints.program);
+		WriteProgram(folder / m_hints.program);
 		WriteFile(folder / "kingpin.x86", "");
 		WriteFile(folder / "main" / "pak0.pak", "");
 	}
 
 	std::vector<SLaunchOption> Find() const
 	{
-		return FindLaunchOptions(Hints, GameName, m_environment);
+		return FindLaunchOptions(m_hints, GameName, m_environment);
 	}
 
+	Query::SLaunchHints m_hints;
 	std::filesystem::path m_root;
 	std::filesystem::path m_game;
 	std::filesystem::path m_program;
@@ -249,7 +247,7 @@ TEST_F(CLaunchDiscoveryTest, ProgramNameIsFoundOnTheSearchPath)
 TEST_F(CLaunchDiscoveryTest, CompleteInstallFolderFollowsTheDesktopEntries)
 {
 	CExpectedLog const expected{ LaunchChannel, 0, 0 };
-	std::filesystem::path const folder{ m_environment.home / Hints.installDir };
+	std::filesystem::path const folder{ m_environment.home / m_hints.installDir };
 
 	WriteEntry(m_environment.dataHome, ValidKeys("Kingpin"));
 	WriteInstallFolder();
@@ -264,10 +262,10 @@ TEST_F(CLaunchDiscoveryTest, CompleteInstallFolderFollowsTheDesktopEntries)
 TEST_F(CLaunchDiscoveryTest, InstallFolderThatADesktopEntryStartsIsListedOnce)
 {
 	CExpectedLog const expected{ LaunchChannel, 0, 0 };
-	std::filesystem::path const folder{ m_environment.home / Hints.installDir };
+	std::filesystem::path const folder{ m_environment.home / m_hints.installDir };
 
 	WriteInstallFolder();
-	WriteEntry(m_environment.dataHome, "Type=Application\nName=Kingpin\nExec=\"" + (folder / Hints.program).string() + "\"\nPath=" + folder.string() + "\n");
+	WriteEntry(m_environment.dataHome, "Type=Application\nName=Kingpin\nExec=\"" + (folder / m_hints.program).string() + "\"\nPath=" + folder.string() + "\n");
 
 	std::vector<SLaunchOption> const options{ Find() };
 
@@ -281,7 +279,7 @@ TEST_F(CLaunchDiscoveryTest, IncompleteInstallFolderIsRejected)
 	CExpectedLog const expected{ LaunchChannel, 1, 0 };
 
 	WriteInstallFolder();
-	std::filesystem::remove(m_environment.home / Hints.installDir / "main" / "pak0.pak");
+	std::filesystem::remove(m_environment.home / m_hints.installDir / "main" / "pak0.pak");
 
 	EXPECT_TRUE(Find().empty());
 }

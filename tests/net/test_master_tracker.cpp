@@ -1,6 +1,6 @@
 #include "master_tracker.hpp"
 #include <gtest/gtest.h>
-#include <array>
+#include <vector>
 
 namespace Lkt::Net
 {
@@ -11,21 +11,36 @@ using namespace std::chrono_literals;
 Clock::time_point const Start{ Clock::time_point{} + 1h };
 constexpr Query::EGame Game{ 0 };
 constexpr Query::EGame OtherGame{ 1 };
-constexpr std::array<Query::SMasterEndpoint, 1> Masters{ Query::SMasterEndpoint{ "master.example", 27900 } };
-constexpr std::array<Query::SMasterEndpoint, 2> TwoMasters{ Query::SMasterEndpoint{ "one.example", 27900 }, Query::SMasterEndpoint{ "two.example", 27900 } };
 constexpr uint32_t MasterIp{ 0x2D5E3A3C };
 constexpr uint32_t SecondMasterIp{ 0x2D5E3A3D };
 constexpr Query::SServerAddress MasterAddress{ MasterIp, 27900 };
 
 //////////////////////////////////////////////////////////////////////////
-void BeginResolved(CMasterTracker& tracker)
+// The tracker keeps views of the master hosts, so the lists live as long as each test.
+class CMasterTrackerTest : public testing::Test
 {
-	tracker.Begin(Game, 1, Masters, Start);
-	tracker.OnResolved(Game, 1, 0, MasterIp, Start);
-}
+protected:
+
+	// testing::Test
+	void SetUp() override
+	{
+		m_masters = { Query::SMasterEndpoint{ "master.example", 27900 } };
+		m_twoMasters = { Query::SMasterEndpoint{ "one.example", 27900 }, Query::SMasterEndpoint{ "two.example", 27900 } };
+	}
+	// ~testing::Test
+
+	void BeginResolved(CMasterTracker& tracker) const
+	{
+		tracker.Begin(Game, 1, m_masters, Start);
+		tracker.OnResolved(Game, 1, 0, MasterIp, Start);
+	}
+
+	std::vector<Query::SMasterEndpoint> m_masters;
+	std::vector<Query::SMasterEndpoint> m_twoMasters;
+};
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, AsksTheMasterOnceResolved)
+TEST_F(CMasterTrackerTest, AsksTheMasterOnceResolved)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
@@ -39,7 +54,7 @@ TEST(MasterTracker, AsksTheMasterOnceResolved)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, AsksASilentMasterOnceMore)
+TEST_F(CMasterTrackerTest, AsksASilentMasterOnceMore)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
@@ -54,7 +69,7 @@ TEST(MasterTracker, AsksASilentMasterOnceMore)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, ReportsAMasterThatNeverAnswers)
+TEST_F(CMasterTrackerTest, ReportsAMasterThatNeverAnswers)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
@@ -71,13 +86,13 @@ TEST(MasterTracker, ReportsAMasterThatNeverAnswers)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, ReportsAMasterThatCannotBeResolved)
+TEST_F(CMasterTrackerTest, ReportsAMasterThatCannotBeResolved)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
 	std::vector<SMasterOutcome> outcomes{};
 
-	tracker.Begin(Game, 1, Masters, Start);
+	tracker.Begin(Game, 1, m_masters, Start);
 	tracker.OnResolved(Game, 1, 0, std::unexpected{ std::string{ "Name or service not known" } }, Start);
 	tracker.Update(Start, queries, outcomes);
 
@@ -87,7 +102,7 @@ TEST(MasterTracker, ReportsAMasterThatCannotBeResolved)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, FinishesOnceTheMasterFallsQuiet)
+TEST_F(CMasterTrackerTest, FinishesOnceTheMasterFallsQuiet)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
@@ -107,14 +122,14 @@ TEST(MasterTracker, FinishesOnceTheMasterFallsQuiet)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, IgnoresAnAnswerForAReplacedRefresh)
+TEST_F(CMasterTrackerTest, IgnoresAnAnswerForAReplacedRefresh)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
 	std::vector<SMasterOutcome> outcomes{};
 
-	tracker.Begin(Game, 1, Masters, Start);
-	tracker.Begin(Game, 2, Masters, Start);
+	tracker.Begin(Game, 1, m_masters, Start);
+	tracker.Begin(Game, 2, m_masters, Start);
 	tracker.OnResolved(Game, 1, 0, MasterIp, Start);
 	tracker.Update(Start, queries, outcomes);
 
@@ -123,7 +138,7 @@ TEST(MasterTracker, IgnoresAnAnswerForAReplacedRefresh)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, StrangerIsNotAMaster)
+TEST_F(CMasterTrackerTest, StrangerIsNotAMaster)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
@@ -136,7 +151,7 @@ TEST(MasterTracker, StrangerIsNotAMaster)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, CapsTheServersOneMasterMayList)
+TEST_F(CMasterTrackerTest, CapsTheServersOneMasterMayList)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
@@ -151,12 +166,12 @@ TEST(MasterTracker, CapsTheServersOneMasterMayList)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, CancelOnlyForgetsThatGame)
+TEST_F(CMasterTrackerTest, CancelOnlyForgetsThatGame)
 {
 	CMasterTracker tracker{};
 
 	BeginResolved(tracker);
-	tracker.Begin(OtherGame, 1, Masters, Start);
+	tracker.Begin(OtherGame, 1, m_masters, Start);
 	tracker.Cancel(Game);
 
 	EXPECT_FALSE(tracker.HasWork(Game));
@@ -164,13 +179,13 @@ TEST(MasterTracker, CancelOnlyForgetsThatGame)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, ResolvesEachMasterByItsIndex)
+TEST_F(CMasterTrackerTest, ResolvesEachMasterByItsIndex)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
 	std::vector<SMasterOutcome> outcomes{};
 
-	tracker.Begin(Game, 1, TwoMasters, Start);
+	tracker.Begin(Game, 1, m_twoMasters, Start);
 	tracker.OnResolved(Game, 1, 1, SecondMasterIp, Start);
 	tracker.Update(Start, queries, outcomes);
 
@@ -179,7 +194,7 @@ TEST(MasterTracker, ResolvesEachMasterByItsIndex)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, AnswerStopsTheRetry)
+TEST_F(CMasterTrackerTest, AnswerStopsTheRetry)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
@@ -194,7 +209,7 @@ TEST(MasterTracker, AnswerStopsTheRetry)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, FinishedMasterTakesNoMoreDatagrams)
+TEST_F(CMasterTrackerTest, FinishedMasterTakesNoMoreDatagrams)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
@@ -209,13 +224,13 @@ TEST(MasterTracker, FinishedMasterTakesNoMoreDatagrams)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, LookupThatNeverReturnsTimesOut)
+TEST_F(CMasterTrackerTest, LookupThatNeverReturnsTimesOut)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};
 	std::vector<SMasterOutcome> outcomes{};
 
-	tracker.Begin(Game, 1, Masters, Start);
+	tracker.Begin(Game, 1, m_masters, Start);
 	tracker.Update(Start + 5s, queries, outcomes);
 
 	ASSERT_EQ(outcomes.size(), 1u);
@@ -223,7 +238,7 @@ TEST(MasterTracker, LookupThatNeverReturnsTimesOut)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(MasterTracker, NextDeadlineFollowsTheQuery)
+TEST_F(CMasterTrackerTest, NextDeadlineFollowsTheQuery)
 {
 	CMasterTracker tracker{};
 	std::vector<SMasterQuery> queries{};

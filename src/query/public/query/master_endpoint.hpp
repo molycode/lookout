@@ -1,13 +1,13 @@
 #pragma once
 
 #include <cstdint>
-#include <string_view>
+#include <string>
 
 namespace Lkt::Query
 {
 struct SMasterEndpoint final
 {
-	std::string_view host;
+	std::string host;
 	uint16_t port{ 0 };
 };
 } // namespace Lkt::Query
