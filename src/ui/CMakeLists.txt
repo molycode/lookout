@@ -51,6 +51,7 @@ LktEmbedFile(LktUi SdlWaylandLicences ${PROJECT_SOURCE_DIR}/assets/licences/sdl-
 LktEmbedFile(LktUi JsonLicence ${PROJECT_SOURCE_DIR}/external/json/LICENSE.MIT)
 LktEmbedFile(LktUi JsonBundledLicences ${PROJECT_SOURCE_DIR}/assets/licences/json-bundled.txt)
 LktEmbedFile(LktUi LuaLicence ${PROJECT_SOURCE_DIR}/assets/licences/lua.txt)
+LktEmbedFile(LktUi MbedTlsLicence ${PROJECT_SOURCE_DIR}/external/mbedtls/LICENSE)
 LktEmbedFile(LktUi TgeCoreLicence ${PROJECT_SOURCE_DIR}/external/tge-core/LICENSE)
 LktEmbedFile(LktUi RpmallocLicence ${PROJECT_SOURCE_DIR}/external/tge-core/external/rpmalloc/LICENSE)
 LktEmbedFile(LktUi RobotoLicence ${PROJECT_SOURCE_DIR}/assets/fonts/LICENSE-Roboto.txt)
