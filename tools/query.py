@@ -255,8 +255,8 @@ def describe_unreal2(packets):
 	map_name, pos = read_unreal2_string(info, pos)
 	_, pos = read_unreal2_string(info, pos)
 	players, maximum = struct.unpack("<ii", info[pos:pos + 8])
-	plain = re.sub(r"\x1b...", "", name, flags=re.DOTALL)
-	return f"{players}/{maximum} {map_name} {''.join(ch for ch in plain if ord(ch) >= 32)}"
+	plain_name, plain_map = (re.sub(r"\x1b...", "", text, flags=re.DOTALL) for text in (name, map_name))
+	return f"{players}/{maximum} {plain_map} {''.join(ch for ch in plain_name if ord(ch) >= 32)}"
 
 
 def main_unreal2(options, masters):
