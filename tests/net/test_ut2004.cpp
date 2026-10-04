@@ -1,11 +1,13 @@
 #include "catalog_fixture.hpp"
+#include "fixtures.hpp"
 #include "net/collect_events.hpp"
 #include "net/event_collector.hpp"
 #include "net/loopback_server.hpp"
 #include "net/loopback_stream_server.hpp"
 #include "net/query_engine.hpp"
 #include "net/ut2004_emulator.hpp"
-#include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
+#include "query/master_endpoint.hpp"
 #include "query/server_summary.hpp"
 #include "query/status_reply.hpp"
 #include "query/styled_text.hpp"
@@ -14,6 +16,7 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace Lkt::Net
@@ -26,39 +29,34 @@ constexpr std::chrono::milliseconds Patience{ 10s };
 constexpr uint16_t JoinPort{ 7777 };
 
 //////////////////////////////////////////////////////////////////////////
-// The UT2004 test game, speaking tests/scripts/unreal2.lua to emulated servers and a master on loopback.
+// The built-in UT2004 game against emulated servers and a master on loopback.
 class CUt2004Test : public Fixtures::CCatalogTest
 {
 protected:
 
-	// testing::Test
-	void SetUp() override
+	// The built-in game, listed by the emulated master alone.
+	Query::EGame AddLoopbackGame(uint16_t masterPort)
 	{
-		CCatalogTest::SetUp();
-		AddProtocol("unreal2");
-	}
-	// ~testing::Test
+		Query::SGameDefinition game{ GetUt2004Game() };
 
-	Query::EGame AddUt2004Game(uint16_t masterPort)
-	{
-		std::array<uint16_t, 1> const masterPorts{ masterPort };
+		game.key = "ut2004-loopback";
+		game.masters = { Query::SMasterEndpoint{ "127.0.0.1", masterPort } };
 
-		return AddGameFile("ut2004-emulated", masterPorts);
+		return AddGame(std::move(game));
 	}
 
 	Query::SGameDefinition const& GetUt2004Game() const
 	{
-		return Query::GetGameCatalog().back();
+		return Fixtures::GetGameByKey("ut2004");
 	}
 
 	// The one reply a refresh of an emulated server got, or none.
 	std::optional<Query::SStatusReply> Ask(Fixtures::SUt2004ServerSetup const& setup)
 	{
 		std::optional<Query::SStatusReply> reply{};
-		Query::EGame const game{ AddUt2004Game(0) };
 
 		EXPECT_TRUE(m_server.StartExchanges(Fixtures::MakeUt2004Server(setup)));
-		EXPECT_TRUE(Run(game, m_server.GetAddress()));
+		EXPECT_TRUE(Run(GetUt2004Game().game, m_server.GetAddress()));
 
 		std::vector<SServerAnswered> const answered{ Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()) };
 
@@ -220,7 +218,7 @@ TEST_F(CUt2004Test, MasterListsItsServersEndToEnd)
 	std::array<Query::SServerAddress, 2> const servers{ m_server.GetAddress(), m_secondServer.GetAddress() };
 
 	ASSERT_TRUE(m_master.Start(Fixtures::MakeUt2004Master(servers)));
-	ASSERT_TRUE(Run(AddUt2004Game(m_master.GetAddress().port), std::nullopt));
+	ASSERT_TRUE(Run(AddLoopbackGame(m_master.GetAddress().port), std::nullopt));
 	EXPECT_TRUE(Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()).empty());
 	EXPECT_EQ(Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()).size(), 2u);
 	EXPECT_EQ(m_master.GetNumConnections(), 1u);
@@ -234,7 +232,7 @@ TEST_F(CUt2004Test, MasterPausingMidFrameIsStillAnswering)
 	std::array<Query::SServerAddress, 1> const servers{ m_server.GetAddress() };
 
 	ASSERT_TRUE(m_master.Start(Fixtures::MakeUt2004Master(servers, 4500ms)));
-	ASSERT_TRUE(Run(AddUt2004Game(m_master.GetAddress().port), std::nullopt));
+	ASSERT_TRUE(Run(AddLoopbackGame(m_master.GetAddress().port), std::nullopt));
 	EXPECT_TRUE(Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()).empty());
 	EXPECT_EQ(Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()).size(), 1u);
 }

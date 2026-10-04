@@ -26,4 +26,12 @@ std::expected<Script::SScriptAction, std::string> ReceiveOnce(Script::CProtocolS
 std::expected<void, Query::EParseError> ReadMasterDatagram(Script::CProtocolScript& script, std::map<std::string, std::string> const& options,
 	std::span<std::byte const> datagram, std::vector<Query::SServerAddress>& servers);
 std::expected<Query::SStatusReply, Query::EParseError> ReadStatusDatagram(Script::CProtocolScript& script, std::span<std::byte const> datagram);
+
+// As the engine reads them: a server's datagrams in order until a reply or reason, then its finish.
+std::expected<Query::SStatusReply, Query::EParseError> ReadStatusDatagrams(Script::CProtocolScript& script,
+	std::span<std::vector<std::byte> const> datagrams);
+// As the engine reads it: a master's stream in pieces of pieceSize, then its end, until the list is done; the error
+// says why it is not.
+std::expected<void, Query::EParseError> ReadMasterStream(Script::CProtocolScript& script, std::map<std::string, std::string> const& options,
+	std::span<std::byte const> stream, size_t pieceSize, std::vector<Query::SServerAddress>& servers);
 } // namespace Lkt::Fixtures
