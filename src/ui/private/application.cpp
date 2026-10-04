@@ -2,6 +2,7 @@
 #include "embedded_fonts.hpp"
 #include "file_dialog.hpp"
 #include "flag_atlas.hpp"
+#include "game_icons.hpp"
 #include "loggers.hpp"
 #include "main_window.hpp"
 #include "theme.hpp"
@@ -269,6 +270,7 @@ void CApplication::Terminate()
 
 	if (m_pRenderer != nullptr)
 	{
+		gGameIcons.Terminate();
 		gFlagAtlas.Terminate();
 		SDL_DestroyRenderer(m_pRenderer);
 		m_pRenderer = nullptr;
@@ -325,6 +327,7 @@ bool CApplication::CreateWindowAndRenderer(Config::SWindowSettings const& window
 			}
 
 			gFlagAtlas.Initialize(m_pRenderer);
+			gGameIcons.Initialize(m_pRenderer);
 		}
 		else
 		{

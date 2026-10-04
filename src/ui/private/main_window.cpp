@@ -24,7 +24,7 @@ namespace Lkt::Ui
 namespace
 {
 constexpr float SidebarEm{ 20.0f };
-constexpr float MinSidebarEm{ 9.0f };
+constexpr float MinSidebarEm{ 11.5f };
 constexpr float MinTableEm{ 28.0f };
 constexpr float MinDetailsEm{ 14.0f };
 constexpr float MaxDetailsEm{ 40.0f };

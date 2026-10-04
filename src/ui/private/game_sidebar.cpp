@@ -1,6 +1,7 @@
 #include "game_sidebar.hpp"
 #include "format_to.hpp"
 #include "frame_intents.hpp"
+#include "game_icons.hpp"
 #include "game_move.hpp"
 #include "icons.hpp"
 #include "theme.hpp"
@@ -118,8 +119,10 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 	float const lineHeight{ ImGui::GetTextLineHeight() };
 	ImVec2 const padding{ style.FramePadding };
 	ImVec2 const start{ ImGui::GetCursorScreenPos() };
-	ImVec2 const size{ ImGui::GetContentRegionAvail().x, padding.y * 2.0f + ImGui::GetTextLineHeightWithSpacing() + lineHeight };
-	ImVec2 const text{ start.x + padding.x, start.y + padding.y };
+	float const iconSize{ ImGui::GetTextLineHeightWithSpacing() + lineHeight };
+	ImVec2 const size{ ImGui::GetContentRegionAvail().x, padding.y * 2.0f + iconSize };
+	ImVec2 const icon{ start.x + padding.x, start.y + padding.y };
+	ImVec2 const text{ icon.x + iconSize + style.ItemInnerSpacing.x, icon.y };
 	float const gearX{ start.x + size.x - padding.x - lineHeight };
 	float const hideX{ gearX - style.ItemInnerSpacing.x - lineHeight };
 	float const spinnerWidth{ status.isRefreshing ? ImGui::CalcTextSize(LKT_ICON_ROTATE).x + style.ItemInnerSpacing.x : 0.0f };
@@ -140,6 +143,7 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 
 	pDrawList->AddRectFilled(start, ImVec2{ start.x + size.x, start.y + size.y }, GetCardFill(isSelected, isHovered, ImGui::IsItemActive()),
 		ImGui::GetFontSize() * CardRoundingEm);
+	gGameIcons.Draw(pDrawList, game.game, icon, iconSize);
 
 	float const nameEnd{ DrawEllipsised(game.name, text, hideX - style.ItemInnerSpacing.x - spinnerWidth, isSelected ? colors.amber : colors.text) };
 
@@ -181,9 +185,11 @@ void DrawHiddenGame(Query::SGameDefinition const& game, SFrameIntents& intents)
 	ImVec2 const start{ ImGui::GetCursorScreenPos() };
 	float const gearX{ start.x + ImGui::GetContentRegionAvail().x - style.FramePadding.x - lineHeight };
 	float const showX{ gearX - style.ItemInnerSpacing.x - lineHeight };
+	ImVec2 const icon{ start.x + style.FramePadding.x, start.y };
 	std::array<char, 96> buffer{};
 
-	DrawEllipsised(game.name, ImVec2{ start.x + style.FramePadding.x, start.y }, showX - style.ItemInnerSpacing.x, GetThemeColors().textDisabled);
+	gGameIcons.Draw(ImGui::GetWindowDrawList(), game.game, icon, lineHeight);
+	DrawEllipsised(game.name, ImVec2{ icon.x + lineHeight + style.ItemInnerSpacing.x, start.y }, showX - style.ItemInnerSpacing.x, GetThemeColors().textDisabled);
 	ImGui::SetCursorScreenPos(ImVec2{ showX, start.y });
 
 	if (IconButton("##show", LKT_ICON_EYE))
