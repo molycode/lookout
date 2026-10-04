@@ -20,6 +20,8 @@ public:
 	void Initialize(std::string_view configDir);
 	SSettings Load();
 	void Save(SSettings const& settings);
+	std::string Snapshot(SSettings const& settings) const;
+	SSettings Restore(std::string_view snapshot);
 
 private:
 

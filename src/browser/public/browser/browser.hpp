@@ -19,12 +19,15 @@
 #include "net/clock.hpp"
 #include "net/query_engine.hpp"
 #include "query/game.hpp"
+#include "query/game_definition.hpp"
 #include "query/parse_error.hpp"
+#include "query/protocol_definition.hpp"
 #include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
 #include <cstdint>
 #include <expected>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -65,6 +68,8 @@ public:
 	void RemoveInstall(Query::EGame game, uint32_t id);
 	void SetGameListed(Query::EGame game, bool isListed);
 	void MoveGame(Query::EGame game, Query::EGame target);
+	void ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games);
+	void SetGameProblems(std::vector<std::string> problems);
 
 	Query::EGame GetSelectedGame() const;
 	Config::SSettings const& GetSettings() const;
@@ -76,6 +81,7 @@ public:
 	std::optional<Net::Clock::time_point> GetNextAutoRefresh() const;
 	SServerEntry const* FindEntry(uint64_t key) const;
 	SGameStatus const& GetStatus(Query::EGame game) const;
+	std::span<std::string const> GetGameProblems() const;
 	bool IsFavourite(Query::SServerAddress const& address) const;
 	std::span<Launch::SLaunchOption const> GetLaunchOptions(Query::EGame game) const;
 	std::span<SInstallLauncher const> GetInstallLaunchers(Query::EGame game) const;
@@ -84,6 +90,7 @@ public:
 
 private:
 
+	void SetUpGame(Query::SGameDefinition const& game);
 	SInstallLauncher ResolveInstall(Query::EGame game, Config::SGameInstall const& install) const;
 	std::optional<size_t> FindInstallIndex(Query::EGame game, uint32_t id) const;
 	void UpdateJoinLauncher(Query::EGame game);
@@ -96,7 +103,8 @@ private:
 	Launch::SLaunchEnvironment m_environment;
 	Launch::CGameLauncher m_launcher;
 	Net::CQueryEngine m_engine;
-	std::vector<CServerList> m_lists;
+	std::function<void()> m_onEventsReady;
+	std::vector<std::unique_ptr<CServerList>> m_lists;
 	std::vector<SGameStatus> m_statuses;
 	std::vector<SLaunchState> m_launchStates;
 	std::vector<bool> m_hasChanged;
@@ -104,6 +112,7 @@ private:
 	std::vector<uint32_t> m_rows;
 	std::vector<std::string> m_mods;
 	std::vector<uint8_t> m_countries;
+	std::vector<std::string> m_gameProblems;
 	CAutoRefresh m_autoRefresh;
 	bool m_isStarted{ false };
 	bool m_isAutoRefreshPaused{ false };

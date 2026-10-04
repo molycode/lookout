@@ -14,5 +14,7 @@ struct STextStyle final
 	EColorCodes codes{ EColorCodes::None };
 	char escape{ '\0' };
 	std::vector<Tge::SColor> palette;
+
+	bool operator==(STextStyle const&) const = default;
 };
 } // namespace Lkt::Query

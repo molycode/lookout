@@ -33,5 +33,7 @@ struct SGameDefinition final
 	SLaunchHints launch;
 	SJoinCommand join;
 	std::vector<std::byte> icon;
+
+	bool operator==(SGameDefinition const&) const = default;
 };
 } // namespace Lkt::Query

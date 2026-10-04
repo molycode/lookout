@@ -12,5 +12,7 @@ struct SProtocolDefinition final
 	std::string name;
 	std::string source;
 	std::vector<SProtocolOption> options;
+
+	bool operator==(SProtocolDefinition const&) const = default;
 };
 } // namespace Lkt::Query

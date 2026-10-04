@@ -10,5 +10,7 @@ struct SProtocolOption final
 	std::string name;
 	std::string description;
 	bool isRequired{ false };
+
+	bool operator==(SProtocolOption const&) const = default;
 };
 } // namespace Lkt::Query

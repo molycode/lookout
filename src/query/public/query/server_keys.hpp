@@ -15,5 +15,7 @@ struct SServerKeys final
 	std::string maxPlayers;
 	std::string password;
 	std::vector<std::string> mods;
+
+	bool operator==(SServerKeys const&) const = default;
 };
 } // namespace Lkt::Query

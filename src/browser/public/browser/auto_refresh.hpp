@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace Lkt::Browser
@@ -20,6 +21,7 @@ public:
 
 	void Initialize(size_t numGames);
 	void OnRefreshStarted(Query::EGame game, Net::Clock::time_point now);
+	void Remap(std::span<std::optional<size_t> const> keptFrom);
 
 	// A game never refreshed has no deadline: the browser refreshes it when it is first selected.
 	std::optional<Net::Clock::time_point> GetDeadline(Query::EGame game, std::chrono::seconds interval) const;

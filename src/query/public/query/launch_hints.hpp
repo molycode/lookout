@@ -12,5 +12,7 @@ struct SLaunchHints final
 	std::string installDir;
 	std::string program;
 	std::vector<std::string> requiredFiles;
+
+	bool operator==(SLaunchHints const&) const = default;
 };
 } // namespace Lkt::Query

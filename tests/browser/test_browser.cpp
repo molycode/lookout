@@ -6,6 +6,8 @@
 #include "settings_json.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
+#include "query/master_endpoint.hpp"
+#include "query/protocol_definition.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <algorithm>
@@ -20,6 +22,7 @@
 #include <string_view>
 #include <sys/wait.h>
 #include <system_error>
+#include <vector>
 
 namespace Lkt::Browser
 {
@@ -425,6 +428,126 @@ TEST_F(CBrowserTest, LastListedGameStaysListed)
 
 	EXPECT_TRUE(m_browser.GetSettings().games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].isListed);
 	m_browser.Terminate();
+}
+//////////////////////////////////////////////////////////////////////////
+// Its catalog's masters are on loopback, so the refresh a replace may start never leaves the machine; the suite's
+// catalog is put back afterwards.
+class CBrowserCatalogTest : public CBrowserTest
+{
+protected:
+
+	// testing::Test
+	void SetUp() override
+	{
+		std::span<Query::SGameDefinition const> const games{ Query::GetGameCatalog() };
+		std::span<Query::SProtocolDefinition const> const protocols{ Query::GetProtocolCatalog() };
+
+		m_savedGames.assign(games.begin(), games.end());
+		m_protocols.assign(protocols.begin(), protocols.end());
+		m_games = m_savedGames;
+
+		for (Query::SGameDefinition& game : m_games)
+		{
+			for (Query::SMasterEndpoint& master : game.masters)
+			{
+				master = Query::SMasterEndpoint{ "127.0.0.1", 1 };
+			}
+		}
+
+		Install(m_games);
+		CBrowserTest::SetUp();
+	}
+
+	void TearDown() override
+	{
+		CBrowserTest::TearDown();
+		Install(m_savedGames);
+	}
+	// ~testing::Test
+
+	void Install(std::span<Query::SGameDefinition const> games) const
+	{
+		Query::TerminateGameCatalog();
+		Query::InitializeGameCatalog(m_protocols, games);
+	}
+
+	std::vector<Query::SGameDefinition> ChangeGame(std::string_view key) const
+	{
+		std::vector<Query::SGameDefinition> games{ m_games };
+
+		std::ranges::find(games, key, &Query::SGameDefinition::key)->name += " (changed)";
+
+		return games;
+	}
+
+	bool WaitUntilOnline()
+	{
+		return m_waiter.WaitUntil(m_browser, [this]()
+		{
+			SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
+
+			return pRow != nullptr && pRow->state == EServerState::Online;
+		}, Patience);
+	}
+
+	std::vector<Query::SProtocolDefinition> m_protocols;
+	std::vector<Query::SGameDefinition> m_savedGames;
+	std::vector<Query::SGameDefinition> m_games;
+};
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, UnchangedGameKeepsItsList)
+{
+	ASSERT_TRUE(StartWithServer());
+	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(WaitUntilOnline());
+
+	m_browser.ReplaceCatalog(m_protocols, m_games);
+
+	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
+
+	ASSERT_NE(pRow, nullptr);
+	EXPECT_EQ(pRow->state, EServerState::Online);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, ChangedGameStartsItsListAgain)
+{
+	ASSERT_TRUE(StartWithServer());
+	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(WaitUntilOnline());
+
+	m_browser.ReplaceCatalog(m_protocols, ChangeGame("kingpin"));
+
+	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
+
+	ASSERT_NE(pRow, nullptr);
+	EXPECT_EQ(pRow->state, EServerState::Pending);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, ServersAreAskedAgainAfterAReplace)
+{
+	ASSERT_TRUE(StartWithServer());
+	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(WaitUntilOnline());
+
+	m_browser.ReplaceCatalog(m_protocols, ChangeGame("kingpin"));
+
+	EXPECT_TRUE(WaitUntilOnline());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, RemovedGameFindsItsInstallsWhenItReturns)
+{
+	std::vector<Query::SGameDefinition> withoutKingpin{ m_games };
+
+	std::erase_if(withoutKingpin, [](Query::SGameDefinition const& game) { return game.key == "kingpin"; });
+	Initialize();
+	m_browser.ReplaceCatalog(m_protocols, withoutKingpin);
+	m_browser.ReplaceCatalog(m_protocols, m_games);
+
+	EXPECT_EQ(m_browser.GetInstallLaunchers(Fixtures::GetGameId("kingpin")).size(), 1u);
 }
 } // namespace
 } // namespace Lkt::Browser

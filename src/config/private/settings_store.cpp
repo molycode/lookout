@@ -3,6 +3,7 @@
 #include "settings_json.hpp"
 #include "config/default_settings.hpp"
 #include "json/files.hpp"
+#include <tge/assert.hpp>
 #include <cstddef>
 #include <expected>
 #include <format>
@@ -107,6 +108,27 @@ void CSettingsStore::Save(SSettings const& settings)
 			gLog.Error("Cannot save the settings to '{}': {}", m_path.string(), written.error());
 		}
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// By key, so the settings outlive a change of the game catalog: taken before it, restored after.
+std::string CSettingsStore::Snapshot(SSettings const& settings) const
+{
+	return WriteSettingsJson(settings, m_kept);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// What is written is no longer comparable once the games are numbered anew, so the next save writes.
+SSettings CSettingsStore::Restore(std::string_view snapshot)
+{
+	std::expected<SSettingsDocument, ESettingsJsonError> const document{ ReadSettingsJson(snapshot) };
+
+	TGE_ASSERT(document.has_value(), "A settings snapshot does not read back");
+
+	m_kept = snapshot;
+	m_written.reset();
+
+	return document.has_value() ? document->settings : MakeDefaultSettings();
 }
 
 //////////////////////////////////////////////////////////////////////////

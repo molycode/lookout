@@ -41,6 +41,16 @@ size_t ToIndex(Query::EGame game)
 {
 	return static_cast<size_t>(game);
 }
+
+//////////////////////////////////////////////////////////////////////////
+// Whatever positions the two catalogs give the game and its protocol.
+bool IsUnchanged(Query::SGameDefinition old, Query::SProtocolDefinition const& oldProtocol, Query::SGameDefinition const& game)
+{
+	old.game = game.game;
+	old.protocol = game.protocol;
+
+	return old == game && oldProtocol == Query::GetProtocol(game.protocol);
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
@@ -48,7 +58,8 @@ void CBrowser::Initialize(std::string_view configDir, std::string_view logsDir, 
 {
 	size_t const numGames{ Query::GetGameCatalog().size() };
 
-	m_lists = std::vector<CServerList>(numGames);
+	m_lists.clear();
+	m_lists.resize(numGames);
 	m_statuses.assign(numGames, SGameStatus{});
 	m_launchStates.assign(numGames, SLaunchState{});
 	m_hasChanged.assign(numGames, false);
@@ -60,23 +71,7 @@ void CBrowser::Initialize(std::string_view configDir, std::string_view logsDir, 
 
 	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
 	{
-		for (Query::SServerAddress const& favourite : m_settings.games[ToIndex(game.game)].favourites)
-		{
-			m_lists[ToIndex(game.game)].SetFavourite(game, favourite, true);
-		}
-
-		SLaunchState& state{ m_launchStates[ToIndex(game.game)] };
-
-		state.options = Launch::FindLaunchOptions(game, m_environment);
-		state.installs.clear();
-
-		for (Config::SGameInstall const& install : m_settings.games[ToIndex(game.game)].installs)
-		{
-			state.installs.emplace_back(ResolveInstall(game.game, install));
-		}
-
-		UpdateJoinLauncher(game.game);
-		Recount(game.game);
+		SetUpGame(game);
 	}
 
 	RebuildRows();
@@ -85,7 +80,8 @@ void CBrowser::Initialize(std::string_view configDir, std::string_view logsDir, 
 //////////////////////////////////////////////////////////////////////////
 bool CBrowser::Start(std::function<void()> onEventsReady)
 {
-	m_isStarted = m_engine.Initialize(std::move(onEventsReady));
+	m_onEventsReady = std::move(onEventsReady);
+	m_isStarted = m_engine.Initialize(m_onEventsReady);
 
 	return m_isStarted;
 }
@@ -113,7 +109,7 @@ void CBrowser::Update()
 		Query::EGame const game{ std::visit([](auto const& typed) { return typed.game; }, event) };
 		size_t const index{ ToIndex(game) };
 
-		if (m_lists[index].Apply(Query::GetGame(game), std::move(event)))
+		if (m_lists[index]->Apply(Query::GetGame(game), std::move(event)))
 		{
 			m_statuses[index].isRefreshing = false;
 		}
@@ -171,7 +167,7 @@ void CBrowser::Refresh()
 	uint32_t const refreshId{ m_engine.Refresh(m_settings.selectedGame, m_settings.games[index].favourites) };
 
 	m_autoRefresh.OnRefreshStarted(m_settings.selectedGame, Net::Clock::now());
-	m_lists[index].BeginRefresh(refreshId);
+	m_lists[index]->BeginRefresh(refreshId);
 	m_statuses[index].hasRefreshed = true;
 	m_statuses[index].isRefreshing = true;
 	Recount(m_settings.selectedGame);
@@ -201,7 +197,7 @@ void CBrowser::ToggleFavourite(Query::SServerAddress const& address)
 		favourites.erase(it);
 	}
 
-	m_lists[index].SetFavourite(Query::GetGame(m_settings.selectedGame), address, isFavourite);
+	m_lists[index]->SetFavourite(Query::GetGame(m_settings.selectedGame), address, isFavourite);
 	m_settingsStore.Save(m_settings);
 	Recount(m_settings.selectedGame);
 	RebuildRows();
@@ -227,7 +223,7 @@ std::expected<Query::SServerAddress, Query::EParseError> CBrowser::AddServer(std
 		if (!std::ranges::contains(favourites, *address))
 		{
 			favourites.emplace_back(*address);
-			m_lists[index].SetFavourite(game, *address, true);
+			m_lists[index]->SetFavourite(game, *address, true);
 			m_settingsStore.Save(m_settings);
 		}
 
@@ -437,6 +433,84 @@ void CBrowser::MoveGame(Query::EGame game, Query::EGame target)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// The engine holds views into the catalog, so it stops before the swap. A game whose description and protocol did not
+// change keeps its list, status and timer; the settings cross the swap by key.
+void CBrowser::ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games)
+{
+	bool const wasStarted{ m_isStarted };
+	std::span<Query::SGameDefinition const> const oldCatalog{ Query::GetGameCatalog() };
+	std::span<Query::SProtocolDefinition const> const oldProtocolCatalog{ Query::GetProtocolCatalog() };
+	std::vector<Query::SGameDefinition> const oldGames{ oldCatalog.begin(), oldCatalog.end() };
+	std::vector<Query::SProtocolDefinition> const oldProtocols{ oldProtocolCatalog.begin(), oldProtocolCatalog.end() };
+
+	m_engine.Terminate();
+	m_isStarted = false;
+
+	std::string const settings{ m_settingsStore.Snapshot(m_settings) };
+
+	Query::TerminateGameCatalog();
+	Query::InitializeGameCatalog(protocols, games);
+	m_settings = m_settingsStore.Restore(settings);
+
+	std::span<Query::SGameDefinition const> const catalog{ Query::GetGameCatalog() };
+	std::vector<std::optional<size_t>> keptFrom(catalog.size());
+	std::vector<std::unique_ptr<CServerList>> lists(catalog.size());
+	std::vector<SGameStatus> statuses(catalog.size());
+	std::vector<SLaunchState> launchStates(catalog.size());
+
+	for (Query::SGameDefinition const& game : catalog)
+	{
+		size_t const index{ ToIndex(game.game) };
+		auto const old{ std::ranges::find(oldGames, game.key, &Query::SGameDefinition::key) };
+
+		if (old != oldGames.end() && IsUnchanged(*old, oldProtocols[static_cast<size_t>(old->protocol)], game))
+		{
+			size_t const oldIndex{ ToIndex(old->game) };
+
+			keptFrom[index] = oldIndex;
+			lists[index] = std::move(m_lists[oldIndex]);
+			statuses[index] = m_statuses[oldIndex];
+			statuses[index].isRefreshing = false;
+			launchStates[index] = std::move(m_launchStates[oldIndex]);
+		}
+	}
+
+	m_lists = std::move(lists);
+	m_statuses = std::move(statuses);
+	m_launchStates = std::move(launchStates);
+	m_hasChanged.assign(catalog.size(), false);
+	m_autoRefresh.Remap(keptFrom);
+
+	for (Query::SGameDefinition const& game : catalog)
+	{
+		if (!keptFrom[ToIndex(game.game)].has_value())
+		{
+			SetUpGame(game);
+		}
+	}
+
+	CollectMods(GetEntries(), m_mods);
+	CollectCountries(GetEntries(), m_countries);
+	RebuildRows();
+
+	if (wasStarted)
+	{
+		m_isStarted = m_engine.Initialize(m_onEventsReady);
+	}
+
+	if (m_isStarted && !m_statuses[GetSelectedIndex()].hasRefreshed)
+	{
+		Refresh();
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CBrowser::SetGameProblems(std::vector<std::string> problems)
+{
+	m_gameProblems = std::move(problems);
+}
+
+//////////////////////////////////////////////////////////////////////////
 Query::EGame CBrowser::GetSelectedGame() const
 {
 	return m_settings.selectedGame;
@@ -451,7 +525,7 @@ Config::SSettings const& CBrowser::GetSettings() const
 //////////////////////////////////////////////////////////////////////////
 std::span<SServerEntry const> CBrowser::GetEntries() const
 {
-	return m_lists[GetSelectedIndex()].GetEntries();
+	return m_lists[GetSelectedIndex()]->GetEntries();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -488,7 +562,7 @@ std::optional<Net::Clock::time_point> CBrowser::GetNextAutoRefresh() const
 //////////////////////////////////////////////////////////////////////////
 SServerEntry const* CBrowser::FindEntry(uint64_t key) const
 {
-	return m_lists[GetSelectedIndex()].Find(Query::FromKey(key));
+	return m_lists[GetSelectedIndex()]->Find(Query::FromKey(key));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -498,9 +572,15 @@ SGameStatus const& CBrowser::GetStatus(Query::EGame game) const
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::span<std::string const> CBrowser::GetGameProblems() const
+{
+	return m_gameProblems;
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool CBrowser::IsFavourite(Query::SServerAddress const& address) const
 {
-	SServerEntry const* const pEntry{ m_lists[GetSelectedIndex()].Find(address) };
+	SServerEntry const* const pEntry{ m_lists[GetSelectedIndex()]->Find(address) };
 
 	return pEntry != nullptr && pEntry->isFavourite;
 }
@@ -529,6 +609,33 @@ std::expected<Launch::SLaunchOption, Launch::ELaunchError> CBrowser::ResolveLaun
 	SLaunchState const& state{ m_launchStates[ToIndex(game)] };
 
 	return ChooseLauncher(state.options, state.installs, launcherId);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A game new to the browser, or whose description changed: an empty list but for its favourites, and its launchers.
+void CBrowser::SetUpGame(Query::SGameDefinition const& game)
+{
+	size_t const index{ ToIndex(game.game) };
+	SLaunchState& state{ m_launchStates[index] };
+
+	m_lists[index] = std::make_unique<CServerList>();
+	m_statuses[index] = SGameStatus{};
+
+	for (Query::SServerAddress const& favourite : m_settings.games[index].favourites)
+	{
+		m_lists[index]->SetFavourite(game, favourite, true);
+	}
+
+	state.options = Launch::FindLaunchOptions(game, m_environment);
+	state.installs.clear();
+
+	for (Config::SGameInstall const& install : m_settings.games[index].installs)
+	{
+		state.installs.emplace_back(ResolveInstall(game.game, install));
+	}
+
+	UpdateJoinLauncher(game.game);
+	Recount(game.game);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -572,7 +679,7 @@ void CBrowser::UpdateJoinLauncher(Query::EGame game)
 void CBrowser::Recount(Query::EGame game)
 {
 	size_t const index{ ToIndex(game) };
-	CServerList const& list{ m_lists[index] };
+	CServerList const& list{ *m_lists[index] };
 	SGameStatus& status{ m_statuses[index] };
 	std::span<SServerEntry const> const entries{ list.GetEntries() };
 

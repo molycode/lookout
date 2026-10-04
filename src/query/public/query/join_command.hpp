@@ -12,5 +12,7 @@ struct SJoinCommand final
 	std::vector<std::string> arguments;
 	std::vector<std::string> passwordArguments;
 	SPasswordRules password;
+
+	bool operator==(SJoinCommand const&) const = default;
 };
 } // namespace Lkt::Query
