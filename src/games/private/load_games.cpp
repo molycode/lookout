@@ -1,9 +1,12 @@
 #include "games/load_games.hpp"
 #include "embedded_games.hpp"
+#include "embedded_text.hpp"
 #include "game_json.hpp"
+#include "merge_patch.hpp"
+#include "try_conversations.hpp"
+#include "user_file_size.hpp"
+#include "games/game_files.hpp"
 #include "json/files.hpp"
-#include "json/json.hpp"
-#include "json/syntax_error.hpp"
 #include "script/protocol_script.hpp"
 #include <algorithm>
 #include <cstddef>
@@ -24,28 +27,10 @@ namespace Lkt::Games
 {
 namespace
 {
-using JsonValue = nlohmann::ordered_json;
 using Scripts = std::vector<std::unique_ptr<Script::CProtocolScript>>;
 
-constexpr bool AllowExceptions{ false };
-constexpr size_t MaxFileSize{ 1024 * 1024 };
 constexpr std::string_view ProtocolExtension{ ".lua" };
 constexpr std::string_view KeyRule{ "its name must use only lower-case letters, digits, '-' and '_'" };
-
-//////////////////////////////////////////////////////////////////////////
-std::string_view AsText(std::span<unsigned char const> bytes)
-{
-	return std::string_view{ reinterpret_cast<char const*>(bytes.data()), bytes.size() };
-}
-
-//////////////////////////////////////////////////////////////////////////
-// Starting with a letter or digit, so a key is also a safe folder name.
-bool IsKey(std::string_view name)
-{
-	auto const isStart{ [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'); } };
-
-	return !name.empty() && isStart(name.front()) && std::ranges::all_of(name, [&isStart](char c) { return isStart(c) || c == '-' || c == '_'; });
-}
 
 //////////////////////////////////////////////////////////////////////////
 // By name, without dot entries; a missing folder holds nothing.
@@ -76,7 +61,7 @@ std::vector<std::filesystem::directory_entry> ListFolder(std::filesystem::path c
 // An absent file is no error, only nothing.
 std::expected<std::optional<std::string>, std::string> ReadUserFile(std::filesystem::path const& path, std::string_view shownAs)
 {
-	std::expected<std::string, std::error_code> text{ Json::ReadFile(path, MaxFileSize) };
+	std::expected<std::string, std::error_code> text{ Json::ReadFile(path, MaxUserFileSize) };
 	std::expected<std::optional<std::string>, std::string> result{};
 
 	if (text.has_value())
@@ -104,7 +89,7 @@ std::map<std::string, std::string> ReadUserProtocols(std::filesystem::path const
 
 		if (path.extension() == ProtocolExtension)
 		{
-			std::expected<std::optional<std::string>, std::string> text{ IsKey(name) ? ReadUserFile(path, shownAs)
+			std::expected<std::optional<std::string>, std::string> text{ IsValidKey(name) ? ReadUserFile(path, shownAs)
 				: std::unexpected{ std::format("{}: {}", shownAs, KeyRule) } };
 
 			if (!text.has_value())
@@ -132,7 +117,7 @@ void LoadProtocols(std::map<std::string, std::string> const& userSources, SGameC
 	{
 		std::string const name{ file.name.substr(0, file.name.rfind('.')) };
 
-		builtins.emplace(name, AsText(file.bytes));
+		builtins.emplace(name, Embedded::AsText(file.bytes));
 		names.insert(name);
 	}
 
@@ -189,28 +174,6 @@ void LoadProtocols(std::map<std::string, std::string> const& userSources, SGameC
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Each kind of conversation is started once with the game's options, so a game the script cannot talk for fails here.
-std::expected<void, std::string> TryConversations(Script::CProtocolScript& script, std::map<std::string, std::string> const& options)
-{
-	std::expected<void, std::string> result{};
-
-	for (Script::EConversationKind const kind : { Script::EConversationKind::Master, Script::EConversationKind::Server })
-	{
-		Script::SConversation conversation{ kind, 0 };
-		std::expected<Script::SScriptAction, std::string> const started{ script.Start(conversation, options) };
-
-		script.End(conversation);
-
-		if (!started.has_value() && result.has_value())
-		{
-			result = std::unexpected{ started.error() };
-		}
-	}
-
-	return result;
-}
-
-//////////////////////////////////////////////////////////////////////////
 std::expected<Query::SGameDefinition, std::string> ReadGame(std::string_view key, std::string_view text, std::span<std::byte const> icon,
 	SGameContent const& content, Scripts const& scripts)
 {
@@ -232,27 +195,6 @@ std::expected<Query::SGameDefinition, std::string> ReadGame(std::string_view key
 	}
 
 	return game;
-}
-
-//////////////////////////////////////////////////////////////////////////
-// A merge patch: what it names replaces the built-in's, a null removes it, the rest stays.
-std::expected<std::string, std::string> ApplyPatch(std::string_view builtinText, std::string_view patchText)
-{
-	JsonValue game = JsonValue::parse(builtinText, nullptr, AllowExceptions);
-	JsonValue const patch = JsonValue::parse(patchText, nullptr, AllowExceptions);
-	std::expected<std::string, std::string> result{ std::unexpected{ std::string{ "a change to a built-in game must be a JSON object" } } };
-
-	if (patch.is_object())
-	{
-		game.merge_patch(patch);
-		result = game.dump(-1, ' ', false, JsonValue::error_handler_t::replace);
-	}
-	else if (patch.is_discarded())
-	{
-		result = std::unexpected{ std::format("it is not valid JSON: {}", Json::DescribeSyntaxError(patchText)) };
-	}
-
-	return result;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -338,7 +280,7 @@ SGameContent LoadGames(std::filesystem::path const& userDir)
 	{
 		std::string const key{ file.name.substr(0, file.name.find('/')) };
 
-		builtins.emplace(key, AsText(file.bytes));
+		builtins.emplace(key, Embedded::AsText(file.bytes));
 		keys.insert(key);
 	}
 
@@ -355,7 +297,7 @@ SGameContent LoadGames(std::filesystem::path const& userDir)
 		std::error_code error{};
 		std::string const name{ entry.path().filename().string() };
 
-		if (entry.is_directory(error) && !IsKey(name))
+		if (entry.is_directory(error) && !IsValidKey(name))
 		{
 			content.problems.emplace_back(std::format("games/{}: {}", name, KeyRule));
 		}

@@ -20,3 +20,4 @@ target_link_libraries(LktGames
 LktEmbedTree(LktGames Protocols ${PROJECT_SOURCE_DIR}/assets/protocols "*.lua")
 LktEmbedTree(LktGames Games ${PROJECT_SOURCE_DIR}/assets/games "*/game.json")
 LktEmbedTree(LktGames GameIcons ${PROJECT_SOURCE_DIR}/assets/games "*/icon.png")
+LktEmbedFile(LktGames NewGame ${PROJECT_SOURCE_DIR}/assets/new-game.json)
