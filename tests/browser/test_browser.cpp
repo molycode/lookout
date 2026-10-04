@@ -511,6 +511,16 @@ TEST_F(CBrowserCatalogTest, UnchangedGameKeepsItsList)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, SameCatalogKeepsARunningRefresh)
+{
+	ASSERT_TRUE(StartWithServer());
+	m_browser.Refresh();
+
+	EXPECT_FALSE(m_browser.ReplaceCatalog(m_protocols, m_games));
+	EXPECT_TRUE(m_browser.GetStatus(m_browser.GetSelectedGame()).isRefreshing);
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserCatalogTest, ChangedGameStartsItsListAgain)
 {
 	ASSERT_TRUE(StartWithServer());

@@ -17,6 +17,7 @@
 #include <tge/assert.hpp>
 #include <algorithm>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <variant>
@@ -50,6 +51,19 @@ bool IsUnchanged(Query::SGameDefinition old, Query::SProtocolDefinition const& o
 	old.protocol = game.protocol;
 
 	return old == game && oldProtocol == Query::GetProtocol(game.protocol);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Loaded games have no ids yet: the catalog numbers them by position.
+bool IsRunning(std::span<Query::SProtocolDefinition const> protocols, std::span<Query::SGameDefinition const> games)
+{
+	return std::ranges::equal(protocols, Query::GetProtocolCatalog()) && std::ranges::equal(games, Query::GetGameCatalog(),
+		[](Query::SGameDefinition game, Query::SGameDefinition const& running)
+	{
+		game.game = running.game;
+
+		return game == running;
+	});
 }
 } // namespace
 
@@ -433,9 +447,23 @@ void CBrowser::MoveGame(Query::EGame game, Query::EGame target)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Swapping stops the engine, which would end a refresh for nothing.
+bool CBrowser::ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games)
+{
+	bool const isChanged{ !IsRunning(protocols, games) };
+
+	if (isChanged)
+	{
+		SwapCatalog(std::move(protocols), std::move(games));
+	}
+
+	return isChanged;
+}
+
+//////////////////////////////////////////////////////////////////////////
 // The engine holds views into the catalog, so it stops before the swap. A game whose description and protocol did not
 // change keeps its list, status and timer; the settings cross the swap by key.
-void CBrowser::ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games)
+void CBrowser::SwapCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games)
 {
 	bool const wasStarted{ m_isStarted };
 	std::span<Query::SGameDefinition const> const oldCatalog{ Query::GetGameCatalog() };

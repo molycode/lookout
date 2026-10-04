@@ -68,7 +68,8 @@ public:
 	void RemoveInstall(Query::EGame game, uint32_t id);
 	void SetGameListed(Query::EGame game, bool isListed);
 	void MoveGame(Query::EGame game, Query::EGame target);
-	void ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games);
+	// False, with nothing touched, when the catalog is the one that runs.
+	bool ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games);
 	void SetGameProblems(std::vector<std::string> problems);
 
 	Query::EGame GetSelectedGame() const;
@@ -90,6 +91,7 @@ public:
 
 private:
 
+	void SwapCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games);
 	void SetUpGame(Query::SGameDefinition const& game);
 	SInstallLauncher ResolveInstall(Query::EGame game, Config::SGameInstall const& install) const;
 	std::optional<size_t> FindInstallIndex(Query::EGame game, uint32_t id) const;

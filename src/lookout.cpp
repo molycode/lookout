@@ -135,13 +135,20 @@ bool CLookout::RunWindow()
 }
 
 //////////////////////////////////////////////////////////////////////////
+// A save in the editor reloads at once and again when the watcher sees it; the second has nothing new to say.
 void CLookout::ReloadGames()
 {
 	Games::SGameContent content{ Games::LoadGames(m_userDir) };
+	size_t const numGames{ content.games.size() };
+	bool const hasNewProblems{ !std::ranges::equal(content.problems, m_browser.GetGameProblems()) };
+	bool const isReplaced{ m_browser.ReplaceCatalog(std::move(content.protocols), std::move(content.games)) };
 
-	ReportGameProblems(content.problems);
-	gLog.Info("Reloaded the game descriptions: {} games", content.games.size());
-	m_browser.ReplaceCatalog(std::move(content.protocols), std::move(content.games));
+	if (isReplaced || hasNewProblems)
+	{
+		ReportGameProblems(content.problems);
+		gLog.Info("Reloaded the game descriptions: {} games", numGames);
+	}
+
 	m_browser.SetGameProblems(std::move(content.problems));
 }
 
