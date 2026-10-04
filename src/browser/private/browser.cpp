@@ -141,7 +141,7 @@ void CBrowser::Update()
 		}
 	}
 
-	if (m_hasChanged[GetSelectedIndex()])
+	if (IsGameSelected() && m_hasChanged[GetSelectedIndex()])
 	{
 		CollectMods(GetEntries(), m_mods);
 		CollectCountries(GetEntries(), m_countries);
@@ -162,6 +162,8 @@ void CBrowser::Update()
 // A game is refreshed on first sight only: after that, refreshing is the user's call.
 void CBrowser::SelectGame(Query::EGame game)
 {
+	TGE_ASSERT(ToIndex(game) < m_statuses.size(), "Only a game of the catalog can be selected");
+
 	m_settings.selectedGame = game;
 
 	if (!m_statuses[ToIndex(game)].hasRefreshed)
@@ -175,23 +177,29 @@ void CBrowser::SelectGame(Query::EGame game)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// The start, F5 and the timer ask whether or not a game is installed; with none there is nothing to refresh.
 void CBrowser::Refresh()
 {
-	size_t const index{ GetSelectedIndex() };
-	uint32_t const refreshId{ m_engine.Refresh(m_settings.selectedGame, m_settings.games[index].favourites) };
+	if (IsGameSelected())
+	{
+		size_t const index{ GetSelectedIndex() };
+		uint32_t const refreshId{ m_engine.Refresh(m_settings.selectedGame, m_settings.games[index].favourites) };
 
-	m_autoRefresh.OnRefreshStarted(m_settings.selectedGame, Net::Clock::now());
-	m_lists[index]->BeginRefresh(refreshId);
-	m_statuses[index].hasRefreshed = true;
-	m_statuses[index].isRefreshing = true;
-	Recount(m_settings.selectedGame);
+		m_autoRefresh.OnRefreshStarted(m_settings.selectedGame, Net::Clock::now());
+		m_lists[index]->BeginRefresh(refreshId);
+		m_statuses[index].hasRefreshed = true;
+		m_statuses[index].isRefreshing = true;
+		Recount(m_settings.selectedGame);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
 void CBrowser::RefreshServer(Query::SServerAddress const& address)
 {
+	size_t const index{ GetSelectedIndex() };
+
 	m_engine.RefreshServer(m_settings.selectedGame, address);
-	m_statuses[GetSelectedIndex()].isRefreshing = true;
+	m_statuses[index].isRefreshing = true;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -221,6 +229,8 @@ void CBrowser::ToggleFavourite(Query::SServerAddress const& address)
 // No IsQueryable check: a server added by hand may well be on the LAN.
 std::expected<Query::SServerAddress, Query::EParseError> CBrowser::AddServer(std::string_view text)
 {
+	TGE_ASSERT(IsGameSelected(), "A server is added to the selected game, and none is selected");
+
 	Query::SGameDefinition const& game{ Query::GetGame(m_settings.selectedGame) };
 	std::string_view const trimmed{ Trim(text) };
 	std::expected<Query::SServerAddress, Query::EParseError> const joinAddress{ Query::ParseAddress(trimmed) };
@@ -260,6 +270,8 @@ std::expected<Query::SServerAddress, Query::EParseError> CBrowser::AddServer(std
 //////////////////////////////////////////////////////////////////////////
 std::expected<void, Launch::ELaunchError> CBrowser::Join(Query::SServerAddress const& joinAddress, std::string_view password, std::string_view launcherId)
 {
+	TGE_ASSERT(IsGameSelected(), "A server of the selected game is joined, and none is selected");
+
 	Query::SGameDefinition const& game{ Query::GetGame(m_settings.selectedGame) };
 	std::expected<Launch::SLaunchOption, Launch::ELaunchError> const choice{ ResolveLauncher(m_settings.selectedGame, launcherId) };
 	std::expected<void, Launch::ELaunchError> result{};
@@ -526,7 +538,7 @@ void CBrowser::SwapCatalog(std::vector<Query::SProtocolDefinition> protocols, st
 		m_isStarted = m_engine.Initialize(m_onEventsReady);
 	}
 
-	if (m_isStarted && !m_statuses[GetSelectedIndex()].hasRefreshed)
+	if (m_isStarted && IsGameSelected() && !m_statuses[GetSelectedIndex()].hasRefreshed)
 	{
 		Refresh();
 	}
@@ -553,7 +565,7 @@ Config::SSettings const& CBrowser::GetSettings() const
 //////////////////////////////////////////////////////////////////////////
 std::span<SServerEntry const> CBrowser::GetEntries() const
 {
-	return m_lists[GetSelectedIndex()]->GetEntries();
+	return IsGameSelected() ? m_lists[GetSelectedIndex()]->GetEntries() : std::span<SServerEntry const>{};
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -579,7 +591,7 @@ std::optional<Net::Clock::time_point> CBrowser::GetNextAutoRefresh() const
 {
 	std::optional<Net::Clock::time_point> deadline{};
 
-	if (!m_isAutoRefreshPaused && !m_statuses[GetSelectedIndex()].isRefreshing)
+	if (IsGameSelected() && !m_isAutoRefreshPaused && !m_statuses[GetSelectedIndex()].isRefreshing)
 	{
 		deadline = m_autoRefresh.GetDeadline(m_settings.selectedGame, std::chrono::seconds{ m_settings.autoRefreshSeconds });
 	}
@@ -590,7 +602,7 @@ std::optional<Net::Clock::time_point> CBrowser::GetNextAutoRefresh() const
 //////////////////////////////////////////////////////////////////////////
 SServerEntry const* CBrowser::FindEntry(uint64_t key) const
 {
-	return m_lists[GetSelectedIndex()]->Find(Query::FromKey(key));
+	return IsGameSelected() ? m_lists[GetSelectedIndex()]->Find(Query::FromKey(key)) : nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -608,7 +620,7 @@ std::span<Query::SGameProblem const> CBrowser::GetGameProblems() const
 //////////////////////////////////////////////////////////////////////////
 bool CBrowser::IsFavourite(Query::SServerAddress const& address) const
 {
-	SServerEntry const* const pEntry{ m_lists[GetSelectedIndex()]->Find(address) };
+	SServerEntry const* const pEntry{ IsGameSelected() ? m_lists[GetSelectedIndex()]->Find(address) : nullptr };
 
 	return pEntry != nullptr && pEntry->isFavourite;
 }
@@ -728,14 +740,30 @@ void CBrowser::Recount(Query::EGame game)
 //////////////////////////////////////////////////////////////////////////
 void CBrowser::RebuildRows()
 {
-	Config::SGameSettings const& settings{ m_settings.games[GetSelectedIndex()] };
+	if (IsGameSelected())
+	{
+		Config::SGameSettings const& settings{ m_settings.games[GetSelectedIndex()] };
 
-	BuildRows(GetEntries(), settings.filter, settings.sort, m_rows);
+		BuildRows(GetEntries(), settings.filter, settings.sort, m_rows);
+	}
+	else
+	{
+		m_rows.clear();
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// No game is selected only while none is installed.
+bool CBrowser::IsGameSelected() const
+{
+	return m_settings.selectedGame != Query::NoGame;
 }
 
 //////////////////////////////////////////////////////////////////////////
 size_t CBrowser::GetSelectedIndex() const
 {
+	TGE_ASSERT(IsGameSelected(), "The selected game is looked up while none is selected");
+
 	return ToIndex(m_settings.selectedGame);
 }
 } // namespace Lkt::Browser

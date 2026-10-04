@@ -444,13 +444,13 @@ void ReadGameOrder(Json const& root, SSettingsDocument& document)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// The sidebar must offer at least one game, and the selected one among them.
+// The sidebar must offer at least one game, and the selected one among them; with no games, none is selected.
 // A selected game the catalog lacks gives way quietly: its game may have been removed.
 void CheckListedGames(SSettingsDocument& document)
 {
 	SSettings& settings{ document.settings };
 
-	if (!FindFirstListedGame(settings).has_value())
+	if (!settings.gameOrder.empty() && !FindFirstListedGame(settings).has_value())
 	{
 		Reject(document, "games");
 
@@ -460,16 +460,20 @@ void CheckListedGames(SSettingsDocument& document)
 		}
 	}
 
-	Query::EGame const firstListed{ FindFirstListedGame(settings).value_or(settings.gameOrder.front()) };
+	std::optional<Query::EGame> const firstListed{ FindFirstListedGame(settings) };
 
-	if (settings.selectedGame == Query::NoGame)
+	if (!firstListed.has_value())
 	{
-		settings.selectedGame = firstListed;
+		settings.selectedGame = Query::NoGame;
+	}
+	else if (settings.selectedGame == Query::NoGame)
+	{
+		settings.selectedGame = *firstListed;
 	}
 	else if (!settings.games[static_cast<size_t>(settings.selectedGame)].isListed)
 	{
 		Reject(document, "game");
-		settings.selectedGame = firstListed;
+		settings.selectedGame = *firstListed;
 	}
 }
 
@@ -605,6 +609,30 @@ Json WriteGame(SGameSettings const& game)
 
 	return object;
 }
+
+//////////////////////////////////////////////////////////////////////////
+// With no game selected, the one kept is written back, so it is selected again once its game returns.
+Json WriteSelectedGame(Query::EGame selectedGame, std::string_view kept)
+{
+	Json game = nullptr;
+
+	if (selectedGame != Query::NoGame)
+	{
+		game = Query::GetGame(selectedGame).key;
+	}
+	else if (!kept.empty())
+	{
+		Json const previous = Json::parse(kept, nullptr, AllowExceptions, IgnoreComments);
+		auto const pGame{ previous.is_object() ? previous.find("game") : previous.end() };
+
+		if (pGame != previous.end() && pGame->is_string())
+		{
+			game = *pGame;
+		}
+	}
+
+	return game;
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
@@ -669,9 +697,16 @@ std::string WriteSettingsJson(SSettings const& settings, std::string_view kept)
 		KeepOtherGames(kept, games, gameOrder);
 	}
 
+	Json selectedGame = WriteSelectedGame(settings.selectedGame, kept);
+
 	root["version"] = SettingsVersion;
 	root["window"] = WriteWindow(settings.window);
-	root["game"] = Query::GetGame(settings.selectedGame).key;
+
+	if (!selectedGame.is_null())
+	{
+		root["game"] = std::move(selectedGame);
+	}
+
 	root["games"] = std::move(games);
 	root[GameOrderKey] = std::move(gameOrder);
 	root["autoRefreshSeconds"] = settings.autoRefreshSeconds;

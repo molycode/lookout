@@ -99,6 +99,7 @@ private:
 	void UpdateJoinLauncher(Query::EGame game);
 	void Recount(Query::EGame game);
 	void RebuildRows();
+	bool IsGameSelected() const;
 	size_t GetSelectedIndex() const;
 
 	Config::CSettingsStore m_settingsStore;

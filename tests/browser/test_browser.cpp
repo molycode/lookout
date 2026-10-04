@@ -548,6 +548,55 @@ TEST_F(CBrowserCatalogTest, ServersAreAskedAgainAfterAReplace)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, NoGameRefreshesNothing)
+{
+	Install({});
+	ASSERT_TRUE(StartWithServer());
+	m_browser.Refresh();
+	m_browser.Update();
+
+	EXPECT_EQ(m_browser.GetSelectedGame(), Query::NoGame);
+	EXPECT_TRUE(m_browser.GetEntries().empty());
+	EXPECT_FALSE(m_browser.GetNextAutoRefresh().has_value());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, SelectedGameSurvivesAStartWithoutGames)
+{
+	Install({});
+	Initialize();
+	m_browser.Terminate();
+	Install(m_games);
+	Initialize();
+
+	EXPECT_EQ(m_browser.GetSelectedGame(), Fixtures::GetGameId("kingpin"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, FirstGamesSelectTheSavedGame)
+{
+	Install({});
+	ASSERT_TRUE(StartWithServer());
+
+	m_browser.ReplaceCatalog(m_protocols, m_games);
+
+	EXPECT_EQ(m_browser.GetSelectedGame(), Fixtures::GetGameId("kingpin"));
+	EXPECT_TRUE(m_browser.GetStatus(m_browser.GetSelectedGame()).isRefreshing);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, LastGameGoingSelectsNoGame)
+{
+	ASSERT_TRUE(StartWithServer());
+
+	m_browser.ReplaceCatalog(m_protocols, {});
+	m_browser.Update();
+
+	EXPECT_EQ(m_browser.GetSelectedGame(), Query::NoGame);
+	EXPECT_TRUE(m_browser.GetRows().empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserCatalogTest, RemovedGameFindsItsInstallsWhenItReturns)
 {
 	std::vector<Query::SGameDefinition> withoutKingpin{ m_games };

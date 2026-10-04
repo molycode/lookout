@@ -4,6 +4,7 @@
 #include "theme.hpp"
 #include "theme_colors.hpp"
 #include "browser/browser.hpp"
+#include "query/game.hpp"
 #include <imgui.h>
 #include <array>
 
@@ -12,33 +13,41 @@ namespace Lkt::Ui
 //////////////////////////////////////////////////////////////////////////
 void DrawStatusBar(Browser::CBrowser const& browser, std::string_view message)
 {
-	Browser::SGameStatus const& status{ browser.GetStatus(browser.GetSelectedGame()) };
 	SThemeColors const& colors{ GetThemeColors() };
+	bool const hasGame{ browser.GetSelectedGame() != Query::NoGame };
 	std::array<char, 96> buffer{};
 
-	std::string_view const summary{ status.hasRefreshed
-		? FormatTo(buffer, "{} of {} servers answered · {} {}", status.numAnswered, status.numListed, status.numPlayers,
-			(status.numPlayers == 1) ? "player" : "players")
-		: std::string_view{ "Not refreshed yet" } };
-
-	ImGui::PushStyleColor(ImGuiCol_Text, colors.textDisabled);
-	ImGui::TextUnformatted(summary.data(), summary.data() + summary.size());
-	ImGui::PopStyleColor();
-
-	if (status.numMastersFailed > 0)
+	if (hasGame)
 	{
-		std::string_view const failed{ FormatTo(buffer, LKT_ICON_WARNING " {} {} failed", status.numMastersFailed,
-			(status.numMastersFailed == 1) ? "master" : "masters") };
+		Browser::SGameStatus const& status{ browser.GetStatus(browser.GetSelectedGame()) };
+		std::string_view const summary{ status.hasRefreshed
+			? FormatTo(buffer, "{} of {} servers answered · {} {}", status.numAnswered, status.numListed, status.numPlayers,
+				(status.numPlayers == 1) ? "player" : "players")
+			: std::string_view{ "Not refreshed yet" } };
 
-		ImGui::SameLine();
-		ImGui::PushStyleColor(ImGuiCol_Text, colors.amber);
-		ImGui::TextUnformatted(failed.data(), failed.data() + failed.size());
+		ImGui::PushStyleColor(ImGuiCol_Text, colors.textDisabled);
+		ImGui::TextUnformatted(summary.data(), summary.data() + summary.size());
 		ImGui::PopStyleColor();
+
+		if (status.numMastersFailed > 0)
+		{
+			std::string_view const failed{ FormatTo(buffer, LKT_ICON_WARNING " {} {} failed", status.numMastersFailed,
+				(status.numMastersFailed == 1) ? "master" : "masters") };
+
+			ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_Text, colors.amber);
+			ImGui::TextUnformatted(failed.data(), failed.data() + failed.size());
+			ImGui::PopStyleColor();
+		}
 	}
 
 	if (!message.empty())
 	{
-		ImGui::SameLine(0.0f, ImGui::GetFontSize() * 2.0f);
+		if (hasGame)
+		{
+			ImGui::SameLine(0.0f, ImGui::GetFontSize() * 2.0f);
+		}
+
 		ImGui::TextUnformatted(message.data(), message.data() + message.size());
 	}
 }

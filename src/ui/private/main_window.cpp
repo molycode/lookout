@@ -51,7 +51,7 @@ void DrawMenuBar(SFrameIntents& intents)
 
 //////////////////////////////////////////////////////////////////////////
 // Shortcuts register every frame; under an open prompt, the ones that would act behind it are ignored.
-void ReadShortcuts(SFrameIntents& intents)
+void ReadShortcuts(bool hasGame, SFrameIntents& intents)
 {
 	bool const isPopupOpen{ ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) };
 	bool const wantsQuit{ ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q, ImGuiInputFlags_RouteGlobal) };
@@ -60,7 +60,18 @@ void ReadShortcuts(SFrameIntents& intents)
 
 	intents.quit = wantsQuit || intents.quit;
 	intents.refresh = (wantsRefresh && !isPopupOpen) || intents.refresh;
-	intents.openAddServer = (wantsAddServer && !isPopupOpen) || intents.openAddServer;
+	intents.openAddServer = (wantsAddServer && !isPopupOpen && hasGame) || intents.openAddServer;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void DrawNoGames()
+{
+	ImGui::BeginChild("##no-games", ImVec2{ 0.0f, 0.0f }, ImGuiChildFlags_Borders);
+	ImGui::PushTextWrapPos(0.0f);
+	ImGui::TextUnformatted("No games are installed yet.");
+	ImGui::TextDisabled("Add one with the gamepad button above.");
+	ImGui::PopTextWrapPos();
+	ImGui::EndChild();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -108,7 +119,7 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 	SFrameIntents intents{};
 
 	DrawMenuBar(intents);
-	ReadShortcuts(intents);
+	ReadShortcuts(browser.GetSelectedGame() != Query::NoGame, intents);
 	m_toolbar.Draw(browser, !m_userDir.empty(), intents);
 	DrawBody(browser, intents);
 	DrawStatusBar(browser, m_message);
@@ -144,12 +155,10 @@ uint32_t CMainWindow::GetDetailsWidth() const
 }
 
 //////////////////////////////////////////////////////////////////////////
-// ImGui resizes a child only from its right edge, so the details pane on the right gets a splitter of its own.
 void CMainWindow::DrawBody(Browser::CBrowser const& browser, SFrameIntents& intents)
 {
 	float const em{ ImGui::GetFontSize() };
 	float const statusHeight{ ImGui::GetFrameHeightWithSpacing() };
-	uint64_t& selectedKey{ GetSelectedKey(browser.GetSelectedGame()) };
 
 	if (ImGui::BeginChild("##body", ImVec2{ 0.0f, -statusHeight }))
 	{
@@ -159,52 +168,70 @@ void CMainWindow::DrawBody(Browser::CBrowser const& browser, SFrameIntents& inte
 		ImGui::EndChild();
 		ImGui::SameLine();
 
-		float const splitterWidth{ ImGui::GetStyle().ItemSpacing.x };
-		float const available{ ImGui::GetContentRegionAvail().x };
-		float const maxDetailsEm{ std::min(MaxDetailsEm, (available - splitterWidth) / em - MinTableEm) };
-		float const detailsEm{ std::min(std::clamp(m_detailsEm, MinDetailsEm, MaxDetailsEm), maxDetailsEm) };
-		bool const isSideBySide{ detailsEm >= MinDetailsEm };
-
-		if (isSideBySide)
+		if (browser.GetSelectedGame() != Query::NoGame)
 		{
-			ImGui::BeginChild("##servers", ImVec2{ available - detailsEm * em - splitterWidth, 0.0f });
-			DrawServerTable(browser, selectedKey, m_shouldScrollToSelection, intents);
-			ImGui::EndChild();
-			ImGui::SameLine(0.0f, 0.0f);
-			ImGui::InvisibleButton("##splitter", ImVec2{ splitterWidth, std::max(1.0f, ImGui::GetContentRegionAvail().y) });
-
-			if (ImGui::IsItemHovered() || ImGui::IsItemActive())
-			{
-				ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-			}
-
-			if (ImGui::IsItemActive())
-			{
-				m_detailsEm = std::clamp(detailsEm - ImGui::GetIO().MouseDelta.x / em, MinDetailsEm, maxDetailsEm);
-			}
-
-			ImGui::SameLine(0.0f, 0.0f);
-			ImGui::BeginChild("##details", ImVec2{ 0.0f, 0.0f }, ImGuiChildFlags_Borders);
-			DrawServerDetails(browser, selectedKey, intents);
-			ImGui::EndChild();
-		}
-		else if (m_isDetailsShown)
-		{
-			ImGui::BeginChild("##details", ImVec2{ 0.0f, 0.0f }, ImGuiChildFlags_Borders);
-			DrawServerDetails(browser, selectedKey, intents);
-			ImGui::EndChild();
+			DrawServerPanes(browser, intents);
 		}
 		else
 		{
-			ImGui::BeginChild("##servers", ImVec2{ 0.0f, 0.0f });
-			DrawServerTable(browser, selectedKey, m_shouldScrollToSelection, intents);
-			ImGui::EndChild();
+			DrawNoGames();
+			m_isNarrow = false;
 		}
-
-		m_isNarrow = !isSideBySide;
 	}
 
 	ImGui::EndChild();
+}
+
+//////////////////////////////////////////////////////////////////////////
+// ImGui resizes a child only from its right edge, so the details pane on the right gets a splitter of its own.
+void CMainWindow::DrawServerPanes(Browser::CBrowser const& browser, SFrameIntents& intents)
+{
+	float const em{ ImGui::GetFontSize() };
+	uint64_t& selectedKey{ GetSelectedKey(browser.GetSelectedGame()) };
+
+	float const splitterWidth{ ImGui::GetStyle().ItemSpacing.x };
+	float const available{ ImGui::GetContentRegionAvail().x };
+	float const maxDetailsEm{ std::min(MaxDetailsEm, (available - splitterWidth) / em - MinTableEm) };
+	float const detailsEm{ std::min(std::clamp(m_detailsEm, MinDetailsEm, MaxDetailsEm), maxDetailsEm) };
+	bool const isSideBySide{ detailsEm >= MinDetailsEm };
+
+	if (isSideBySide)
+	{
+		ImGui::BeginChild("##servers", ImVec2{ available - detailsEm * em - splitterWidth, 0.0f });
+		DrawServerTable(browser, selectedKey, m_shouldScrollToSelection, intents);
+		ImGui::EndChild();
+		ImGui::SameLine(0.0f, 0.0f);
+		ImGui::InvisibleButton("##splitter", ImVec2{ splitterWidth, std::max(1.0f, ImGui::GetContentRegionAvail().y) });
+
+		if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+		{
+			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+		}
+
+		if (ImGui::IsItemActive())
+		{
+			m_detailsEm = std::clamp(detailsEm - ImGui::GetIO().MouseDelta.x / em, MinDetailsEm, maxDetailsEm);
+		}
+
+		ImGui::SameLine(0.0f, 0.0f);
+		ImGui::BeginChild("##details", ImVec2{ 0.0f, 0.0f }, ImGuiChildFlags_Borders);
+		DrawServerDetails(browser, selectedKey, intents);
+		ImGui::EndChild();
+	}
+	else if (m_isDetailsShown)
+	{
+		ImGui::BeginChild("##details", ImVec2{ 0.0f, 0.0f }, ImGuiChildFlags_Borders);
+		DrawServerDetails(browser, selectedKey, intents);
+		ImGui::EndChild();
+	}
+	else
+	{
+		ImGui::BeginChild("##servers", ImVec2{ 0.0f, 0.0f });
+		DrawServerTable(browser, selectedKey, m_shouldScrollToSelection, intents);
+		ImGui::EndChild();
+	}
+
+	m_isNarrow = !isSideBySide;
 }
 
 //////////////////////////////////////////////////////////////////////////

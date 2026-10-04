@@ -54,6 +54,7 @@ public:
 private:
 
 	void DrawBody(Browser::CBrowser const& browser, SFrameIntents& intents);
+	void DrawServerPanes(Browser::CBrowser const& browser, SFrameIntents& intents);
 	void DrawDetailsToggle();
 	void Apply(Browser::CBrowser& browser, SFrameIntents const& intents);
 	void SetGameListed(Browser::CBrowser& browser, Query::EGame game, bool isListed);

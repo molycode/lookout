@@ -1,4 +1,5 @@
 #include "catalog_fixture.hpp"
+#include "empty_catalog_fixture.hpp"
 #include "fixtures.hpp"
 #include "settings_json.hpp"
 #include "config/default_settings.hpp"
@@ -23,6 +24,8 @@ namespace Lkt::Config
 {
 namespace
 {
+using CSettingsWithoutGamesTest = Fixtures::CEmptyCatalogTest;
+
 // 203.0.113.7:31510 and 203.0.113.8:27910.
 constexpr Query::SServerAddress Favourite{ 0xCB007107, 31510 };
 constexpr Query::SServerAddress OtherFavourite{ 0xCB007108, 27910 };
@@ -424,6 +427,31 @@ TEST(SettingsJson, CommentsAreAccepted)
 	SSettingsDocument const document{ ReadValid("// edited by hand\n{ /* the one I play */ \"game\": \"quake2\" }") };
 
 	EXPECT_EQ(document.settings.selectedGame, Fixtures::GetGameId("quake2"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CSettingsWithoutGamesTest, DefaultsSelectNoGame)
+{
+	EXPECT_EQ(MakeDefaultSettings().selectedGame, Query::NoGame);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CSettingsWithoutGamesTest, SavedGamesAreNotInvalid)
+{
+	std::expected<SSettingsDocument, ESettingsJsonError> const document{ ReadSettingsJson(R"({ "version": 2, "game": "kingpin",
+		"games": { "kingpin": { "listed": false } }, "gameOrder": [ "kingpin" ] })") };
+
+	ASSERT_TRUE(document.has_value());
+	EXPECT_EQ(document->numInvalid, 0u);
+	EXPECT_EQ(document->settings.selectedGame, Query::NoGame);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CSettingsWithoutGamesTest, SelectedGameIsKeptForItsReturn)
+{
+	std::string const text{ WriteSettingsJson(MakeDefaultSettings(), R"({ "version": 2, "game": "kingpin" })") };
+
+	EXPECT_TRUE(text.contains("\"game\": \"kingpin\"")) << text;
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -51,7 +51,9 @@ void DrawRefreshButtons(Browser::CBrowser const& browser, SFrameIntents& intents
 	std::array<char, 32> buffer{};
 	std::array<char, 96> tooltip{};
 
-	if (ImGui::Button(browser.GetStatus(browser.GetSelectedGame()).isRefreshing ? LKT_ICON_ROTATE " Refreshing…###refresh" : LKT_ICON_ROTATE " Refresh###refresh"))
+	bool const isRefreshing{ browser.GetSelectedGame() != Query::NoGame && browser.GetStatus(browser.GetSelectedGame()).isRefreshing };
+
+	if (ImGui::Button(isRefreshing ? LKT_ICON_ROTATE " Refreshing…###refresh" : LKT_ICON_ROTATE " Refresh###refresh"))
 	{
 		intents.refresh = true;
 	}
@@ -236,10 +238,13 @@ void DrawCountryFilter(Browser::CBrowser const& browser, Config::SServerFilter c
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
+// With no game installed, only adding one does anything.
 void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameIntents& intents)
 {
+	Config::SServerFilter const noFilter{};
 	Query::EGame const game{ browser.GetSelectedGame() };
-	Config::SServerFilter const& filter{ browser.GetSettings().games[static_cast<size_t>(game)].filter };
+	bool const hasGame{ game != Query::NoGame };
+	Config::SServerFilter const& filter{ hasGame ? browser.GetSettings().games[static_cast<size_t>(game)].filter : noFilter };
 
 	if (!m_hasGame || game != m_game)
 	{
@@ -248,6 +253,7 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 		m_hasGame = true;
 	}
 
+	ImGui::BeginDisabled(!hasGame);
 	DrawRefreshButtons(browser, intents);
 	ImGui::SameLine();
 
@@ -257,6 +263,7 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 	}
 
 	ImGui::SetItemTooltip("Add a server by its address (Ctrl+N)");
+	ImGui::EndDisabled();
 	ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
 	ImGui::BeginDisabled(!canEditGames);
 
@@ -272,6 +279,7 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 	bool showFull{ filter.showFull };
 
 	ImGui::SameLine();
+	ImGui::BeginDisabled(!hasGame);
 
 	if (ImGui::Checkbox("Empty", &showEmpty))
 	{
@@ -324,6 +332,8 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 	{
 		DrawClearButton(filter, intents);
 	}
+
+	ImGui::EndDisabled();
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -334,6 +334,13 @@ void DrawGameSidebar(Browser::CBrowser const& browser, std::filesystem::path con
 		}
 	}
 
+	if (games.empty())
+	{
+		ImGui::PushTextWrapPos(0.0f);
+		ImGui::TextDisabled("No games yet");
+		ImGui::PopTextWrapPos();
+	}
+
 	DrawProblems(browser.GetGameProblems(), userDir, intents);
 }
 } // namespace Lkt::Ui
