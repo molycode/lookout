@@ -129,7 +129,7 @@ TEST_F(CGameFilesTest, EditedBuiltinLoadsAsEdited)
 	SGameContent const content{ LoadGames(m_dir) };
 	auto const game{ std::ranges::find(content.games, "quake3", &Query::SGameDefinition::key) };
 
-	EXPECT_TRUE(content.problems.empty()) << content.problems.front();
+	EXPECT_TRUE(content.problems.empty()) << content.problems.front().text;
 	ASSERT_NE(game, content.games.end());
 	EXPECT_TRUE(game->modes.empty());
 	EXPECT_TRUE(game->foreignServers.empty());

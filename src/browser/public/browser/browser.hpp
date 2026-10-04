@@ -20,6 +20,7 @@
 #include "net/query_engine.hpp"
 #include "query/game.hpp"
 #include "query/game_definition.hpp"
+#include "query/game_problem.hpp"
 #include "query/parse_error.hpp"
 #include "query/protocol_definition.hpp"
 #include "query/server_address.hpp"
@@ -70,7 +71,7 @@ public:
 	void MoveGame(Query::EGame game, Query::EGame target);
 	// False, with nothing touched, when the catalog is the one that runs.
 	bool ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games);
-	void SetGameProblems(std::vector<std::string> problems);
+	void SetGameProblems(std::vector<Query::SGameProblem> problems);
 
 	Query::EGame GetSelectedGame() const;
 	Config::SSettings const& GetSettings() const;
@@ -82,7 +83,7 @@ public:
 	std::optional<Net::Clock::time_point> GetNextAutoRefresh() const;
 	SServerEntry const* FindEntry(uint64_t key) const;
 	SGameStatus const& GetStatus(Query::EGame game) const;
-	std::span<std::string const> GetGameProblems() const;
+	std::span<Query::SGameProblem const> GetGameProblems() const;
 	bool IsFavourite(Query::SServerAddress const& address) const;
 	std::span<Launch::SLaunchOption const> GetLaunchOptions(Query::EGame game) const;
 	std::span<SInstallLauncher const> GetInstallLaunchers(Query::EGame game) const;
@@ -114,7 +115,7 @@ private:
 	std::vector<uint32_t> m_rows;
 	std::vector<std::string> m_mods;
 	std::vector<uint8_t> m_countries;
-	std::vector<std::string> m_gameProblems;
+	std::vector<Query::SGameProblem> m_gameProblems;
 	CAutoRefresh m_autoRefresh;
 	bool m_isStarted{ false };
 	bool m_isAutoRefreshPaused{ false };

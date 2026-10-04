@@ -49,8 +49,8 @@ int main(int argc, char* argv[])
 
 	if (!dataHome.has_value())
 	{
-		content.problems.emplace_back(std::format("Cannot locate the data directory, so only the built-in games are loaded: {}",
-			Lkt::Config::ToString(dataHome.error())));
+		content.problems.emplace_back(Lkt::Query::SGameProblem{ std::format("Cannot locate the data directory, so only the built-in games are loaded: {}",
+			Lkt::Config::ToString(dataHome.error())), {} });
 	}
 
 	Lkt::Query::InitializeGameCatalog(content.protocols, content.games);

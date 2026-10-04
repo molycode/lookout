@@ -29,17 +29,18 @@ constexpr float MinHeightEm{ 20.0f };
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CGameEditor::Open(Query::SGameDefinition const& game, std::filesystem::path const& userDir)
+void CGameEditor::Open(std::string_view key, std::filesystem::path const& userDir)
 {
-	Games::SEditableGame opened{ Games::ReadGameText(userDir, game.key) };
-	Games::EGameSource const source{ Games::FindGameSource(userDir, game.key) };
+	Games::SEditableGame opened{ Games::ReadGameText(userDir, key) };
+	Games::EGameSource const source{ Games::FindGameSource(userDir, key) };
+	Query::SGameDefinition const* const pGame{ Query::FindGame(key) };
 
-	m_key = game.key;
-	m_name = game.name;
-	m_text = std::move(opened.text);
-	m_openedText = m_text;
-	m_note = opened.problem.empty() ? std::string{} : std::format("Your changes cannot be opened, so this is the built-in: {}", opened.problem);
+	m_key = key;
+	m_name = (pGame != nullptr) ? pGame->name : m_key;
 	m_isBuiltin = source == Games::EGameSource::Builtin || source == Games::EGameSource::Patched;
+	m_text = opened.text.empty() ? std::string{ Games::GetNewGameText() } : std::move(opened.text);
+	m_openedText = m_text;
+	m_note = (m_isBuiltin && !opened.problem.empty()) ? std::format("Your changes cannot be opened, so this is the built-in: {}", opened.problem) : opened.problem;
 	m_isNew = false;
 	Opened(userDir);
 }

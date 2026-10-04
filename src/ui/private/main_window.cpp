@@ -294,7 +294,7 @@ void CMainWindow::Apply(Browser::CBrowser& browser, SFrameIntents const& intents
 
 	if (intents.editGame.has_value())
 	{
-		m_gameEditor.Open(Query::GetGame(*intents.editGame), m_userDir);
+		m_gameEditor.Open(*intents.editGame, m_userDir);
 	}
 
 	if (intents.revertGame.has_value())

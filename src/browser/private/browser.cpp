@@ -533,7 +533,7 @@ void CBrowser::SwapCatalog(std::vector<Query::SProtocolDefinition> protocols, st
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CBrowser::SetGameProblems(std::vector<std::string> problems)
+void CBrowser::SetGameProblems(std::vector<Query::SGameProblem> problems)
 {
 	m_gameProblems = std::move(problems);
 }
@@ -600,7 +600,7 @@ SGameStatus const& CBrowser::GetStatus(Query::EGame game) const
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::span<std::string const> CBrowser::GetGameProblems() const
+std::span<Query::SGameProblem const> CBrowser::GetGameProblems() const
 {
 	return m_gameProblems;
 }

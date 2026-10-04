@@ -62,7 +62,7 @@ void PrintServers(Browser::CServerList const& servers)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-bool CLookout::Run(Query::SGameDefinition const* pListGame, std::filesystem::path const& userDir, std::span<std::string const> gameProblems)
+bool CLookout::Run(Query::SGameDefinition const* pListGame, std::filesystem::path const& userDir, std::span<Query::SGameProblem const> gameProblems)
 {
 	PrepareDirectories();
 	m_userDir = userDir;
@@ -305,11 +305,11 @@ void CLookout::ReportStartupProblems() const
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CLookout::ReportGameProblems(std::span<std::string const> problems) const
+void CLookout::ReportGameProblems(std::span<Query::SGameProblem const> problems) const
 {
-	for (std::string const& problem : problems)
+	for (Query::SGameProblem const& problem : problems)
 	{
-		gLog.Warning("{}", problem);
+		gLog.Warning("{}", problem.text);
 	}
 }
 

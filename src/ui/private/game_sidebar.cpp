@@ -88,7 +88,7 @@ void DrawGameMenu(Query::SGameDefinition const& game, std::filesystem::path cons
 
 		if (ImGui::MenuItem("Edit description…"))
 		{
-			intents.editGame = game.game;
+			intents.editGame = game.key;
 		}
 
 		ImGui::EndDisabled();
@@ -217,7 +217,8 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 }
 
 //////////////////////////////////////////////////////////////////////////
-void DrawProblems(std::span<std::string const> problems)
+// One whose game's description can be fixed in the editor offers it.
+void DrawProblems(std::span<Query::SGameProblem const> problems, std::filesystem::path const& userDir, SFrameIntents& intents)
 {
 	if (!problems.empty())
 	{
@@ -232,9 +233,25 @@ void DrawProblems(std::span<std::string const> problems)
 			ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColors().amber);
 			ImGui::PushTextWrapPos(0.0f);
 
-			for (std::string const& problem : problems)
+			for (size_t index{ 0 }; index < problems.size(); ++index)
 			{
-				ImGui::TextUnformatted(problem.data(), problem.data() + problem.size());
+				Query::SGameProblem const& problem{ problems[index] };
+
+				ImGui::TextUnformatted(problem.text.data(), problem.text.data() + problem.text.size());
+
+				if (!problem.key.empty() && !userDir.empty())
+				{
+					ImGui::PushID(static_cast<int>(index));
+					ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColors().text);
+
+					if (ImGui::SmallButton("Edit description…"))
+					{
+						intents.editGame = problem.key;
+					}
+
+					ImGui::PopStyleColor();
+					ImGui::PopID();
+				}
 			}
 
 			ImGui::PopTextWrapPos();
@@ -317,6 +334,6 @@ void DrawGameSidebar(Browser::CBrowser const& browser, std::filesystem::path con
 		}
 	}
 
-	DrawProblems(browser.GetGameProblems());
+	DrawProblems(browser.GetGameProblems(), userDir, intents);
 }
 } // namespace Lkt::Ui

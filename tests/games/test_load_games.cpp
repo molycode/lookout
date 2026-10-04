@@ -1,6 +1,7 @@
 #include "fixtures.hpp"
 #include "games/load_games.hpp"
 #include "query/game_definition.hpp"
+#include "query/game_problem.hpp"
 #include "query/protocol_definition.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
@@ -128,7 +129,7 @@ TEST_F(CLoadGamesTest, BrokenPatchKeepsTheBuiltin)
 	SGameContent const content{ LoadGames(m_dir) };
 	Query::SGameDefinition const* const pGame{ FindGame(content, "quake3") };
 
-	EXPECT_EQ(content.problems, std::vector<std::string>{ "games/quake3/game.json: masters: must list at least one master" });
+	EXPECT_EQ(content.problems, (std::vector<Query::SGameProblem>{ { "games/quake3/game.json: masters: must list at least one master", "quake3" } }));
 	ASSERT_NE(pGame, nullptr);
 	EXPECT_EQ(pGame->name, Fixtures::GetGameByKey("quake3").name);
 }
@@ -138,7 +139,8 @@ TEST_F(CLoadGamesTest, PatchThatIsNotAnObjectIsAProblem)
 {
 	WriteFile("games/quake3/game.json", "[ 1 ]");
 
-	EXPECT_EQ(LoadGames(m_dir).problems, std::vector<std::string>{ "games/quake3/game.json: a change to a built-in game must be a JSON object" });
+	EXPECT_EQ(LoadGames(m_dir).problems,
+		(std::vector<Query::SGameProblem>{ { "games/quake3/game.json: a change to a built-in game must be a JSON object", "quake3" } }));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -178,7 +180,8 @@ TEST_F(CLoadGamesTest, BrokenUserProtocolKeepsTheBuiltin)
 	Query::SProtocolDefinition const* const pProtocol{ FindProtocol(content, "quake2") };
 
 	ASSERT_EQ(content.problems.size(), 1u);
-	EXPECT_TRUE(content.problems.front().starts_with("protocols/quake2.lua: ")) << content.problems.front();
+	EXPECT_TRUE(content.problems.front().text.starts_with("protocols/quake2.lua: ")) << content.problems.front().text;
+	EXPECT_TRUE(content.problems.front().key.empty());
 	ASSERT_NE(pProtocol, nullptr);
 	EXPECT_EQ(pProtocol->source, Fixtures::GetProtocolByName("quake2").source);
 }
@@ -204,7 +207,7 @@ TEST_F(CLoadGamesTest, FolderNameThatIsNotAKeyIsAProblem)
 {
 	WriteFile("games/My Game/game.json", UserGame);
 
-	EXPECT_EQ(LoadGames(m_dir).problems, std::vector<std::string>{ "games/My Game: its name must use only lower-case letters, digits, '-' and '_'" });
+	EXPECT_EQ(LoadGames(m_dir).problems, (std::vector<Query::SGameProblem>{ { "games/My Game: its name must use only lower-case letters, digits, '-' and '_'", "" } }));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -224,7 +227,19 @@ TEST_F(CLoadGamesTest, UserFolderWithoutAGameIsAProblem)
 {
 	WriteFile("games/empty/notes.txt", "");
 
-	EXPECT_EQ(LoadGames(m_dir).problems, std::vector<std::string>{ "games/empty: has no game.json" });
+	EXPECT_EQ(LoadGames(m_dir).problems, (std::vector<Query::SGameProblem>{ { "games/empty: has no game.json", "empty" } }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, UnusableUserGameIsLeftOutAndNamesItsKey)
+{
+	WriteFile("games/mygame/game.json", R"json({ "format": 1, "name": "My Game" })json");
+
+	SGameContent const content{ LoadGames(m_dir) };
+
+	ASSERT_EQ(content.problems.size(), 1u);
+	EXPECT_EQ(content.problems.front().key, "mygame");
+	EXPECT_EQ(FindGame(content, "mygame"), nullptr);
 }
 } // namespace
 } // namespace Lkt::Games

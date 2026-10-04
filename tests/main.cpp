@@ -4,7 +4,6 @@
 #include <gtest/gtest.h>
 #include <cstdio>
 #include <cstdlib>
-#include <string>
 
 //////////////////////////////////////////////////////////////////////////
 int main(int argc, char** argv)
@@ -12,9 +11,9 @@ int main(int argc, char** argv)
 	Lkt::Games::SGameContent const builtins{ Lkt::Games::LoadGames({}) };
 	int result{ EXIT_FAILURE };
 
-	for (std::string const& problem : builtins.problems)
+	for (Lkt::Query::SGameProblem const& problem : builtins.problems)
 	{
-		std::fprintf(stderr, "%s\n", problem.c_str());
+		std::fprintf(stderr, "%s\n", problem.text.c_str());
 	}
 
 	if (builtins.problems.empty())

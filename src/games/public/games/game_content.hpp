@@ -1,8 +1,8 @@
 #pragma once
 
 #include "query/game_definition.hpp"
+#include "query/game_problem.hpp"
 #include "query/protocol_definition.hpp"
-#include <string>
 #include <vector>
 
 namespace Lkt::Games
@@ -12,6 +12,6 @@ struct SGameContent final
 {
 	std::vector<Query::SProtocolDefinition> protocols;
 	std::vector<Query::SGameDefinition> games;
-	std::vector<std::string> problems;
+	std::vector<Query::SGameProblem> problems;
 };
 } // namespace Lkt::Games

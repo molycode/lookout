@@ -3,6 +3,7 @@
 #include "browser/browser.hpp"
 #include "games/folder_watcher.hpp"
 #include "net/query_engine.hpp"
+#include "query/game_problem.hpp"
 #include "ui/application.hpp"
 #include <tge/non_copyable.hpp>
 #include <filesystem>
@@ -25,14 +26,14 @@ public:
 	~CLookout() = default;
 
 	// Problems from loading the games are logged once logging reaches its file.
-	bool Run(Query::SGameDefinition const* pListGame, std::filesystem::path const& userDir, std::span<std::string const> gameProblems);
+	bool Run(Query::SGameDefinition const* pListGame, std::filesystem::path const& userDir, std::span<Query::SGameProblem const> gameProblems);
 
 private:
 
 	bool RunWindow();
 	bool RunList(Query::SGameDefinition const& game);
 	void ReloadGames();
-	void ReportGameProblems(std::span<std::string const> problems) const;
+	void ReportGameProblems(std::span<Query::SGameProblem const> problems) const;
 	void StartListLogging();
 	void StopListLogging();
 	void PrepareDirectories();
@@ -43,7 +44,7 @@ private:
 	std::string m_configDir;
 	std::vector<std::string> m_startupProblems;
 	std::filesystem::path m_userDir;
-	std::vector<std::string> m_gameProblems;
+	std::vector<Query::SGameProblem> m_gameProblems;
 	Games::CFolderWatcher m_watcher;
 	Net::CQueryEngine m_engine;
 	Browser::CBrowser m_browser;

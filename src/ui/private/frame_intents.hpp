@@ -7,6 +7,7 @@
 #include "query/game.hpp"
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace Lkt::Ui
 {
@@ -19,7 +20,8 @@ struct SFrameIntents final
 	std::optional<Query::EGame> showGame;
 	std::optional<SGameMove> moveGame;
 	std::optional<Query::EGame> openGameSettings;
-	std::optional<Query::EGame> editGame;
+	// By key: a game whose description has a problem may not be in the catalog.
+	std::optional<std::string> editGame;
 	std::optional<Query::EGame> revertGame;
 	std::optional<Query::EGame> removeGame;
 	std::optional<Config::SServerFilter> filter;

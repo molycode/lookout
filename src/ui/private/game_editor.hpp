@@ -4,15 +4,9 @@
 #include <tge/non_copyable.hpp>
 #include <filesystem>
 #include <string>
+#include <string_view>
 
-namespace Lkt
-{
-namespace Query
-{
-struct SGameDefinition;
-} // namespace Query
-
-namespace Ui
+namespace Lkt::Ui
 {
 // A game description as JSON text, checked as it is typed, beside a reference of what it may hold.
 class CGameEditor final : private Tge::SNoCopyNoMove
@@ -22,7 +16,8 @@ public:
 	CGameEditor() = default;
 	~CGameEditor() = default;
 
-	void Open(Query::SGameDefinition const& game, std::filesystem::path const& userDir);
+	// A key the catalog lacks opens as written, or as a new game when it has no description at all.
+	void Open(std::string_view key, std::filesystem::path const& userDir);
 	void OpenNew(SNewGame game, std::filesystem::path const& userDir);
 	// True once the description was saved.
 	bool Draw(std::filesystem::path const& userDir, std::string& message);
@@ -47,5 +42,4 @@ private:
 	bool m_isNew{ false };
 	bool m_shouldOpen{ false };
 };
-} // namespace Ui
-} // namespace Lkt
+} // namespace Lkt::Ui

@@ -34,7 +34,8 @@ constexpr std::string_view KeyRule{ "its name must use only lower-case letters, 
 
 //////////////////////////////////////////////////////////////////////////
 // By name, without dot entries; a missing folder holds nothing.
-std::vector<std::filesystem::directory_entry> ListFolder(std::filesystem::path const& folder, std::string_view shownAs, std::vector<std::string>& problems)
+std::vector<std::filesystem::directory_entry> ListFolder(std::filesystem::path const& folder, std::string_view shownAs,
+	std::vector<Query::SGameProblem>& problems)
 {
 	std::vector<std::filesystem::directory_entry> entries{};
 	std::error_code error{};
@@ -49,7 +50,7 @@ std::vector<std::filesystem::directory_entry> ListFolder(std::filesystem::path c
 
 	if (error.value() != 0 && error != std::errc::no_such_file_or_directory)
 	{
-		problems.emplace_back(std::format("{}: {}", shownAs, error.message()));
+		problems.emplace_back(Query::SGameProblem{ std::format("{}: {}", shownAs, error.message()), {} });
 	}
 
 	std::ranges::sort(entries, {}, [](std::filesystem::directory_entry const& entry) { return entry.path().filename(); });
@@ -77,7 +78,7 @@ std::expected<std::optional<std::string>, std::string> ReadUserFile(std::filesys
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::map<std::string, std::string> ReadUserProtocols(std::filesystem::path const& userDir, std::vector<std::string>& problems)
+std::map<std::string, std::string> ReadUserProtocols(std::filesystem::path const& userDir, std::vector<Query::SGameProblem>& problems)
 {
 	std::map<std::string, std::string> sources{};
 
@@ -94,7 +95,7 @@ std::map<std::string, std::string> ReadUserProtocols(std::filesystem::path const
 
 			if (!text.has_value())
 			{
-				problems.emplace_back(std::move(text.error()));
+				problems.emplace_back(Query::SGameProblem{ std::move(text.error()), {} });
 			}
 			else if (text->has_value())
 			{
@@ -143,7 +144,7 @@ void LoadProtocols(std::map<std::string, std::string> const& userSources, SGameC
 
 			if (!isLoaded)
 			{
-				content.problems.emplace_back(std::format("protocols/{}{}: {}", name, ProtocolExtension, loaded.error()));
+				content.problems.emplace_back(Query::SGameProblem{ std::format("protocols/{}{}: {}", name, ProtocolExtension, loaded.error()), {} });
 				pScript->Terminate();
 			}
 		}
@@ -157,7 +158,7 @@ void LoadProtocols(std::map<std::string, std::string> const& userSources, SGameC
 
 			if (!isLoaded)
 			{
-				content.problems.emplace_back(std::format("The built-in protocol '{}' cannot be loaded: {}", name, loaded.error()));
+				content.problems.emplace_back(Query::SGameProblem{ std::format("The built-in protocol '{}' cannot be loaded: {}", name, loaded.error()), {} });
 				pScript->Terminate();
 			}
 		}
@@ -212,12 +213,14 @@ void AddGame(std::string_view key, std::optional<std::string_view> builtin, std:
 	std::span<std::byte const> const icon{ hasUserIcon ? std::as_bytes(std::span{ **userIcon }) : std::as_bytes(builtinIcon) };
 	std::optional<Query::SGameDefinition> game{};
 
-	for (UserFile const* pFile : { &userText, &userIcon })
+	if (!userText.has_value())
 	{
-		if (!pFile->has_value())
-		{
-			content.problems.emplace_back(pFile->error());
-		}
+		content.problems.emplace_back(Query::SGameProblem{ userText.error(), std::string{ key } });
+	}
+
+	if (!userIcon.has_value())
+	{
+		content.problems.emplace_back(Query::SGameProblem{ userIcon.error(), {} });
 	}
 
 	if (hasUserText)
@@ -233,7 +236,7 @@ void AddGame(std::string_view key, std::optional<std::string_view> builtin, std:
 		}
 		else
 		{
-			content.problems.emplace_back(std::format("{}: {}", shownAs, read.error()));
+			content.problems.emplace_back(Query::SGameProblem{ std::format("{}: {}", shownAs, read.error()), std::string{ key } });
 		}
 	}
 
@@ -247,12 +250,12 @@ void AddGame(std::string_view key, std::optional<std::string_view> builtin, std:
 		}
 		else
 		{
-			content.problems.emplace_back(std::format("The built-in game '{}' cannot be read: {}", key, read.error()));
+			content.problems.emplace_back(Query::SGameProblem{ std::format("The built-in game '{}' cannot be read: {}", key, read.error()), {} });
 		}
 	}
 	else if (!game.has_value() && userText.has_value() && !hasUserText)
 	{
-		content.problems.emplace_back(std::format("games/{}: has no game.json", key));
+		content.problems.emplace_back(Query::SGameProblem{ std::format("games/{}: has no game.json", key), std::string{ key } });
 	}
 
 	if (game.has_value())
@@ -299,7 +302,7 @@ SGameContent LoadGames(std::filesystem::path const& userDir)
 
 		if (entry.is_directory(error) && !IsValidKey(name))
 		{
-			content.problems.emplace_back(std::format("games/{}: {}", name, KeyRule));
+			content.problems.emplace_back(Query::SGameProblem{ std::format("games/{}: {}", name, KeyRule), {} });
 		}
 		else if (entry.is_directory(error))
 		{
