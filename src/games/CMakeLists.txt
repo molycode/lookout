@@ -15,10 +15,6 @@ target_link_libraries(LktGames
 		Lkt::Script
 )
 
-LktEmbedFile(LktGames Quake2Protocol ${PROJECT_SOURCE_DIR}/assets/protocols/quake2.lua)
-LktEmbedFile(LktGames Quake3Protocol ${PROJECT_SOURCE_DIR}/assets/protocols/quake3.lua)
-LktEmbedFile(LktGames KingpinGame ${PROJECT_SOURCE_DIR}/assets/games/kingpin/game.json)
-LktEmbedFile(LktGames Quake2Game ${PROJECT_SOURCE_DIR}/assets/games/quake2/game.json)
-LktEmbedFile(LktGames RtcwGame ${PROJECT_SOURCE_DIR}/assets/games/rtcw/game.json)
-LktEmbedFile(LktGames EnemyTerritoryGame ${PROJECT_SOURCE_DIR}/assets/games/et/game.json)
-LktEmbedFile(LktGames Quake3Game ${PROJECT_SOURCE_DIR}/assets/games/quake3/game.json)
+LktEmbedTree(LktGames Protocols ${PROJECT_SOURCE_DIR}/assets/protocols "*.lua")
+LktEmbedTree(LktGames Games ${PROJECT_SOURCE_DIR}/assets/games "*/game.json")
+LktEmbedFile(LktGames GameOrder ${PROJECT_SOURCE_DIR}/assets/games/order.json)

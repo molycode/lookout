@@ -1,0 +1,2 @@
+// The built-in games in sidebar order. A game's position also keys its saved table layout, so a new game goes last.
+[ "kingpin", "quake2", "rtcw", "et", "quake3" ]

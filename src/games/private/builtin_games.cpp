@@ -1,8 +1,9 @@
 #include "games/builtin_games.hpp"
 #include "embedded_games.hpp"
 #include "game_json.hpp"
+#include "game_order.hpp"
 #include "script/protocol_script.hpp"
-#include <array>
+#include <algorithm>
 #include <expected>
 #include <format>
 #include <span>
@@ -74,36 +75,51 @@ void AddGame(std::string_view key, std::span<unsigned char const> bytes, std::sp
 //////////////////////////////////////////////////////////////////////////
 SBuiltins LoadBuiltins()
 {
-	using EmbeddedFile = std::pair<std::string_view, std::span<unsigned char const>>;
-
-	std::array<EmbeddedFile, 2> const protocols{ {
-		{ "quake2", Embedded::Quake2Protocol },
-		{ "quake3", Embedded::Quake3Protocol }
-	} };
-
-	// The order also numbers each game's saved table layout, so a new game goes last.
-	std::array<EmbeddedFile, 5> const games{ {
-		{ "kingpin", Embedded::KingpinGame },
-		{ "quake2", Embedded::Quake2Game },
-		{ "rtcw", Embedded::RtcwGame },
-		{ "et", Embedded::EnemyTerritoryGame },
-		{ "quake3", Embedded::Quake3Game }
-	} };
-
 	SBuiltins builtins{};
-	std::vector<Script::CProtocolScript> scripts(protocols.size());
+	std::vector<Script::CProtocolScript> scripts(Embedded::Protocols.size());
 
-	for (size_t index{ 0 }; index < protocols.size(); ++index)
+	for (size_t index{ 0 }; index < Embedded::Protocols.size(); ++index)
 	{
-		AddProtocol(protocols[index].first, protocols[index].second, scripts[index], builtins);
+		std::string_view const name{ Embedded::Protocols[index].name };
+
+		AddProtocol(name.substr(0, name.rfind('.')), Embedded::Protocols[index].bytes, scripts[index], builtins);
+	}
+
+	std::expected<std::vector<std::string>, std::string> const order{ ReadGameOrder(AsText(Embedded::GameOrder)) };
+
+	if (order.has_value())
+	{
+		for (Embedded::SEmbeddedFile const& file : Embedded::Games)
+		{
+			std::string_view const key{ file.name.substr(0, file.name.find('/')) };
+
+			if (!std::ranges::contains(*order, key))
+			{
+				builtins.problems.emplace_back(std::format("The built-in game '{}' is missing from order.json", key));
+			}
+		}
+	}
+	else
+	{
+		builtins.problems.emplace_back(std::format("The built-in game order cannot be read: {}", order.error()));
 	}
 
 	// Games name protocols by position, which holds only when every protocol loaded.
 	if (builtins.problems.empty())
 	{
-		for (EmbeddedFile const& game : games)
+		for (std::string const& key : *order)
 		{
-			AddGame(game.first, game.second, scripts, builtins);
+			std::string const path{ std::format("{}/game.json", key) };
+			auto const file{ std::ranges::find(Embedded::Games, std::string_view{ path }, &Embedded::SEmbeddedFile::name) };
+
+			if (file != Embedded::Games.end())
+			{
+				AddGame(key, file->bytes, scripts, builtins);
+			}
+			else
+			{
+				builtins.problems.emplace_back(std::format("order.json lists '{}', which has no game.json", key));
+			}
 		}
 	}
 
