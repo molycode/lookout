@@ -1,5 +1,5 @@
 #!/bin/sh
-# Removes what install.sh put in place; settings and logs are kept.
+# Removes what install.sh put in place; settings, logs and the user's game descriptions are kept.
 #
 #   ./uninstall.sh      (from the package, or as ~/.local/share/lookout/uninstall.sh)
 
@@ -34,7 +34,10 @@ done
 
 rmdir "$UNINSTALL_DIR" 2>/dev/null || true
 
-if [ "$isFound" = true ]; then
+# Still there, it holds the user's own games or protocols.
+if [ "$isFound" = true ] && [ -d "$UNINSTALL_DIR" ]; then
+	echo "Lookout is uninstalled. Its settings in $CONFIG_DIR, logs in $STATE_DIR and game descriptions in $UNINSTALL_DIR are kept."
+elif [ "$isFound" = true ]; then
 	echo "Lookout is uninstalled. Its settings in $CONFIG_DIR and logs in $STATE_DIR are kept."
 else
 	echo "Lookout is not installed for this user: there was nothing to remove."

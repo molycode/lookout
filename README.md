@@ -5,6 +5,14 @@ who is playing, and joins with a double-click through the game's own launcher.
 
 ![The Lookout window: the games in the sidebar, their servers in the list, and the selected server's players and rules](docs/screenshot.png)
 
+## Games
+
+Lookout knows no game by itself: each is a description, `games/<key>/game.json`, and each protocol a Lua script,
+`protocols/<name>.lua`. The built-in ones are in `assets/`; yours go in `~/.local/share/lookout/` (or
+`$XDG_DATA_HOME/lookout/`), where a description under a built-in's key changes only what it names. In the app,
+right-click a game to edit its description, or click the gamepad beside the "+" to add one; Lookout checks it as
+you type and reloads the games whenever that folder changes.
+
 ## Building
 
 Needs CMake 4.3 or newer, Ninja, and GCC 14+ or Clang 19+.
