@@ -1,4 +1,5 @@
 #include "settings_json.hpp"
+#include "json.hpp"
 #include "config/default_settings.hpp"
 #include "config/first_listed_game.hpp"
 #include "config/install_ids.hpp"
@@ -7,7 +8,6 @@
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include "query/server_address.hpp"
-#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cstddef>
 #include <expected>
