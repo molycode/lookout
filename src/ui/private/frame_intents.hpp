@@ -32,6 +32,7 @@ struct SFrameIntents final
 	bool openAddServer{ false };
 	bool openAddGame{ false };
 	bool openAbout{ false };
+	bool openDownloads{ false };
 	bool quit{ false };
 };
 } // namespace Lkt::Ui

@@ -15,6 +15,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace
 {
@@ -29,7 +30,7 @@ std::string GetGameKeys()
 		keys += game.key;
 	}
 
-	return keys.empty() ? std::string{ "none, as no game is installed" } : keys;
+	return keys.empty() ? std::string{ "none, as no game is installed (--download gets them)" } : keys;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -37,10 +38,11 @@ void PrintUsage(std::string_view executable)
 {
 	std::println("Usage: {} [options]", executable);
 	std::println("Options:");
-	std::println("  --list <game>     Print the game's servers and exit; <game> is one of: {}", GetGameKeys());
-	std::println("  --check <folder>  Check the games and protocols of a lookout-games folder, print each problem and exit");
-	std::println("  --version         Show the version");
-	std::println("  --help            Show this help message");
+	std::println("  --list <game>         Print the game's servers and exit; <game> is one of: {}", GetGameKeys());
+	std::println("  --download [game...]  Download these games from lookout-games, or each one missing or with an update, and exit");
+	std::println("  --check <folder>      Check the games and protocols of a lookout-games folder, print each problem and exit");
+	std::println("  --version             Show the version");
+	std::println("  --help                Show this help message");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -86,7 +88,7 @@ int main(int argc, char* argv[])
 	bool showVersion{ false };
 	bool isExpectingGame{ false };
 	bool isExpectingFolder{ false };
-	Lkt::Query::SGameDefinition const* pListGame{ nullptr };
+	Lkt::SRunRequest request{};
 	std::optional<std::filesystem::path> checkFolder{};
 
 	for (std::string_view const arg : options)
@@ -95,8 +97,8 @@ int main(int argc, char* argv[])
 		{
 			if (isExpectingGame)
 			{
-				pListGame = Lkt::Query::FindGame(arg);
-				valid = pListGame != nullptr;
+				request.pListGame = Lkt::Query::FindGame(arg);
+				valid = request.pListGame != nullptr;
 				isExpectingGame = false;
 
 				if (!valid)
@@ -124,6 +126,14 @@ int main(int argc, char* argv[])
 			else if (arg == "--check")
 			{
 				isExpectingFolder = true;
+			}
+			else if (arg == "--download")
+			{
+				request.downloadKeys = std::vector<std::string>{};
+			}
+			else if (request.downloadKeys.has_value() && !arg.starts_with("--"))
+			{
+				request.downloadKeys->emplace_back(arg);
 			}
 			else
 			{
@@ -164,7 +174,7 @@ int main(int argc, char* argv[])
 	{
 		Lkt::CLookout lookout;
 
-		result = lookout.Run(pListGame, userDir, content.problems) ? EXIT_SUCCESS : EXIT_FAILURE;
+		result = lookout.Run(request, userDir, content.problems) ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
 	Lkt::Query::TerminateGameCatalog();

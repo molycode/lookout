@@ -201,7 +201,7 @@ void CApplication::Run(Browser::CBrowser& browser, std::function<void()> const& 
 	CMainWindow mainWindow{};
 	auto lastUpdate{ std::chrono::steady_clock::now() };
 
-	mainWindow.Initialize(m_pWindow, m_window.detailsWidth, m_about, m_userDir, MakeReloadCallback());
+	mainWindow.Initialize(m_pWindow, m_window.detailsWidth, m_about, m_userDir, MakeReloadCallback(), MakeWakeCallback());
 	m_activeUntil = lastUpdate + ActiveDuration;
 
 	while (Tge::gRuntime->CanRun())
@@ -257,6 +257,7 @@ void CApplication::Run(Browser::CBrowser& browser, std::function<void()> const& 
 	}
 
 	m_window.detailsWidth = mainWindow.GetDetailsWidth();
+	mainWindow.Terminate();
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -19,6 +19,7 @@ target_compile_definitions(lookout PRIVATE LKT_VERSION="${PROJECT_VERSION}")
 target_link_libraries(lookout PRIVATE
 	Lkt::Browser
 	Lkt::Config
+	Lkt::Download
 	Lkt::Games
 	Lkt::Launch
 	Lkt::Net

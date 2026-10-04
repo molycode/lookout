@@ -39,6 +39,7 @@ void DrawMenuBar(SFrameIntents& intents)
 	{
 		if (ImGui::BeginMenu("Lookout"))
 		{
+			intents.openDownloads = ImGui::MenuItem("Download games…") || intents.openDownloads;
 			intents.openAbout = ImGui::MenuItem("About Lookout") || intents.openAbout;
 			ImGui::Separator();
 			intents.quit = ImGui::MenuItem("Quit", "Ctrl+Q") || intents.quit;
@@ -64,12 +65,17 @@ void ReadShortcuts(bool hasGame, SFrameIntents& intents)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void DrawNoGames()
+void DrawNoGames(bool canDownload, SFrameIntents& intents)
 {
 	ImGui::BeginChild("##no-games", ImVec2{ 0.0f, 0.0f }, ImGuiChildFlags_Borders);
 	ImGui::PushTextWrapPos(0.0f);
 	ImGui::TextUnformatted("No games are installed yet.");
-	ImGui::TextDisabled("Add one with the gamepad button above.");
+	ImGui::Spacing();
+	ImGui::BeginDisabled(!canDownload);
+	intents.openDownloads = ImGui::Button("Download games…") || intents.openDownloads;
+	ImGui::EndDisabled();
+	ImGui::Spacing();
+	ImGui::TextDisabled("Or add one of your own with the gamepad button above.");
 	ImGui::PopTextWrapPos();
 	ImGui::EndChild();
 }
@@ -83,10 +89,11 @@ std::string GetDisplayName(Browser::SServerEntry const& entry)
 
 //////////////////////////////////////////////////////////////////////////
 void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutInfo const& about, std::filesystem::path const& userDir,
-	std::function<void()> requestReload)
+	std::function<void()> requestReload, std::function<void()> wake)
 {
 	m_userDir = userDir;
 	m_requestReload = std::move(requestReload);
+	m_downloadWindow.Initialize(userDir, about.version, std::move(wake));
 	m_gameSettings.Initialize(pWindow);
 	m_aboutDialog.Initialize(pWindow, about);
 	m_detailsEm = static_cast<float>(detailsWidth) / BaseFontSize;
@@ -114,9 +121,23 @@ void CMainWindow::OnCatalogChanged(std::span<std::string const> oldKeys)
 }
 
 //////////////////////////////////////////////////////////////////////////
+void CMainWindow::Terminate()
+{
+	m_downloadWindow.Terminate();
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A first start with no games opens the download window by itself.
 void CMainWindow::Draw(Browser::CBrowser& browser)
 {
 	SFrameIntents intents{};
+	bool const hasNewDownloads{ m_downloadWindow.Update() };
+
+	if (!m_hasStarted)
+	{
+		intents.openDownloads = Query::GetGameCatalog().empty();
+		m_hasStarted = true;
+	}
 
 	DrawMenuBar(intents);
 	ReadShortcuts(browser.GetSelectedGame() != Query::NoGame, intents);
@@ -146,6 +167,12 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 	m_passwordPrompt.Draw(browser, m_message);
 	m_aboutDialog.Draw();
 	DrawGamePrompts();
+	m_downloadWindow.Draw();
+
+	if (hasNewDownloads)
+	{
+		m_requestReload();
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -174,7 +201,7 @@ void CMainWindow::DrawBody(Browser::CBrowser const& browser, SFrameIntents& inte
 		}
 		else
 		{
-			DrawNoGames();
+			DrawNoGames(m_downloadWindow.CanOpen(), intents);
 			m_isNarrow = false;
 		}
 	}
@@ -307,6 +334,11 @@ void CMainWindow::Apply(Browser::CBrowser& browser, SFrameIntents const& intents
 	if (intents.openAbout)
 	{
 		m_aboutDialog.Open();
+	}
+
+	if (intents.openDownloads)
+	{
+		m_downloadWindow.Open();
 	}
 
 	if (intents.openGameSettings.has_value())

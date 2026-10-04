@@ -4,6 +4,8 @@
 #include "run_context.hpp"
 #include "browser/server_list.hpp"
 #include "config/xdg_paths.hpp"
+#include "download/game_downloads.hpp"
+#include "download/lookout_games.hpp"
 #include "games/game_files.hpp"
 #include "games/load_games.hpp"
 #include "launch/launch_environment.hpp"
@@ -63,13 +65,13 @@ void PrintServers(Browser::CServerList const& servers)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-bool CLookout::Run(Query::SGameDefinition const* pListGame, std::filesystem::path const& userDir, std::span<Query::SGameProblem const> gameProblems)
+bool CLookout::Run(SRunRequest const& request, std::filesystem::path const& userDir, std::span<Query::SGameProblem const> gameProblems)
 {
 	PrepareDirectories();
 	m_userDir = userDir;
 	m_gameProblems.assign(gameProblems.begin(), gameProblems.end());
 
-	bool const isListing{ pListGame != nullptr };
+	bool const isListing{ request.pListGame != nullptr || request.downloadKeys.has_value() };
 
 	if (isListing)
 	{
@@ -87,7 +89,14 @@ bool CLookout::Run(Query::SGameDefinition const* pListGame, std::filesystem::pat
 		gLog.Info("Lookout {} started", LKT_VERSION);
 		PruneLogs();
 
-		success = isListing ? RunList(*pListGame) : RunWindow();
+		if (request.downloadKeys.has_value())
+		{
+			success = RunDownload(*request.downloadKeys);
+		}
+		else
+		{
+			success = isListing ? RunList(*request.pListGame) : RunWindow();
+		}
 
 		gLog.Info("Lookout terminated");
 	}
@@ -215,6 +224,105 @@ bool CLookout::RunList(Query::SGameDefinition const& game)
 	}
 
 	m_engine.Terminate();
+
+	return success;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Each game's outcome on stdout, its problems on stderr; the window would show both in its download list.
+bool CLookout::RunDownload(std::span<std::string const> keys)
+{
+	std::mutex mutex{};
+	std::condition_variable wake{};
+	bool hasResults{ false };
+	Download::CGameDownloads downloads{};
+	auto const waitUntilIdle{ [&]()
+	{
+		auto lastUpdate{ std::chrono::steady_clock::now() };
+
+		while (downloads.GetPhase() != Download::EDownloadPhase::Idle)
+		{
+			{
+				std::unique_lock lock{ mutex };
+
+				wake.wait_for(lock, ListUpdateInterval, [&hasResults]() { return hasResults; });
+				hasResults = false;
+			}
+
+			downloads.Update();
+
+			auto const now{ std::chrono::steady_clock::now() };
+
+			Tge::gRuntime->Update(std::chrono::duration<float>{ now - lastUpdate }.count());
+			lastUpdate = now;
+		}
+	} };
+
+	bool success{ downloads.Initialize(m_userDir, Download::GetLookoutGamesSource(LKT_VERSION), [&mutex, &wake, &hasResults]()
+	{
+		{
+			std::lock_guard const lock{ mutex };
+
+			hasResults = true;
+		}
+
+		wake.notify_one();
+	}) };
+
+	if (success)
+	{
+		downloads.ReadIndex();
+		waitUntilIdle();
+		success = downloads.HasIndex();
+	}
+	else
+	{
+		gLog.Error("Cannot download games: {}", m_userDir.empty() ? "Lookout cannot locate its data folder" : "the download could not be set up");
+	}
+
+	std::vector<std::string> chosen{ keys.begin(), keys.end() };
+
+	if (success && chosen.empty())
+	{
+		for (Download::SGameOffer const& offer : downloads.GetOffers())
+		{
+			if (offer.state == Download::EOfferState::NotInstalled || offer.state == Download::EOfferState::UpdateAvailable)
+			{
+				chosen.emplace_back(offer.key);
+			}
+		}
+	}
+
+	for (std::string const& key : chosen)
+	{
+		if (success && !std::ranges::contains(downloads.GetOffers(), key, &Download::SGameOffer::key))
+		{
+			gLog.Error("lookout-games has no game '{}'", key);
+			success = false;
+		}
+	}
+
+	if (success && !chosen.empty())
+	{
+		downloads.Download(chosen);
+		waitUntilIdle();
+
+		for (Download::SGameOffer const& offer : downloads.GetOffers())
+		{
+			if (std::ranges::contains(chosen, offer.key))
+			{
+				std::println("{}: {}", offer.key, (offer.state == Download::EOfferState::Installed) ? "installed" : "not installed");
+			}
+		}
+
+		success = downloads.GetProblems().empty();
+	}
+	else if (success)
+	{
+		std::println("Every game is installed and up to date");
+	}
+
+	downloads.Terminate();
 
 	return success;
 }

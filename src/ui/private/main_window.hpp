@@ -4,6 +4,7 @@
 #include "add_game_prompt.hpp"
 #include "add_server_prompt.hpp"
 #include "discard_prompt.hpp"
+#include "download_window.hpp"
 #include "game_editor.hpp"
 #include "game_settings_popup.hpp"
 #include "password_prompt.hpp"
@@ -44,9 +45,10 @@ public:
 	CMainWindow() = default;
 	~CMainWindow() = default;
 
-	// requestReload has the games read again once no popup is open.
+	// requestReload has the games read again once no popup is open; wake brings the window back for downloads.
 	void Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutInfo const& about, std::filesystem::path const& userDir,
-		std::function<void()> requestReload);
+		std::function<void()> requestReload, std::function<void()> wake);
+	void Terminate();
 	void Draw(Browser::CBrowser& browser);
 	void OnCatalogChanged(std::span<std::string const> oldKeys);
 	uint32_t GetDetailsWidth() const;
@@ -72,6 +74,7 @@ private:
 	CAddGamePrompt m_addGamePrompt;
 	CGameEditor m_gameEditor;
 	CDiscardPrompt m_discardPrompt;
+	CDownloadWindow m_downloadWindow;
 	std::filesystem::path m_userDir;
 	std::function<void()> m_requestReload;
 	std::vector<uint64_t> m_selectedKeys;
@@ -80,6 +83,7 @@ private:
 	bool m_shouldScrollToSelection{ false };
 	bool m_isNarrow{ false };
 	bool m_isDetailsShown{ false };
+	bool m_hasStarted{ false };
 };
 } // namespace Ui
 } // namespace Lkt

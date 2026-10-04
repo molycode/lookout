@@ -30,6 +30,7 @@ target_link_libraries(LktUi
 		Tge::Base
 	PRIVATE
 		Lkt::Browser
+		Lkt::Download
 		Lkt::Games
 		Lkt::Geo
 		Lkt::Launch
