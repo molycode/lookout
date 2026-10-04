@@ -7,7 +7,6 @@
 #include "launch/launcher_ids.hpp"
 #include "loggers.hpp"
 #include "program_path.hpp"
-#include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <algorithm>
 #include <cerrno>
@@ -205,7 +204,7 @@ std::optional<SLaunchOption> FindDesktopOption(std::string_view id, SLaunchEnvir
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::optional<SLaunchOption> FindInstallOption(SLaunchHints const& hints, std::string_view gameName, SLaunchEnvironment const& environment)
+std::optional<SLaunchOption> FindInstallOption(Query::SLaunchHints const& hints, std::string_view gameName, SLaunchEnvironment const& environment)
 {
 	std::optional<SLaunchOption> option{};
 
@@ -251,7 +250,7 @@ bool StartsTheSameProgram(SLaunchOption const& lhs, SLaunchOption const& rhs)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<SLaunchOption> FindLaunchOptions(SLaunchHints const& hints, std::string_view gameName, SLaunchEnvironment const& environment)
+std::vector<SLaunchOption> FindLaunchOptions(Query::SLaunchHints const& hints, std::string_view gameName, SLaunchEnvironment const& environment)
 {
 	std::vector<SLaunchOption> options{};
 
@@ -276,8 +275,8 @@ std::vector<SLaunchOption> FindLaunchOptions(SLaunchHints const& hints, std::str
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<SLaunchOption> FindLaunchOptions(Query::EGame game, SLaunchEnvironment const& environment)
+std::vector<SLaunchOption> FindLaunchOptions(Query::SGameDefinition const& game, SLaunchEnvironment const& environment)
 {
-	return FindLaunchOptions(GetLaunchHints(game), Query::GetGame(game).name, environment);
+	return FindLaunchOptions(game.launch, game.name, environment);
 }
 } // namespace Lkt::Launch

@@ -22,7 +22,7 @@ using Tge::Testing::CExpectedLog;
 constexpr std::string_view DesktopId{ "kingpin-native.desktop" };
 constexpr std::array<std::string_view, 1> DesktopFiles{ DesktopId };
 constexpr std::array<std::string_view, 2> RequiredFiles{ "kingpin.x86", "main/pak0.pak" };
-constexpr SLaunchHints Hints{ Query::EGame::Kingpin, DesktopFiles, "Games/Kingpin", "run-game.sh", RequiredFiles };
+constexpr Query::SLaunchHints Hints{ DesktopFiles, "Games/Kingpin", "run-game.sh", RequiredFiles };
 constexpr std::string_view GameName{ "Kingpin: Life of Crime" };
 
 constexpr std::filesystem::perms Executable{ std::filesystem::perms::owner_all | std::filesystem::perms::group_read | std::filesystem::perms::others_read };

@@ -201,7 +201,7 @@ void CGameSettingsPopup::DrawInstalls(Browser::CBrowser& browser)
 	std::span<Browser::SInstallLauncher const> const launchers{ browser.GetInstallLaunchers(m_game) };
 	bool const hasCommand{ std::ranges::contains(installs, Config::EInstallKind::Command, &Config::SGameInstall::kind) };
 	bool const isDialogPending{ IsFileDialogPending() };
-	bool const canAddFolder{ Launch::IsFolderInstallSupported(m_game) };
+	bool const canAddFolder{ Launch::IsFolderInstallSupported(Query::GetGame(m_game)) };
 	std::optional<uint32_t> removedId{};
 
 	ImGui::Spacing();

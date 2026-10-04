@@ -1,8 +1,6 @@
 #include "launch/folder_option.hpp"
 #include "install_folder.hpp"
-#include "launch_hints.hpp"
 #include "loggers.hpp"
-#include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <filesystem>
 #include <string>
@@ -10,20 +8,19 @@
 namespace Lkt::Launch
 {
 //////////////////////////////////////////////////////////////////////////
-bool IsFolderInstallSupported(Query::EGame game)
+bool IsFolderInstallSupported(Query::SGameDefinition const& game)
 {
-	return !GetLaunchHints(game).program.empty();
+	return !game.launch.program.empty();
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<SLaunchOption, ELaunchError> MakeFolderOption(Query::EGame game, std::string_view folder)
+std::expected<SLaunchOption, ELaunchError> MakeFolderOption(Query::SGameDefinition const& game, std::string_view folder)
 {
 	std::expected<SLaunchOption, ELaunchError> result{ std::unexpected{ ELaunchError::FolderInstallUnsupported } };
-	SLaunchHints const& hints{ GetLaunchHints(game) };
 
 	if (IsFolderInstallSupported(game))
 	{
-		std::expected<std::filesystem::path, std::string> const program{ CheckInstallFolder(hints, std::filesystem::path{ folder }) };
+		std::expected<std::filesystem::path, std::string> const program{ CheckInstallFolder(game.launch, std::filesystem::path{ folder }) };
 
 		if (program.has_value())
 		{
@@ -31,7 +28,7 @@ std::expected<SLaunchOption, ELaunchError> MakeFolderOption(Query::EGame game, s
 		}
 		else
 		{
-			gLog.Warning("'{}' cannot start {}: {}", folder, Query::GetGame(game).name, program.error());
+			gLog.Warning("'{}' cannot start {}: {}", folder, game.name, program.error());
 			result = std::unexpected{ ELaunchError::BrokenInstallFolder };
 		}
 	}

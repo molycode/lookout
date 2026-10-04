@@ -59,7 +59,7 @@ void CBrowser::Initialize(std::string_view configDir, std::string_view logsDir, 
 
 		SLaunchState& state{ m_launchStates[ToIndex(game.game)] };
 
-		state.options = Launch::FindLaunchOptions(game.game, m_environment);
+		state.options = Launch::FindLaunchOptions(game, m_environment);
 		state.installs.clear();
 
 		for (Config::SGameInstall const& install : m_settings.games[ToIndex(game.game)].installs)
@@ -496,7 +496,7 @@ SInstallLauncher CBrowser::ResolveInstall(Query::EGame game, Config::SGameInstal
 	bool const isFolder{ install.kind == Config::EInstallKind::Folder };
 	SInstallLauncher launcher{ Config::ToLauncherId(install.id), install.name.empty() ? std::string{ Query::GetGame(game).name } : install.name,
 		isFolder ? Launch::ShortenHome(install.location, m_environment.home) : install.location,
-		isFolder ? Launch::MakeFolderOption(game, install.location) : Launch::MakeCommandOption(install.location) };
+		isFolder ? Launch::MakeFolderOption(Query::GetGame(game), install.location) : Launch::MakeCommandOption(install.location) };
 
 	if (launcher.option.has_value())
 	{

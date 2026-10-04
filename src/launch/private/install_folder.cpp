@@ -7,7 +7,7 @@
 namespace Lkt::Launch
 {
 //////////////////////////////////////////////////////////////////////////
-std::expected<std::filesystem::path, std::string> CheckInstallFolder(SLaunchHints const& hints, std::filesystem::path const& folder)
+std::expected<std::filesystem::path, std::string> CheckInstallFolder(Query::SLaunchHints const& hints, std::filesystem::path const& folder)
 {
 	std::expected<std::filesystem::path, std::string> result{ std::unexpected{ std::string{ "it is not a folder" } } };
 	std::error_code error{};

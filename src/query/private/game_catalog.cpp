@@ -93,27 +93,35 @@ constexpr std::array<SKeyMatch, 3> Quake3ForeignServers
 	SKeyMatch{ "gamename", "baseoa" }
 };
 
+// Only names seen on real installs; Steam's Kingpin.desktop runs a steam:// URL, which drops the connect arguments.
+constexpr std::array<std::string_view, 1> KingpinDesktopFiles{ "kingpin-native.desktop" };
+constexpr std::array<std::string_view, 2> KingpinRequiredFiles{ "kingpin.x86", "main/pak0.pak" };
+constexpr std::array<std::string_view, 1> RtcwDesktopFiles{ "id-linux-rtcw-mp.desktop" };
+constexpr std::array<std::string_view, 2> RtcwRequiredFiles{ "kit/id-run", "rtcw/.installed-rtcw-mp" };
+
 constexpr std::array<SGameDefinition, NumGames> Catalog
 {
 	SGameDefinition{
 		EGame::Kingpin, "kingpin", "Kingpin: Life of Crime", EProtocolFamily::Quake2, ETextStyle::Ascii7,
-		KingpinMasters, "", { "hostname", "mapname", "maxclients", "password", KingpinMods }, KingpinModes, {}
+		KingpinMasters, "", { "hostname", "mapname", "maxclients", "password", KingpinMods }, KingpinModes, {},
+		SLaunchHints{ KingpinDesktopFiles, "Games/Kingpin", "run-game.sh", KingpinRequiredFiles }
 	},
 	SGameDefinition{
 		EGame::Quake2, "quake2", "Quake II", EProtocolFamily::Quake2, ETextStyle::Ascii7,
-		Quake2Masters, "", { "hostname", "mapname", "maxclients", "needpass", Quake2Mods }, Quake2Modes, {}
+		Quake2Masters, "", { "hostname", "mapname", "maxclients", "needpass", Quake2Mods }, Quake2Modes, {}, {}
 	},
 	SGameDefinition{
 		EGame::RtcwMultiplayer, "rtcw", "Return to Castle Wolfenstein", EProtocolFamily::Quake3, ETextStyle::Quake3,
-		RtcwMasters, "60 empty full", { "sv_hostname", "mapname", "sv_maxclients", "g_needpass", Quake3FamilyMods }, RtcwModes, {}
+		RtcwMasters, "60 empty full", { "sv_hostname", "mapname", "sv_maxclients", "g_needpass", Quake3FamilyMods }, RtcwModes, {},
+		SLaunchHints{ RtcwDesktopFiles, "Games/id-linux", "rtcw-mp", RtcwRequiredFiles }
 	},
 	SGameDefinition{
 		EGame::EnemyTerritory, "et", "Enemy Territory", EProtocolFamily::Quake3, ETextStyle::EnemyTerritory,
-		EnemyTerritoryMasters, "84 empty full", { "sv_hostname", "mapname", "sv_maxclients", "g_needpass", Quake3FamilyMods }, EnemyTerritoryModes, {}
+		EnemyTerritoryMasters, "84 empty full", { "sv_hostname", "mapname", "sv_maxclients", "g_needpass", Quake3FamilyMods }, EnemyTerritoryModes, {}, {}
 	},
 	SGameDefinition{
 		EGame::Quake3, "quake3", "Quake III Arena", EProtocolFamily::Quake3, ETextStyle::Quake3,
-		Quake3Masters, "68 empty full", { "sv_hostname", "mapname", "sv_maxclients", "g_needpass", Quake3FamilyMods }, Quake3Modes, Quake3ForeignServers
+		Quake3Masters, "68 empty full", { "sv_hostname", "mapname", "sv_maxclients", "g_needpass", Quake3FamilyMods }, Quake3Modes, Quake3ForeignServers, {}
 	}
 };
 
