@@ -1,5 +1,6 @@
 #include "game_json.hpp"
 #include "games/game_fields.hpp"
+#include "games/game_format.hpp"
 #include "json/json.hpp"
 #include "json/syntax_error.hpp"
 #include <algorithm>
@@ -22,7 +23,6 @@ using JsonValue = nlohmann::ordered_json;
 
 constexpr bool AllowExceptions{ false };
 constexpr bool IgnoreComments{ false };
-constexpr uint64_t Format{ 1 };
 constexpr std::string_view CommentPrefix{ "//" };
 constexpr uint64_t MaxPort{ 65535 };
 // Any larger offset leaves no port that both the query and the join could use.
@@ -342,13 +342,13 @@ bool ReadFormat(JsonValue const& root, std::string& problem)
 	{
 		Fail(problem, "format", "is missing");
 	}
-	else if (it->is_number_unsigned() && it->get<uint64_t>() > Format)
+	else if (it->is_number_unsigned() && it->get<uint64_t>() > GameFormat)
 	{
 		Fail(problem, "format", std::format("is {}, which needs a newer Lookout", it->get<uint64_t>()));
 	}
-	else if (!it->is_number_unsigned() || it->get<uint64_t>() != Format)
+	else if (!it->is_number_unsigned() || it->get<uint64_t>() != GameFormat)
 	{
-		Fail(problem, "format", std::format("must be {}", Format));
+		Fail(problem, "format", std::format("must be {}", GameFormat));
 	}
 
 	return problem.empty();

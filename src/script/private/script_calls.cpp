@@ -4,6 +4,7 @@
 #include "load_call.hpp"
 #include "lua_api.hpp"
 #include "sandbox.hpp"
+#include "script/script_api.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -20,7 +21,7 @@ namespace Lkt::Script
 {
 namespace
 {
-constexpr lua_Integer Api{ 1 };
+constexpr lua_Integer Api{ ScriptApi };
 constexpr std::array<std::string_view, 4> ModuleFields{ "api", "options", "master", "server" };
 constexpr std::array<std::string_view, 3> MasterFields{ "transport", "start", "receive" };
 constexpr std::array<std::string_view, 3> ServerFields{ "start", "receive", "finish" };
