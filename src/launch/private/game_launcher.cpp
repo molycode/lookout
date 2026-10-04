@@ -97,7 +97,7 @@ std::expected<void, ELaunchError> CGameLauncher::Launch(Query::SGameDefinition c
 	TGE_ASSERT(!option.argv.empty(), "A launch option without a program");
 
 	std::expected<void, ELaunchError> result{};
-	std::expected<std::vector<std::string>, ELaunchError> const connectArgs{ BuildConnectArgs(request) };
+	std::expected<std::vector<std::string>, ELaunchError> const connectArgs{ BuildConnectArgs(game.join, request) };
 
 	if (connectArgs.has_value())
 	{

@@ -12,6 +12,7 @@
 		"hostname": "hostname",
 		"map": "mapname",
 		"maxPlayers": "maxclients",
+		// needpass is a bitmask: 1 a player password, 2 a spectator password.
 		"password": "needpass",
 		// Mods often put a version in gamename instead of their title.
 		"mods": [ "game", "gamename" ]
@@ -20,5 +21,17 @@
 		{ "key": "ctf", "value": "1", "label": "Capture the Flag" },
 		{ "key": "coop", "value": "1", "label": "Co-op" },
 		{ "key": "deathmatch", "value": "1", "label": "Deathmatch" }
-	]
+	],
+	"join": {
+		"arguments": [ "+connect", "{address}" ],
+		"passwordArguments": [ "+set", "password", "{password}", "+connect", "{address}" ],
+		"password": {
+			// Info_SetValueForKey refuses 64 characters or more, so a longer password would never reach the server.
+			"maxLength": 63,
+			// kpded2 rebuilds "set password %s", so a space splits the value; iortcw cuts the command line at every '+'
+			// and ends a token at "//" or "/*"; both refuse '"', '\' and ';' in userinfo, and Quake 2 expands '$'.
+			"refusedCharacters": " \"$;+\\",
+			"refusedSequences": [ "//", "/*" ]
+		}
+	}
 }

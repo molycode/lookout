@@ -42,7 +42,7 @@ constexpr std::string_view ToString(ELaunchError error)
 			text = "Lookout does not know how this game starts from a folder";
 			break;
 		case ELaunchError::UnsupportedPassword:
-			text = "the games cannot receive this password on their command line: it must be up to 63 printable ASCII characters without spaces, \" $ ; + \\ // or /*";
+			text = "the game cannot receive this password on its command line";
 			break;
 		case ELaunchError::SpawnFailed:
 			text = "the game could not be started";

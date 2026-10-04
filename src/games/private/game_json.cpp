@@ -23,7 +23,7 @@ constexpr bool IgnoreComments{ true };
 constexpr uint64_t Format{ 1 };
 constexpr uint64_t MaxPort{ 65535 };
 
-constexpr std::array<std::string_view, 10> GameFields{ "format", "name", "protocol", "text", "protocolOptions", "masters", "keys",
+constexpr std::array<std::string_view, 11> GameFields{ "format", "name", "protocol", "text", "protocolOptions", "masters", "keys", "join",
 	"modes", "foreignServers", "launch" };
 constexpr std::array<std::string_view, 2> MasterFields{ "host", "port" };
 constexpr std::array<std::string_view, 5> KeyFields{ "hostname", "map", "maxPlayers", "password", "mods" };
@@ -32,6 +32,11 @@ constexpr std::array<std::string_view, 2> MatchFields{ "key", "value" };
 constexpr std::array<std::string_view, 4> LaunchFields{ "desktopFiles", "installDir", "program", "requiredFiles" };
 
 constexpr std::array<std::string_view, 2> TextFields{ "encoding", "colourCodes" };
+constexpr std::array<std::string_view, 3> JoinFields{ "arguments", "passwordArguments", "password" };
+constexpr std::array<std::string_view, 3> PasswordFields{ "maxLength", "refusedCharacters", "refusedSequences" };
+constexpr std::string_view AddressPlaceholder{ "{address}" };
+constexpr std::string_view PasswordPlaceholder{ "{password}" };
+constexpr uint64_t MaxPasswordLength{ 1024 };
 constexpr std::array<std::string_view, 3> ColourCodeFields{ "escape", "codes", "palette" };
 constexpr size_t MaxPaletteSize{ 256 };
 
@@ -470,6 +475,96 @@ void ReadText(JsonValue const& root, Query::STextStyle& style, std::string& prob
 }
 
 //////////////////////////////////////////////////////////////////////////
+// A brace that starts neither placeholder is a typo, which would otherwise reach the game unfilled.
+void CheckPlaceholders(std::vector<std::string> const& arguments, std::string_view path, bool needsPassword, std::string& problem)
+{
+	bool hasAddress{ false };
+	bool hasPassword{ false };
+
+	for (size_t index{ 0 }; index < arguments.size(); ++index)
+	{
+		std::string_view const argument{ arguments[index] };
+
+		for (size_t at{ argument.find('{') }; at != std::string_view::npos; at = argument.find('{', at + 1))
+		{
+			std::string_view const rest{ argument.substr(at) };
+
+			hasAddress = hasAddress || rest.starts_with(AddressPlaceholder);
+			hasPassword = hasPassword || rest.starts_with(PasswordPlaceholder);
+
+			if (!rest.starts_with(AddressPlaceholder) && !rest.starts_with(PasswordPlaceholder))
+			{
+				Fail(problem, std::format("{}[{}]", path, index), "holds a placeholder other than {address} and {password}");
+			}
+		}
+	}
+
+	if (!hasAddress)
+	{
+		Fail(problem, path, "must hold {address}");
+	}
+	else if (hasPassword != needsPassword)
+	{
+		Fail(problem, path, needsPassword ? "must hold {password}" : "must not hold {password}");
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadPasswordRules(JsonValue const& join, Query::SPasswordRules& rules, std::string& problem)
+{
+	constexpr std::string_view Path{ "join.password" };
+	JsonValue::const_iterator const it{ join.find("password") };
+
+	if (it == join.cend() || !it->is_object())
+	{
+		Fail(problem, Path, "must be an object");
+	}
+	else
+	{
+		JsonValue::const_iterator const maxLength{ it->find("maxLength") };
+		JsonValue::const_iterator const refusedCharacters{ it->find("refusedCharacters") };
+		JsonValue::const_iterator const refusedSequences{ it->find("refusedSequences") };
+
+		CheckFields(*it, Path, PasswordFields, problem);
+
+		if (maxLength != it->cend() && maxLength->is_number_unsigned() && maxLength->get<uint64_t>() >= 1 && maxLength->get<uint64_t>() <= MaxPasswordLength)
+		{
+			rules.maxLength = static_cast<uint32_t>(maxLength->get<uint64_t>());
+		}
+		else
+		{
+			Fail(problem, JoinPath(Path, "maxLength"), std::format("must be a whole number from 1 to {}", MaxPasswordLength));
+		}
+
+		if (refusedCharacters != it->cend())
+		{
+			ReadString(*refusedCharacters, JoinPath(Path, "refusedCharacters"), rules.refusedCharacters, problem);
+		}
+
+		if (refusedSequences != it->cend())
+		{
+			ReadStrings(*refusedSequences, JoinPath(Path, "refusedSequences"), rules.refusedSequences, problem);
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadJoin(JsonValue const& root, Query::SJoinCommand& join, std::string& problem)
+{
+	JsonValue const* const pJoin{ FindObject(root, "join", true, problem) };
+
+	if (pJoin != nullptr)
+	{
+		CheckFields(*pJoin, "join", JoinFields, problem);
+		ReadRequiredStrings(*pJoin, "join", "arguments", join.arguments, problem);
+		ReadRequiredStrings(*pJoin, "join", "passwordArguments", join.passwordArguments, problem);
+		CheckPlaceholders(join.arguments, "join.arguments", false, problem);
+		CheckPlaceholders(join.passwordArguments, "join.passwordArguments", true, problem);
+		ReadPasswordRules(*pJoin, join.password, problem);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Null, with the problem set, when the protocol is not one of the loaded scripts.
 Query::SProtocolDefinition const* ReadProtocol(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::EProtocol& protocol,
 	std::string& problem)
@@ -549,6 +644,7 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 	}
 
 	ReadText(root, game.text, problem);
+	ReadJoin(root, game.join, problem);
 	ReadMasters(root, game, problem);
 	ReadKeys(root, game.keys, problem);
 	ReadModes(root, game.modes, problem);

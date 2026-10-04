@@ -32,7 +32,9 @@ JsonValue MakeMinimalGame()
 		"protocol": "quake2",
 		"text": { "encoding": "ascii7" },
 		"masters": [ { "host": "master.example", "port": 27900 } ],
-		"keys": { "hostname": "hostname", "map": "mapname", "maxPlayers": "maxclients", "password": "needpass" }
+		"keys": { "hostname": "hostname", "map": "mapname", "maxPlayers": "maxclients", "password": "needpass" },
+		"join": { "arguments": [ "+connect", "{address}" ], "passwordArguments": [ "+password", "{password}", "+connect", "{address}" ],
+			"password": { "maxLength": 63 } }
 	})json");
 }
 
@@ -271,6 +273,55 @@ TEST(GameJson, EscapeMustBeOneCharacter)
 	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7", "colourCodes": { "escape": "^^", "codes": "rgb" } })json");
 
 	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.escape:"));
+}
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, UnknownPlaceholderIsRejected)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["join"]["arguments"][1] = "{adress}";
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("join.arguments[1]:"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, ArgumentsWithoutAddressAreRejected)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["join"]["arguments"] = JsonValue::parse(R"json([ "+connect" ])json");
+
+	EXPECT_EQ(ReadProblem(game), "join.arguments: must hold {address}");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, PasswordArgumentsNeedThePassword)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["join"]["passwordArguments"] = JsonValue::parse(R"json([ "+connect", "{address}" ])json");
+
+	EXPECT_EQ(ReadProblem(game), "join.passwordArguments: must hold {password}");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, ArgumentsWithoutAPasswordMustNotHoldOne)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["join"]["arguments"] = JsonValue::parse(R"json([ "+password", "{password}", "+connect", "{address}" ])json");
+
+	EXPECT_EQ(ReadProblem(game), "join.arguments: must not hold {password}");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, PasswordLengthIsRequired)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["join"]["password"] = JsonValue::object();
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("join.password.maxLength:"));
 }
 } // namespace
 } // namespace Lkt::Games

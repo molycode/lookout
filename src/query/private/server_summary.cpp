@@ -55,7 +55,7 @@ SServerSummary Summarize(SGameDefinition const& game, SStatusReply const& reply)
 	summary.mode = FindMode(reply, game.modes);
 	summary.numPlayers = static_cast<uint32_t>(reply.players.size());
 	summary.maxPlayers = ParseCount(FindRule(reply, game.keys.maxPlayers));
-	// Quake II's needpass is a bitmask, 2 being a spectator password; bit 0 means locked in every game here.
+	// Only the lowest bit means a player password: games use the others for things like spectator passwords.
 	summary.hasPassword = (ParseCount(FindRule(reply, game.keys.password)) & 1u) != 0;
 	summary.isForeign = std::ranges::any_of(game.foreignServers, [&reply](SKeyMatch const& match) { return FindRule(reply, match.key) == match.value; });
 

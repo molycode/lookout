@@ -3,10 +3,13 @@
 #include "theme.hpp"
 #include "theme_colors.hpp"
 #include "browser/browser.hpp"
+#include "launch/describe_password_rules.hpp"
+#include "launch/launch_error.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <format>
 #include <utility>
 
 namespace Lkt::Ui
@@ -79,7 +82,7 @@ void CPasswordPrompt::Draw(Browser::CBrowser& browser, std::string& message)
 
 			if (!joined.has_value() && joined.error() == Launch::ELaunchError::UnsupportedPassword)
 			{
-				m_error = Launch::ToString(joined.error());
+				m_error = std::format("{}: it must be {}", Launch::ToString(joined.error()), Launch::DescribePasswordRules(Query::GetGame(game).join.password));
 				m_shouldFocus = true;
 			}
 			else

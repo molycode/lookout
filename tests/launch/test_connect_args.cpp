@@ -1,4 +1,6 @@
 #include "connect_args.hpp"
+#include "fixtures.hpp"
+#include "launch/describe_password_rules.hpp"
 #include <gtest/gtest.h>
 #include <string>
 #include <vector>
@@ -13,21 +15,28 @@ using Arguments = std::vector<std::string>;
 constexpr Query::SServerAddress Server{ 0xCB007107, 31510 };
 
 //////////////////////////////////////////////////////////////////////////
+// The built-in games share these rules; Kingpin's stand for them.
+Query::SJoinCommand const& Join()
+{
+	return Fixtures::GetGameByKey("kingpin").join;
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool IsRefused(std::string password)
 {
-	return BuildConnectArgs(SConnectRequest{ Server, std::move(password) }).error_or(ELaunchError::SpawnFailed) == ELaunchError::UnsupportedPassword;
+	return BuildConnectArgs(Join(), SConnectRequest{ Server, std::move(password) }).error_or(ELaunchError::SpawnFailed) == ELaunchError::UnsupportedPassword;
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST(ConnectArgs, WithoutPasswordOnlyConnects)
 {
-	EXPECT_EQ(BuildConnectArgs(SConnectRequest{ Server, {} }), (Arguments{ "+connect", "203.0.113.7:31510" }));
+	EXPECT_EQ(BuildConnectArgs(Join(), SConnectRequest{ Server, {} }), (Arguments{ "+connect", "203.0.113.7:31510" }));
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST(ConnectArgs, PasswordIsSetBeforeConnecting)
 {
-	EXPECT_EQ(BuildConnectArgs(SConnectRequest{ Server, "s3cret" }), (Arguments{ "+set", "password", "s3cret", "+connect", "203.0.113.7:31510" }));
+	EXPECT_EQ(BuildConnectArgs(Join(), SConnectRequest{ Server, "s3cret" }), (Arguments{ "+set", "password", "s3cret", "+connect", "203.0.113.7:31510" }));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -106,6 +115,36 @@ TEST(ConnectArgs, SixtyThreeCharactersAreAccepted)
 TEST(ConnectArgs, OtherPunctuationIsAccepted)
 {
 	EXPECT_FALSE(IsRefused("it's%~#/!"));
+}
+//////////////////////////////////////////////////////////////////////////
+TEST(ConnectArgs, PasswordUpToTheLimitIsCarried)
+{
+	EXPECT_FALSE(IsRefused(std::string(63, 'x')));
+	EXPECT_TRUE(IsRefused(std::string(64, 'x')));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ConnectArgs, PlaceholdersAreFilledInsideAnArgument)
+{
+	Query::SJoinCommand join{};
+
+	join.arguments = { "{address}" };
+	join.passwordArguments = { "{address}?password={password}" };
+	join.password.maxLength = 63;
+
+	EXPECT_EQ(BuildConnectArgs(join, SConnectRequest{ Server, "s3cret" }), (Arguments{ "203.0.113.7:31510?password=s3cret" }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ConnectArgs, PasswordThatSpellsAPlaceholderStaysAsTyped)
+{
+	EXPECT_EQ(BuildConnectArgs(Join(), SConnectRequest{ Server, "{address}" }), (Arguments{ "+set", "password", "{address}", "+connect", "203.0.113.7:31510" }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ConnectArgs, RulesAreDescribed)
+{
+	EXPECT_EQ(DescribePasswordRules(Join().password), "up to 63 printable ASCII characters, without spaces, \", $, ;, +, \\, // or /*");
 }
 } // namespace
 } // namespace Lkt::Launch

@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <format>
 #include <span>
+#include <string>
+#include <string_view>
 
 namespace Lkt::Ui
 {
@@ -24,6 +26,27 @@ namespace
 {
 constexpr char const* PopupId{ "###game-settings" };
 constexpr float FieldEm{ 26.0f };
+
+//////////////////////////////////////////////////////////////////////////
+std::string DescribeJoinArguments(Query::SJoinCommand const& join)
+{
+	constexpr std::string_view Placeholder{ "{address}" };
+	std::string arguments{};
+
+	for (std::string const& argument : join.arguments)
+	{
+		std::string shown{ argument };
+
+		for (size_t at{ shown.find(Placeholder) }; at != std::string::npos; at = shown.find(Placeholder, at))
+		{
+			shown.replace(at, Placeholder.size(), "<address>");
+		}
+
+		arguments += std::format("{}{}", arguments.empty() ? "" : " ", shown);
+	}
+
+	return std::format("Lookout appends {} to a command", arguments);
+}
 
 //////////////////////////////////////////////////////////////////////////
 void DrawOptionTooltip(Launch::SLaunchOption const& option)
@@ -239,7 +262,7 @@ void CGameSettingsPopup::DrawInstalls(Browser::CBrowser& browser)
 	if (hasCommand)
 	{
 		ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColors().textDisabled);
-		ImGui::TextUnformatted("Lookout appends +connect <address> to a command");
+		ImGui::TextUnformatted(DescribeJoinArguments(Query::GetGame(m_game).join).c_str());
 		ImGui::PopStyleColor();
 	}
 
@@ -293,7 +316,7 @@ std::optional<uint32_t> CGameSettingsPopup::DrawInstall(Browser::CBrowser& brows
 	{
 		ImGui::SetNextItemWidth(fieldWidth);
 
-		if (ImGui::InputTextWithHint("##command", "steam -applaunch 38430", &edit.command))
+		if (ImGui::InputTextWithHint("##command", "a command that starts the game", &edit.command))
 		{
 			browser.SetInstallCommand(m_game, install.id, edit.command);
 		}

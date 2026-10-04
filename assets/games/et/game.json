@@ -34,5 +34,17 @@
 		{ "key": "g_gametype", "value": "4", "label": "Campaign" },
 		{ "key": "g_gametype", "value": "5", "label": "Last Man Standing" },
 		{ "key": "g_gametype", "value": "6", "label": "Map Voting" }
-	]
+	],
+	"join": {
+		"arguments": [ "+connect", "{address}" ],
+		"passwordArguments": [ "+set", "password", "{password}", "+connect", "{address}" ],
+		"password": {
+			// Info_SetValueForKey refuses 64 characters or more, so a longer password would never reach the server.
+			"maxLength": 63,
+			// kpded2 rebuilds "set password %s", so a space splits the value; iortcw cuts the command line at every '+'
+			// and ends a token at "//" or "/*"; both refuse '"', '\' and ';' in userinfo, and Quake 2 expands '$'.
+			"refusedCharacters": " \"$;+\\",
+			"refusedSequences": [ "//", "/*" ]
+		}
+	}
 }

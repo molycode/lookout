@@ -1,6 +1,7 @@
 #pragma once
 
 #include "query/game.hpp"
+#include "query/join_command.hpp"
 #include "query/key_match.hpp"
 #include "query/launch_hints.hpp"
 #include "query/master_endpoint.hpp"
@@ -28,6 +29,7 @@ struct SGameDefinition final
 	std::vector<SModeRule> modes;
 	std::vector<SKeyMatch> foreignServers;
 	SLaunchHints launch;
+	SJoinCommand join;
 	// Built once from the protocol options, when the game is loaded.
 	std::vector<std::byte> masterRequest;
 	std::vector<std::byte> statusRequest;
