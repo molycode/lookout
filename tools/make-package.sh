@@ -22,6 +22,7 @@ die()  { printf '\n%s%s %s%s\n' "$C_ERR" "$G_ERR" "$*" "$C_OFF" >&2; exit 1; }
 ok()   { printf '  %s%s%s %s\n' "$C_OK" "$G_OK" "$C_OFF" "$*"; }
 note() { printf '  %s%s%s\n' "$C_DIM" "$*" "$C_OFF"; }
 
+command -v git >/dev/null 2>&1 || die "git is required to tell a released version"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || die "cannot locate the repository"
 cd "$ROOT" || die "cannot enter $ROOT"
 
@@ -31,6 +32,12 @@ BINARY="dist/lookout"
 VERSION_LINE=$("$BINARY" --version 2>&1) || die "$BINARY does not run here: $VERSION_LINE"
 VERSION="${VERSION_LINE#Lookout }"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "'$VERSION_LINE' does not name a version"
+
+# A published release never changes, so its version is packaged only from a clean checkout of its tag.
+if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null \
+	&& { [ "$(git rev-parse HEAD)" != "$(git rev-parse "v$VERSION^{commit}")" ] || [ -n "$(git status --porcelain)" ]; }; then
+	die "Lookout $VERSION is released - package it only from a clean checkout of v$VERSION, or rebuild with a newer version"
+fi
 
 NAME="lookout-$VERSION-x86_64"
 OUT="dist/$NAME.tar.xz"

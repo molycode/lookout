@@ -37,10 +37,20 @@ note() { printf '  %s%s%s\n' "$C_DIM" "$*" "$C_OFF"; }
 command -v docker >/dev/null 2>&1 || die "docker is required to build the release"
 command -v readelf >/dev/null 2>&1 || die "readelf is required to check the result"
 command -v objdump >/dev/null 2>&1 || die "objdump is required to check the result"
+command -v git >/dev/null 2>&1 || die "git is required to tell a released version"
 [ -n "$CMAKE_DIR" ] && [ -x "$CMAKE_DIR/bin/cmake" ] || die "no cmake in '$CMAKE_DIR' - set LKT_CMAKE_DIR to an unpacked CMake 4.3+ release"
 [ -n "$NINJA_DIR" ] && [ -x "$NINJA_DIR/ninja" ] || die "no ninja in '$NINJA_DIR' - set LKT_NINJA_DIR to the folder holding ninja"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || die "cannot locate the repository"
 cd "$ROOT" || die "cannot enter $ROOT"
+
+VERSION=$(sed -n 's/^project(Lookout VERSION \([0-9]*\.[0-9]*\.[0-9]*\) .*/\1/p' CMakeLists.txt)
+[ -n "$VERSION" ] || die "CMakeLists.txt's project() names no version"
+
+# A published release never changes, so its version is built only from a clean checkout of its tag.
+if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null \
+	&& { [ "$(git rev-parse HEAD)" != "$(git rev-parse "v$VERSION^{commit}")" ] || [ -n "$(git status --porcelain)" ]; }; then
+	die "Lookout $VERSION is released - build it only from a clean checkout of v$VERSION, or raise the version in CMakeLists.txt's project()"
+fi
 
 for submodule in external/tge-core external/sdl external/imgui external/json external/lua external/googletest; do
 	[ -f "$submodule/CMakeLists.txt" ] || [ -f "$submodule/imgui.h" ] || [ -f "$submodule/lua.h" ] \
