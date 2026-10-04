@@ -19,8 +19,8 @@ namespace
 using JsonValue = nlohmann::ordered_json;
 
 constexpr bool AllowExceptions{ false };
-constexpr bool IgnoreComments{ true };
 constexpr uint64_t Format{ 1 };
+constexpr std::string_view CommentPrefix{ "//" };
 constexpr uint64_t MaxPort{ 65535 };
 // Any larger offset leaves no port that both the query and the join could use.
 constexpr int64_t MaxPortOffset{ 65534 };
@@ -70,19 +70,6 @@ void Fail(std::string& problem, std::string_view path, std::string_view reason)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A field format 1 does not know is a typo or a later format's, so it is never skipped silently.
-void CheckFields(JsonValue const& object, std::string_view path, std::span<std::string_view const> fields, std::string& problem)
-{
-	for (auto const& item : object.items())
-	{
-		if (!std::ranges::contains(fields, std::string_view{ item.key() }))
-		{
-			Fail(problem, JoinPath(path, item.key()), "is not a field of format 1");
-		}
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
 // Every string names a rule, a host or a path, so an empty one or a NUL is always a mistake.
 void ReadString(JsonValue const& json, std::string_view path, std::string& value, std::string& problem)
 {
@@ -95,6 +82,46 @@ void ReadString(JsonValue const& json, std::string_view path, std::string& value
 	else
 	{
 		Fail(problem, path, "must be a non-empty string without NUL");
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool IsComment(std::string_view key)
+{
+	return key.starts_with(CommentPrefix);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Its field must be beside it, so a comment left behind by a removed or renamed field is caught.
+void CheckComment(JsonValue const& object, std::string_view path, std::string_view key, JsonValue const& comment, std::string& problem)
+{
+	std::string_view const field{ key.substr(CommentPrefix.size()) };
+	std::string text{};
+
+	if (object.find(field) == object.cend())
+	{
+		Fail(problem, JoinPath(path, key), std::format("is a comment on '{}', which is not in this object", field));
+	}
+
+	ReadString(comment, JoinPath(path, key), text, problem);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A field format 1 does not know is a typo or a later format's, so it is never skipped silently.
+void CheckFields(JsonValue const& object, std::string_view path, std::span<std::string_view const> fields, std::string& problem)
+{
+	for (auto const& item : object.items())
+	{
+		std::string_view const key{ item.key() };
+
+		if (IsComment(key))
+		{
+			CheckComment(object, path, key, item.value(), problem);
+		}
+		else if (!std::ranges::contains(fields, key))
+		{
+			Fail(problem, JoinPath(path, key), "is not a field of format 1");
+		}
 	}
 }
 
@@ -618,7 +645,11 @@ void ReadProtocolOptions(JsonValue const& root, Query::SProtocolDefinition const
 		{
 			std::string const path{ JoinPath("protocolOptions", item.key()) };
 
-			if (std::ranges::contains(protocol.options, item.key(), &Query::SProtocolOption::name))
+			if (IsComment(item.key()))
+			{
+				CheckComment(*pOptions, "protocolOptions", item.key(), item.value(), problem);
+			}
+			else if (std::ranges::contains(protocol.options, item.key(), &Query::SProtocolOption::name))
 			{
 				ReadString(item.value(), path, options[item.key()], problem);
 			}
@@ -686,7 +717,7 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 //////////////////////////////////////////////////////////////////////////
 std::expected<Query::SGameDefinition, std::string> ReadGameJson(std::string_view text, std::span<Query::SProtocolDefinition const> protocols)
 {
-	JsonValue const root = JsonValue::parse(text, nullptr, AllowExceptions, IgnoreComments);
+	JsonValue const root = JsonValue::parse(text, nullptr, AllowExceptions);
 	Query::SGameDefinition game{};
 	std::string problem{};
 

@@ -27,7 +27,6 @@ using JsonValue = nlohmann::ordered_json;
 using Scripts = std::vector<std::unique_ptr<Script::CProtocolScript>>;
 
 constexpr bool AllowExceptions{ false };
-constexpr bool IgnoreComments{ true };
 constexpr size_t MaxFileSize{ 1024 * 1024 };
 constexpr std::string_view ProtocolExtension{ ".lua" };
 constexpr std::string_view KeyRule{ "its name must use only lower-case letters, digits, '-' and '_'" };
@@ -238,8 +237,8 @@ std::expected<Query::SGameDefinition, std::string> ReadGame(std::string_view key
 // A merge patch: what it names replaces the built-in's, a null removes it, the rest stays.
 std::expected<std::string, std::string> ApplyPatch(std::string_view builtinText, std::string_view patchText)
 {
-	JsonValue game = JsonValue::parse(builtinText, nullptr, AllowExceptions, IgnoreComments);
-	JsonValue const patch = JsonValue::parse(patchText, nullptr, AllowExceptions, IgnoreComments);
+	JsonValue game = JsonValue::parse(builtinText, nullptr, AllowExceptions);
+	JsonValue const patch = JsonValue::parse(patchText, nullptr, AllowExceptions);
 	std::expected<std::string, std::string> result{ std::unexpected{ std::string{ "it is not valid JSON" } } };
 
 	if (patch.is_object())

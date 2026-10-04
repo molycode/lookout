@@ -4,7 +4,7 @@
 	"protocol": "quake3",
 	"text": {
 		"encoding": "utf8OrWindows1252",
-		// ioquake3 and iortcw take only letters and digits after the escape; a caret before anything else is shown.
+		"//colourCodes": "ioquake3 and iortcw take only letters and digits after the escape; a caret before anything else is shown.",
 		"colourCodes": {
 			"escape": "^",
 			"codes": "alphanumeric",
@@ -38,10 +38,9 @@
 		"arguments": [ "+connect", "{address}" ],
 		"passwordArguments": [ "+set", "password", "{password}", "+connect", "{address}" ],
 		"password": {
-			// Info_SetValueForKey refuses 64 characters or more, so a longer password would never reach the server.
+			"//maxLength": "Info_SetValueForKey refuses 64 characters or more, so a longer password would never reach the server.",
 			"maxLength": 63,
-			// kpded2 rebuilds "set password %s", so a space splits the value; iortcw cuts the command line at every '+'
-			// and ends a token at "//" or "/*"; both refuse '"', '\' and ';' in userinfo, and Quake 2 expands '$'.
+			"//refusedCharacters": "kpded2 rebuilds \"set password %s\", so a space splits the value; iortcw cuts the command line at every '+' and ends a token at \"//\" or \"/*\"; both refuse '\"', '\\' and ';' in userinfo, and Quake 2 expands '$'.",
 			"refusedCharacters": " \"$;+\\",
 			"refusedSequences": [ "//", "/*" ]
 		}

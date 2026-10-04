@@ -17,7 +17,7 @@ namespace Lkt::Games
 namespace
 {
 constexpr std::string_view UserGame{ R"json({
-	// A comment, as the built-ins have them.
+	"//format": "A comment, as the built-ins have them.",
 	"format": 1,
 	"name": "My Game",
 	"protocol": "quake2",

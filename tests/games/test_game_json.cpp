@@ -64,12 +64,58 @@ TEST(GameJson, ReadsAMinimalGame)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(GameJson, AcceptsComments)
+TEST(GameJson, CommentFieldChangesNothing)
 {
-	std::string const text{ MakeMinimalGame().dump(1, '\t') };
-	std::string const commented{ "// A game\n" + text };
+	JsonValue game = MakeMinimalGame();
 
-	EXPECT_TRUE(ReadGameJson(commented, MakeProtocols()).has_value());
+	game["//masters"] = "The only master";
+
+	std::expected<Query::SGameDefinition, std::string> const commented{ ReadGameJson(game.dump(), MakeProtocols()) };
+	std::expected<Query::SGameDefinition, std::string> const plain{ ReadGameJson(MakeMinimalGame().dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(commented.has_value()) << commented.error();
+	ASSERT_TRUE(plain.has_value()) << plain.error();
+	EXPECT_TRUE(*commented == *plain);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, CommentWithoutItsFieldIsRejected)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["keys"]["//mods"] = "Where the mod is named";
+
+	EXPECT_EQ(ReadProblem(game), "keys.//mods: is a comment on 'mods', which is not in this object");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, CommentThatIsNotAStringIsRejected)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["//name"] = 1;
+
+	EXPECT_EQ(ReadProblem(game), "//name: must be a non-empty string without NUL");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, CommentOnAProtocolOptionIsAccepted)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["protocol"] = "quake3";
+	game["protocolOptions"]["masterQuery"] = "68 empty full";
+	game["protocolOptions"]["//masterQuery"] = "Protocol 68, every server";
+
+	EXPECT_EQ(ReadProblem(game), "");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, SlashCommentIsNotJson)
+{
+	std::string const commented{ "// A game\n" + MakeMinimalGame().dump(1, '\t') };
+
+	EXPECT_FALSE(ReadGameJson(commented, MakeProtocols()).has_value());
 }
 
 //////////////////////////////////////////////////////////////////////////
