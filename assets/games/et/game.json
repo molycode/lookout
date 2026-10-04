@@ -1,0 +1,25 @@
+{
+	"format": 1,
+	"name": "Enemy Territory",
+	"protocol": "quake3",
+	"textStyle": "enemyTerritory",
+	"masterQuery": "84 empty full",
+	"masters": [
+		{ "host": "etmaster.idsoftware.com", "port": 27950 },
+		{ "host": "etmaster.etlegacy.com", "port": 27950 }
+	],
+	"keys": {
+		"hostname": "sv_hostname",
+		"map": "mapname",
+		"maxPlayers": "sv_maxclients",
+		"password": "g_needpass",
+		"mods": [ "gamename" ]
+	},
+	"modes": [
+		{ "key": "g_gametype", "value": "2", "label": "Objective" },
+		{ "key": "g_gametype", "value": "3", "label": "Stopwatch" },
+		{ "key": "g_gametype", "value": "4", "label": "Campaign" },
+		{ "key": "g_gametype", "value": "5", "label": "Last Man Standing" },
+		{ "key": "g_gametype", "value": "6", "label": "Map Voting" }
+	]
+}

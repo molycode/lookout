@@ -1,0 +1,35 @@
+{
+	"format": 1,
+	"name": "Quake III Arena",
+	"protocol": "quake3",
+	"textStyle": "quake3",
+	"masterQuery": "68 empty full",
+	"masters": [
+		{ "host": "master.quake3arena.com", "port": 27950 },
+		{ "host": "master.ioquake3.org", "port": 27950 },
+		{ "host": "dpmaster.deathmask.net", "port": 27950 }
+	],
+	"keys": {
+		"hostname": "sv_hostname",
+		"map": "mapname",
+		"maxPlayers": "sv_maxclients",
+		"password": "g_needpass",
+		"mods": [ "gamename" ]
+	},
+	"modes": [
+		{ "key": "g_gametype", "value": "0", "label": "Free for All" },
+		{ "key": "g_gametype", "value": "1", "label": "Tournament" },
+		{ "key": "g_gametype", "value": "2", "label": "Single Player" },
+		{ "key": "g_gametype", "value": "3", "label": "Team Deathmatch" },
+		{ "key": "g_gametype", "value": "4", "label": "Capture the Flag" },
+		{ "key": "g_gametype", "value": "5", "label": "One Flag CTF" },
+		{ "key": "g_gametype", "value": "6", "label": "Overload" },
+		{ "key": "g_gametype", "value": "7", "label": "Harvester" }
+	],
+	// Urban Terror and OpenArena list themselves on Quake III's masters.
+	"foreignServers": [
+		{ "key": "gamename", "value": "q3urt42" },
+		{ "key": "gamename", "value": "q3urt43" },
+		{ "key": "gamename", "value": "baseoa" }
+	]
+}

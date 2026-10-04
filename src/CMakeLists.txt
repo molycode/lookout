@@ -1,6 +1,7 @@
 add_subdirectory(query)
 add_subdirectory(geo)
 add_subdirectory(json)
+add_subdirectory(games)
 add_subdirectory(launch)
 add_subdirectory(net)
 add_subdirectory(browser)
@@ -16,6 +17,7 @@ target_compile_definitions(lookout PRIVATE LKT_VERSION="${PROJECT_VERSION}")
 target_link_libraries(lookout PRIVATE
 	Lkt::Browser
 	Lkt::Config
+	Lkt::Games
 	Lkt::Launch
 	Lkt::Net
 	Lkt::Query

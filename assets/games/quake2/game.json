@@ -1,0 +1,23 @@
+{
+	"format": 1,
+	"name": "Quake II",
+	"protocol": "quake2",
+	"textStyle": "ascii7",
+	"masters": [
+		{ "host": "master.quakeservers.net", "port": 27900 },
+		{ "host": "master.maraakate.org", "port": 27900 }
+	],
+	"keys": {
+		"hostname": "hostname",
+		"map": "mapname",
+		"maxPlayers": "maxclients",
+		"password": "needpass",
+		// Mods often put a version in gamename instead of their title.
+		"mods": [ "game", "gamename" ]
+	},
+	"modes": [
+		{ "key": "ctf", "value": "1", "label": "Capture the Flag" },
+		{ "key": "coop", "value": "1", "label": "Co-op" },
+		{ "key": "deathmatch", "value": "1", "label": "Deathmatch" }
+	]
+}

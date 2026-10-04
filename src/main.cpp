@@ -1,6 +1,6 @@
 #include "lookout.hpp"
 #include "loggers.hpp"
-#include "query/builtin_games.hpp"
+#include "games/builtin_games.hpp"
 #include "query/game_catalog.hpp"
 #include <cstdlib>
 #include <print>
@@ -38,7 +38,7 @@ void PrintUsage(std::string_view executable)
 //////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-	Lkt::Query::InitializeGameCatalog(Lkt::Query::GetBuiltinGames());
+	Lkt::Query::InitializeGameCatalog(Lkt::Games::LoadBuiltinGames());
 
 	std::span<char* const> const args{ argv, static_cast<size_t>(argc) };
 	std::string_view const executable{ args.empty() ? "lookout" : args.front() };

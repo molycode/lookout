@@ -1,0 +1,31 @@
+{
+	"format": 1,
+	"name": "Kingpin: Life of Crime",
+	"protocol": "quake2",
+	"textStyle": "ascii7",
+	// master1 and master2.kingpin.info speak only GameSpy's TCP protocol, never the Quake 2 query.
+	"masters": [
+		{ "host": "master.kingpin.info", "port": 27900 }
+	],
+	"keys": {
+		"hostname": "hostname",
+		"map": "mapname",
+		"maxPlayers": "maxclients",
+		"password": "password",
+		// The gamename is the mod's own title ("Monkey Mod v2.1").
+		"mods": [ "gamename", "game" ]
+	},
+	// In order: bagman sets deathmatch as well as teamplay.
+	"modes": [
+		{ "key": "coop", "value": "1", "label": "Co-op" },
+		{ "key": "teamplay", "value": "1", "label": "Bagman" },
+		{ "key": "deathmatch", "value": "1", "label": "Deathmatch" }
+	],
+	"launch": {
+		// Only names seen on real installs; Steam's Kingpin.desktop runs a steam:// URL, which drops the connect arguments.
+		"desktopFiles": [ "kingpin-native.desktop" ],
+		"installDir": "Games/Kingpin",
+		"program": "run-game.sh",
+		"requiredFiles": [ "kingpin.x86", "main/pak0.pak" ]
+	}
+}
