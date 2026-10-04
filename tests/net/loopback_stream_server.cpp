@@ -118,40 +118,42 @@ void CLoopbackStreamServer::Serve()
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Waits on the client between steps, so a client that closes, or Stop, ends the conversation.
+// A step that expects nothing goes at once; one whose bytes differ ends the connection.
 void CLoopbackStreamServer::Converse(int connection)
 {
-	std::array<std::byte, MaxRequestSize> request{};
+	std::array<std::byte, MaxRequestSize> received{};
 	size_t numReceived{ 0 };
-	bool isOpen{ m_stream.greeting.empty() || SendAll(connection, m_stream.greeting) };
-	bool hasRequest{ false };
+	size_t step{ 0 };
+	bool isOpen{ true };
 
 	while (isOpen && m_isServing.load(std::memory_order_acquire))
 	{
-		pollfd descriptor{ connection, POLLIN, 0 };
+		std::vector<std::byte> const* const pExpect{ (step < m_stream.steps.size()) ? &m_stream.steps[step].expect : nullptr };
 
-		if (poll(&descriptor, 1, PollIntervalMs) > 0)
+		if (pExpect != nullptr && numReceived >= pExpect->size())
 		{
-			ssize_t const received{ recv(connection, request.data() + numReceived, request.size() - numReceived, 0) };
+			std::span<std::byte const> const reply{ m_stream.steps[step].send };
 
-			isOpen = received > 0;
-			numReceived += isOpen ? static_cast<size_t>(received) : 0;
-		}
+			isOpen = std::ranges::equal(std::span<std::byte const>{ received.data(), pExpect->size() }, *pExpect);
 
-		if (isOpen && !hasRequest && !m_stream.request.empty() && numReceived >= m_stream.request.size())
-		{
-			hasRequest = true;
-			isOpen = std::ranges::equal(std::span<std::byte const>{ request.data(), m_stream.request.size() }, m_stream.request);
-
-			for (size_t start{ 0 }; isOpen && start < m_stream.reply.size(); start += m_stream.writeSize)
+			for (size_t start{ 0 }; isOpen && start < reply.size(); start += m_stream.writeSize)
 			{
-				size_t const size{ std::min(m_stream.writeSize, m_stream.reply.size() - start) };
-
-				isOpen = SendAll(connection, std::span<std::byte const>{ m_stream.reply }.subspan(start, size));
-				std::this_thread::sleep_for(WriteInterval);
+				isOpen = SendAll(connection, reply.subspan(start, std::min(m_stream.writeSize, reply.size() - start)));
+				std::this_thread::sleep_for((start == 0) ? std::max(m_stream.steps[step].pause, WriteInterval) : WriteInterval);
 			}
 
-			isOpen = isOpen && !m_stream.closesAfterReply;
+			numReceived = 0;
+			++step;
+			isOpen = isOpen && (step < m_stream.steps.size() || !m_stream.closesWhenDone);
+		}
+		else if (pollfd descriptor{ connection, POLLIN, 0 }; poll(&descriptor, 1, PollIntervalMs) > 0)
+		{
+			size_t const offset{ (pExpect != nullptr) ? numReceived : 0 };
+			size_t const wanted{ (pExpect != nullptr) ? pExpect->size() - numReceived : received.size() };
+			ssize_t const count{ recv(connection, received.data() + offset, std::min(wanted, received.size() - offset), 0) };
+
+			isOpen = count > 0;
+			numReceived += (isOpen && pExpect != nullptr) ? static_cast<size_t>(count) : 0;
 		}
 	}
 }

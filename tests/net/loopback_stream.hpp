@@ -1,17 +1,16 @@
 #pragma once
 
+#include "net/loopback_stream_step.hpp"
 #include <cstddef>
 #include <vector>
 
 namespace Lkt::Fixtures
 {
-// No greeting leaves the master silent; it then waits for a request that never comes.
+// No steps leaves the master silent until the client goes.
 struct SLoopbackStream final
 {
-	std::vector<std::byte> greeting;
-	std::vector<std::byte> request;
-	std::vector<std::byte> reply;
+	std::vector<SLoopbackStreamStep> steps;
 	size_t writeSize{ 1 };
-	bool closesAfterReply{ true };
+	bool closesWhenDone{ false };
 };
 } // namespace Lkt::Fixtures

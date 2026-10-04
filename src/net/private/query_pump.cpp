@@ -574,7 +574,8 @@ void CQueryPump::ReadMasterData(SMasterId const& master, SMasterConversation& co
 	{
 		size_t const numAdmitted{ m_masters.AdmitEntries(master, action->servers.size()) };
 
-		if (!IsEmpty(*action))
+		// A stream keeps its order, so whatever arrives answers the step, even a frame still incomplete.
+		if (conversation.isStream || !IsEmpty(*action))
 		{
 			m_masters.MarkStepAnswered(master);
 		}

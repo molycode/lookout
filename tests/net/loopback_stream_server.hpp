@@ -9,8 +9,8 @@
 
 namespace Lkt::Fixtures
 {
-// A TCP master on 127.0.0.1, one connection at a time: it greets, waits for the request it expects, then sends its reply
-// in writes of the set size and closes, or holds the connection until the client or Stop ends it.
+// A TCP master on 127.0.0.1, one connection at a time: step by step it waits for the bytes it expects and sends its
+// part in writes of the set size; then it closes, or holds the connection until the client or Stop ends it.
 class CLoopbackStreamServer final : private Tge::SNoCopyNoMove
 {
 public:

@@ -7,6 +7,7 @@
 #include <array>
 #include <cstddef>
 #include <span>
+#include <thread>
 #include <unistd.h>
 #include <utility>
 
@@ -152,6 +153,7 @@ void CLoopbackServer::Serve()
 					{
 						for (std::vector<std::byte> const& reply : exchange->replies)
 						{
+							std::this_thread::sleep_for(exchange->replyInterval);
 							sendto(m_descriptor, reply.data(), reply.size(), 0, reinterpret_cast<sockaddr const*>(&sender), senderSize);
 						}
 					}

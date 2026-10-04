@@ -67,9 +67,14 @@ class CStreamMasterTest : public Fixtures::CCatalogTest
 protected:
 
 	// A master that greets, takes the request, and sends these frames in odd-sized writes.
-	Fixtures::SLoopbackStream MakeStream(std::vector<std::byte> reply, bool closesAfterReply = true) const
+	Fixtures::SLoopbackStream MakeStream(std::vector<std::byte> reply, bool closesWhenDone = true) const
 	{
-		return Fixtures::SLoopbackStream{ ToBytes("HELLO"), ToBytes("LIST"), std::move(reply), OddWriteSize, closesAfterReply };
+		std::vector<Fixtures::SLoopbackStreamStep> steps{};
+
+		steps.emplace_back(std::vector<std::byte>{}, ToBytes("HELLO"));
+		steps.emplace_back(ToBytes("LIST"), std::move(reply));
+
+		return Fixtures::SLoopbackStream{ std::move(steps), OddWriteSize, closesWhenDone };
 	}
 
 	std::vector<std::byte> ListStatusServer() const
