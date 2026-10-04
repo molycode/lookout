@@ -1,4 +1,5 @@
 #include "lookout.hpp"
+#include "app_dir_name.hpp"
 #include "loggers.hpp"
 #include "run_context.hpp"
 #include "browser/server_list.hpp"
@@ -21,7 +22,6 @@ namespace Lkt
 {
 namespace
 {
-constexpr std::string_view AppDirName{ "lookout" };
 constexpr size_t MaxLogFiles{ 10 };
 
 // tge's runtime names every log file "tge_<date>_<time>.log", so the name orders them by age.

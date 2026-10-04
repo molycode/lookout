@@ -8,7 +8,7 @@
 namespace Lkt::Games
 {
 // Problems are reported by the caller: loading runs before logging reaches its file.
-struct SBuiltins final
+struct SGameContent final
 {
 	std::vector<Query::SProtocolDefinition> protocols;
 	std::vector<Query::SGameDefinition> games;

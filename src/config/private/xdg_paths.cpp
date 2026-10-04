@@ -50,4 +50,10 @@ std::expected<std::filesystem::path, EXdgError> GetStateHome()
 {
 	return ResolveBaseDir("XDG_STATE_HOME", ".local/state");
 }
+
+//////////////////////////////////////////////////////////////////////////
+std::expected<std::filesystem::path, EXdgError> GetDataHome()
+{
+	return ResolveBaseDir("XDG_DATA_HOME", ".local/share");
+}
 } // namespace Lkt::Config

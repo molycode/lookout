@@ -1,5 +1,5 @@
 #include "tge_environment.hpp"
-#include "games/builtin_games.hpp"
+#include "games/load_games.hpp"
 #include "query/game_catalog.hpp"
 #include <gtest/gtest.h>
 #include <cstdio>
@@ -9,7 +9,7 @@
 //////////////////////////////////////////////////////////////////////////
 int main(int argc, char** argv)
 {
-	Lkt::Games::SBuiltins const builtins{ Lkt::Games::LoadBuiltins() };
+	Lkt::Games::SGameContent const builtins{ Lkt::Games::LoadGames({}) };
 	int result{ EXIT_FAILURE };
 
 	for (std::string const& problem : builtins.problems)

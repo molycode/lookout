@@ -1,8 +1,13 @@
+#include "app_dir_name.hpp"
 #include "lookout.hpp"
 #include "loggers.hpp"
-#include "games/builtin_games.hpp"
+#include "config/xdg_paths.hpp"
+#include "games/load_games.hpp"
 #include "query/game_catalog.hpp"
 #include <cstdlib>
+#include <expected>
+#include <filesystem>
+#include <format>
 #include <print>
 #include <span>
 #include <string>
@@ -38,9 +43,16 @@ void PrintUsage(std::string_view executable)
 //////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-	Lkt::Games::SBuiltins const builtins{ Lkt::Games::LoadBuiltins() };
+	std::expected<std::filesystem::path, Lkt::Config::EXdgError> const dataHome{ Lkt::Config::GetDataHome() };
+	Lkt::Games::SGameContent content{ Lkt::Games::LoadGames(dataHome.has_value() ? *dataHome / Lkt::AppDirName : std::filesystem::path{}) };
 
-	Lkt::Query::InitializeGameCatalog(builtins.protocols, builtins.games);
+	if (!dataHome.has_value())
+	{
+		content.problems.emplace_back(std::format("Cannot locate the data directory, so only the built-in games are loaded: {}",
+			Lkt::Config::ToString(dataHome.error())));
+	}
+
+	Lkt::Query::InitializeGameCatalog(content.protocols, content.games);
 
 	std::span<char* const> const args{ argv, static_cast<size_t>(argc) };
 	std::string_view const executable{ args.empty() ? "lookout" : args.front() };
@@ -109,7 +121,7 @@ int main(int argc, char* argv[])
 	{
 		Lkt::CLookout lookout;
 
-		result = lookout.Run(pListGame, builtins.problems) ? EXIT_SUCCESS : EXIT_FAILURE;
+		result = lookout.Run(pListGame, content.problems) ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
 	Lkt::Query::TerminateGameCatalog();
