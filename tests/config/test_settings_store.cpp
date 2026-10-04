@@ -117,6 +117,20 @@ TEST_F(CSettingsStoreTest, SavedSettingsLoadBack)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CSettingsStoreTest, SectionOfAGameTheCatalogLacksSurvivesASave)
+{
+	CExpectedLog const expected{ ConfigChannel, 0, 0 };
+	CSettingsStore store{};
+
+	WriteText(m_file, R"({ "games": { "doom": { "favourites": [ "198.51.100.9:27960" ] } } })");
+	store.Initialize(m_dir.string());
+	store.Load();
+	store.Save(MakeChangedSettings());
+
+	EXPECT_TRUE(ReadText(m_file).contains("198.51.100.9:27960"));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CSettingsStoreTest, SaveLeavesOnlyTheSettingsFile)
 {
 	CExpectedLog const expected{ ConfigChannel, 0, 0 };

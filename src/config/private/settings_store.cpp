@@ -8,6 +8,7 @@
 #include <format>
 #include <string>
 #include <system_error>
+#include <utility>
 
 namespace Lkt::Config
 {
@@ -37,6 +38,7 @@ SSettings CSettingsStore::Load()
 	SSettings settings{ MakeDefaultSettings() };
 
 	m_written.reset();
+	m_kept.clear();
 	m_canSave = false;
 
 	if (!m_path.empty())
@@ -46,6 +48,8 @@ SSettings CSettingsStore::Load()
 		if (text.has_value())
 		{
 			std::expected<SSettingsDocument, ESettingsJsonError> const document{ ReadSettingsJson(*text) };
+
+			m_kept = *text;
 
 			if (document.has_value())
 			{
@@ -90,11 +94,13 @@ void CSettingsStore::Save(SSettings const& settings)
 {
 	if (m_canSave && m_written != settings)
 	{
-		std::expected<void, std::string> const written{ Json::WriteFileAtomically(m_path, WriteSettingsJson(settings)) };
+		std::string text{ WriteSettingsJson(settings, m_kept) };
+		std::expected<void, std::string> const written{ Json::WriteFileAtomically(m_path, text) };
 
 		if (written.has_value())
 		{
 			m_written = settings;
+			m_kept = std::move(text);
 		}
 		else
 		{

@@ -1,7 +1,9 @@
+#include "catalog_fixture.hpp"
 #include "fixtures.hpp"
 #include "settings_json.hpp"
 #include "config/default_settings.hpp"
 #include "config/settings.hpp"
+#include "json/json.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include "query/server_address.hpp"
@@ -169,13 +171,26 @@ TEST(SettingsJson, SectionOfWrongKindIsRejected)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(SettingsJson, UnknownSelectedGameIsRejected)
+// Its game may have been removed, so the file is not repaired over it.
+TEST(SettingsJson, SelectedGameTheCatalogLacksGivesWayToTheFirstListed)
 {
-	SSettingsDocument const document{ ReadValid(R"({ "game": "doom" })") };
+	std::span<Query::SGameDefinition const> const catalog{ Query::GetGameCatalog() };
+	SSettingsDocument const document{ ReadValid(std::format(R"({{ "game": "doom", "games": {{ "{}": {{ "listed": false }} }} }})", catalog[0].key)) };
 
-	EXPECT_EQ(document.settings.selectedGame, MakeDefaultSettings().selectedGame);
-	EXPECT_EQ(document.numInvalid, 1u);
-	EXPECT_EQ(document.firstInvalidPath, "game");
+	ASSERT_GE(catalog.size(), 2u);
+	EXPECT_EQ(document.settings.selectedGame, catalog[1].game);
+	EXPECT_EQ(document.numInvalid, 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, OrderPlaceOfAGameTheCatalogLacksIsKept)
+{
+	std::span<Query::SGameDefinition const> const catalog{ Query::GetGameCatalog() };
+	std::string const kept{ std::format(R"({{ "gameOrder": [ "{}", "doom" ] }})", catalog[0].key) };
+	nlohmann::ordered_json const written = nlohmann::ordered_json::parse(WriteSettingsJson(MakeDefaultSettings(), kept));
+
+	ASSERT_GE(written["gameOrder"].size(), 2u);
+	EXPECT_EQ(written["gameOrder"][1], "doom");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -512,6 +527,25 @@ TEST(SettingsJson, EmptyCustomCommandOfFormatOneAddsNoInstall)
 	SSettingsDocument const document{ ReadValid(R"({ "version": 1, "games": { "kingpin": { "launcher": "custom", "customCommand": "" } } })") };
 
 	EXPECT_TRUE(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].installs.empty());
+}
+//////////////////////////////////////////////////////////////////////////
+class CSettingsCatalogTest : public Fixtures::CCatalogTest
+{
+};
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CSettingsCatalogTest, RemovedGameFindsItsSettingsWhenItReturns)
+{
+	std::string const kept{ R"({ "games": { "doom": { "favourites": [ "203.0.113.7:31510" ] } } })" };
+	std::string const written{ WriteSettingsJson(MakeDefaultSettings(), kept) };
+	Query::SGameDefinition doom{ Fixtures::GetGameByKey("quake2") };
+
+	doom.key = "doom";
+
+	Query::EGame const game{ AddGame(std::move(doom)) };
+	SSettingsDocument const document{ ReadValid(written) };
+
+	EXPECT_EQ(document.settings.games[static_cast<size_t>(game)].favourites, std::vector<Query::SServerAddress>{ Favourite });
 }
 } // namespace
 } // namespace Lkt::Config

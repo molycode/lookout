@@ -13,6 +13,7 @@
 #include <expected>
 #include <filesystem>
 #include <format>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <span>
@@ -443,23 +444,31 @@ void ReadGameOrder(Json const& root, SSettingsDocument& document)
 
 //////////////////////////////////////////////////////////////////////////
 // The sidebar must offer at least one game, and the selected one among them.
+// A selected game the catalog lacks gives way quietly: its game may have been removed.
 void CheckListedGames(SSettingsDocument& document)
 {
-	std::optional<Query::EGame> const firstListed{ FindFirstListedGame(document.settings) };
+	SSettings& settings{ document.settings };
 
-	if (!firstListed.has_value())
+	if (!FindFirstListedGame(settings).has_value())
 	{
 		Reject(document, "games");
 
-		for (SGameSettings& game : document.settings.games)
+		for (SGameSettings& game : settings.games)
 		{
 			game.isListed = SGameSettings{}.isListed;
 		}
 	}
-	else if (!document.settings.games[static_cast<size_t>(document.settings.selectedGame)].isListed)
+
+	Query::EGame const firstListed{ FindFirstListedGame(settings).value_or(settings.gameOrder.front()) };
+
+	if (settings.selectedGame == Query::NoGame)
+	{
+		settings.selectedGame = firstListed;
+	}
+	else if (!settings.games[static_cast<size_t>(settings.selectedGame)].isListed)
 	{
 		Reject(document, "game");
-		document.settings.selectedGame = *firstListed;
+		settings.selectedGame = firstListed;
 	}
 }
 
@@ -489,12 +498,12 @@ void ReadDocument(Json const& root, SSettingsDocument& document)
 	{
 		Query::SGameDefinition const* const pGame{ json.is_string() ? Query::FindGame(json.get_ref<std::string const&>()) : nullptr };
 
-		if (pGame != nullptr)
+		if (json.is_string())
 		{
-			document.settings.selectedGame = pGame->game;
+			document.settings.selectedGame = (pGame != nullptr) ? pGame->game : Query::NoGame;
 		}
 
-		return pGame != nullptr;
+		return json.is_string();
 	});
 
 	ReadUnsigned(root, {}, "autoRefreshSeconds", 0, MaxAutoRefreshSeconds, document.settings.autoRefreshSeconds, document);
@@ -598,7 +607,47 @@ Json WriteGame(SGameSettings const& game)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-std::string WriteSettingsJson(SSettings const& settings)
+// Each order entry the catalog lacks goes back after the entry it followed.
+void KeepOtherGames(std::string_view kept, Json& games, Json& gameOrder)
+{
+	Json const previous = Json::parse(kept, nullptr, AllowExceptions, IgnoreComments);
+	auto const pGames{ previous.is_object() ? previous.find("games") : previous.end() };
+	auto const pOrder{ previous.is_object() ? previous.find(GameOrderKey) : previous.end() };
+
+	if (pGames != previous.end() && pGames->is_object())
+	{
+		for (auto const& [key, section] : pGames->items())
+		{
+			if (Query::FindGame(key) == nullptr)
+			{
+				games[key] = section;
+			}
+		}
+	}
+
+	if (pOrder != previous.end() && pOrder->is_array())
+	{
+		Json::const_iterator predecessor{ gameOrder.cend() };
+
+		for (Json const& entry : *pOrder)
+		{
+			bool const isOther{ entry.is_string() && Query::FindGame(entry.get_ref<std::string const&>()) == nullptr
+				&& std::find(gameOrder.cbegin(), gameOrder.cend(), entry) == gameOrder.cend() };
+
+			if (isOther)
+			{
+				predecessor = gameOrder.insert((predecessor == gameOrder.cend()) ? gameOrder.cbegin() : std::next(predecessor), entry);
+			}
+			else if (entry.is_string())
+			{
+				predecessor = std::find(gameOrder.cbegin(), gameOrder.cend(), entry);
+			}
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::string WriteSettingsJson(SSettings const& settings, std::string_view kept)
 {
 	Json root = Json::object();
 	Json games = Json::object();
@@ -612,6 +661,11 @@ std::string WriteSettingsJson(SSettings const& settings)
 	for (Query::EGame const game : settings.gameOrder)
 	{
 		gameOrder.emplace_back(Query::GetGame(game).key);
+	}
+
+	if (!kept.empty())
+	{
+		KeepOtherGames(kept, games, gameOrder);
 	}
 
 	root["version"] = SettingsVersion;

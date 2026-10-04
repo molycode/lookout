@@ -4,6 +4,7 @@
 #include <tge/non_copyable.hpp>
 #include <filesystem>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace Lkt::Config
@@ -26,6 +27,7 @@ private:
 	void MoveAside(std::string_view reason);
 
 	std::filesystem::path m_path;
+	std::string m_kept;
 	std::optional<SSettings> m_written;
 	bool m_canSave{ false };
 };
