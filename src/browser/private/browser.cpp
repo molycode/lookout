@@ -413,6 +413,30 @@ void CBrowser::SetGameListed(Query::EGame game, bool isListed)
 }
 
 //////////////////////////////////////////////////////////////////////////
+void CBrowser::MoveGame(Query::EGame game, Query::EGame target)
+{
+	std::vector<Query::EGame>& order{ m_settings.gameOrder };
+	auto const from{ std::ranges::find(order, game) };
+	auto const to{ std::ranges::find(order, target) };
+
+	TGE_ASSERT(from != order.end() && to != order.end(), "Moving a game the order does not hold");
+
+	if (from != to && from != order.end() && to != order.end())
+	{
+		if (from < to)
+		{
+			std::rotate(from, from + 1, to + 1);
+		}
+		else
+		{
+			std::rotate(to, from, from + 1);
+		}
+
+		m_settingsStore.Save(m_settings);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 Query::EGame CBrowser::GetSelectedGame() const
 {
 	return m_settings.selectedGame;

@@ -3,10 +3,12 @@
 #include "channels.hpp"
 #include "fixtures.hpp"
 #include "net/loopback_server.hpp"
+#include "settings_json.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -373,6 +375,36 @@ TEST_F(CBrowserTest, HiddenGameIsSavedAtOnce)
 
 	EXPECT_FALSE(m_browser.GetSettings().games[static_cast<size_t>(Fixtures::GetGameId("quake2"))].isListed);
 	EXPECT_TRUE(ReadText(m_configDir / "config.json").contains(R"("listed": false)"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserTest, MovedGameIsSavedAtOnce)
+{
+	Initialize();
+
+	std::vector<Query::EGame> expected{ m_browser.GetSettings().gameOrder };
+
+	std::ranges::rotate(expected, expected.end() - 1);
+	m_browser.MoveGame(expected.front(), expected[1]);
+
+	std::expected<Config::SSettingsDocument, Config::ESettingsJsonError> const saved{ Config::ReadSettingsJson(ReadText(m_configDir / "config.json")) };
+
+	EXPECT_EQ(m_browser.GetSettings().gameOrder, expected);
+	ASSERT_TRUE(saved.has_value());
+	EXPECT_EQ(saved->settings.gameOrder, expected);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserTest, GameMovedDownTakesItsTargetsPlace)
+{
+	Initialize();
+
+	std::vector<Query::EGame> expected{ m_browser.GetSettings().gameOrder };
+
+	std::ranges::rotate(expected, expected.begin() + 1);
+	m_browser.MoveGame(expected.back(), expected[expected.size() - 2]);
+
+	EXPECT_EQ(m_browser.GetSettings().gameOrder, expected);
 }
 
 //////////////////////////////////////////////////////////////////////////

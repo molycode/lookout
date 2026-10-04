@@ -64,6 +64,7 @@ public:
 	void SetInstallFolder(Query::EGame game, uint32_t id, std::string_view folder);
 	void RemoveInstall(Query::EGame game, uint32_t id);
 	void SetGameListed(Query::EGame game, bool isListed);
+	void MoveGame(Query::EGame game, Query::EGame target);
 
 	Query::EGame GetSelectedGame() const;
 	Config::SSettings const& GetSettings() const;
