@@ -1,5 +1,6 @@
 #pragma once
 
+#include "master_id.hpp"
 #include "master_outcome.hpp"
 #include "master_query.hpp"
 #include "master_record.hpp"
@@ -28,9 +29,11 @@ public:
 	void OnResolved(Query::EGame game, uint32_t generation, size_t index, std::expected<uint32_t, std::string> const& result, Clock::time_point now);
 	void Update(Clock::time_point now, std::vector<SMasterQuery>& queries, std::vector<SMasterOutcome>& outcomes);
 
-	std::optional<Query::EGame> OnDatagram(Query::SServerAddress const& source, Clock::time_point now);
+	// The first asked master at that address takes the datagram; every one there hears it.
+	std::optional<SMasterId> OnDatagram(Query::SServerAddress const& source, Clock::time_point now);
 
-	size_t AdmitEntries(Query::SServerAddress const& source, size_t numEntries);
+	size_t AdmitEntries(SMasterId const& master, size_t numEntries);
+	void Fail(SMasterId const& master, std::string failure, std::vector<SMasterOutcome>& outcomes);
 
 	void Cancel(Query::EGame game);
 

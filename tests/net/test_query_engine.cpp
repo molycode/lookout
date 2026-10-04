@@ -86,6 +86,29 @@ TEST(QueryEngine, SilentServerIsAskedTwiceThenFails)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(QueryEngine, RetrySendsWhatTheConversationStartedWith)
+{
+	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
+	Fixtures::CLoopbackServer server{};
+	Fixtures::CEventCollector collector{};
+	CQueryEngine engine{};
+
+	ASSERT_TRUE(server.Start({}));
+	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
+
+	engine.RefreshServer(game, server.GetAddress());
+
+	bool const isFinished{ collector.WaitForFinish(engine, game, Patience) };
+
+	engine.Terminate();
+	server.Stop();
+
+	ASSERT_TRUE(isFinished);
+	EXPECT_EQ(server.GetFirstRequest(), Fixtures::ToBytes("\xFF\xFF\xFF\xFFstatus\n"));
+	EXPECT_TRUE(server.AreRequestsAlike());
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, RunsAgainAfterARefreshFinished)
 {
 	Query::EGame const game{ Fixtures::GetGameId("kingpin") };

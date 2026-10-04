@@ -9,8 +9,10 @@
 #include <sys/socket.h>
 #include <algorithm>
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <expected>
+#include <format>
 #include <optional>
 #include <span>
 #include <string>
@@ -62,6 +64,18 @@ std::expected<uint32_t, std::string> TakeAddress(gaicb& request, int status)
 	FreeResults(request);
 
 	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+uint64_t ToConversationKey(Query::EGame game, Query::SServerAddress const& address)
+{
+	return (static_cast<uint64_t>(game) << 48) | Query::ToKey(address);
+}
+
+//////////////////////////////////////////////////////////////////////////
+uint64_t ToConversationKey(SMasterId const& master)
+{
+	return (static_cast<uint64_t>(master.game) << 48) | static_cast<uint64_t>(master.index);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -129,6 +143,8 @@ void CQueryPump::Terminate()
 	m_loop.Terminate();
 	AbandonLookups();
 	m_socket.Terminate();
+	m_serverConversations.clear();
+	m_masterConversations.clear();
 
 	for (Script::CProtocolScript& script : m_scripts)
 	{
@@ -226,6 +242,8 @@ void CQueryPump::StartRefresh(Query::EGame game, std::span<Query::SServerAddress
 	TGE_ASSERT(generation > refresh.generation, "A refresh id that is not newer than the game's last one");
 
 	m_scheduler.Cancel(game);
+	CloseConversations(m_serverConversations, game);
+	CloseConversations(m_masterConversations, game);
 	refresh = SRefreshState{};
 	refresh.isActive = true;
 	refresh.generation = generation;
@@ -272,6 +290,8 @@ void CQueryPump::CancelRefresh(Query::EGame game)
 
 	m_scheduler.Cancel(game);
 	m_masters.Cancel(game);
+	CloseConversations(m_serverConversations, game);
+	CloseConversations(m_masterConversations, game);
 
 	if (refresh.isActive)
 	{
@@ -352,21 +372,33 @@ void CQueryPump::UpdateMasters(Clock::time_point now)
 
 	for (SMasterQuery const& query : m_masterQueries)
 	{
-		Query::SGameDefinition const& game{ Query::GetGame(query.game) };
-		std::expected<void, int> const sent{ m_socket.Send(query.address, game.masterRequest) };
+		Query::SGameDefinition const& game{ Query::GetGame(query.master.game) };
+		std::expected<SConversationRecord const*, std::string> const conversation{ OpenConversation(m_masterConversations,
+			ToConversationKey(query.master), query.master.game, Script::EConversationKind::Master) };
 
-		if (!sent.has_value())
+		if (conversation.has_value())
 		{
-			gLog.Warning("{}: cannot ask master {}: {}", game.name, Query::FormatAddress(query.address), std::strerror(sent.error()));
+			std::expected<void, int> const sent{ Send(query.address, (*conversation)->send) };
+
+			if (!sent.has_value())
+			{
+				gLog.Warning("{}: cannot ask master {}: {}", game.name, Query::FormatAddress(query.address), std::strerror(sent.error()));
+			}
+		}
+		else
+		{
+			m_masters.Fail(query.master, std::format("cannot be asked: {}", conversation.error()), m_masterOutcomes);
 		}
 	}
 
 	for (SMasterOutcome const& outcome : m_masterOutcomes)
 	{
+		CloseConversation(m_masterConversations, ToConversationKey(outcome.master));
+
 		if (!outcome.failure.empty())
 		{
-			gLog.Warning("{}: master {} {}", Query::GetGame(outcome.game).name, outcome.host, outcome.failure);
-			Emit(SMasterFailed{ outcome.game, std::string{ outcome.host }, outcome.failure });
+			gLog.Warning("{}: master {} {}", Query::GetGame(outcome.master.game).name, outcome.host, outcome.failure);
+			Emit(SMasterFailed{ outcome.master.game, std::string{ outcome.host }, outcome.failure });
 		}
 	}
 
@@ -381,12 +413,22 @@ void CQueryPump::SendDueRequests(Clock::time_point now)
 
 	for (SServerRequest const& request : m_requests)
 	{
-		std::expected<void, int> const sent{ m_socket.Send(request.address, Query::GetGame(request.game).statusRequest) };
+		uint64_t const key{ ToConversationKey(request.game, request.address) };
 
-		if (!sent.has_value())
+		TGE_ASSERT(m_serverConversations.contains(key) == (request.numAttempts > 1), "A server's conversation must span exactly its attempts");
+
+		std::expected<SConversationRecord const*, std::string> const conversation{ OpenConversation(m_serverConversations, key, request.game,
+			Script::EConversationKind::Server) };
+		SRefreshStats& stats{ GetRefresh(request.game).stats };
+
+		if (!conversation.has_value())
 		{
-			SRefreshStats& stats{ GetRefresh(request.game).stats };
-
+			RecordScriptFailure(stats, conversation.error());
+			m_scheduler.Abandon(request);
+			Emit(SServerFailed{ request.game, request.address, EServerFailure::BadReply });
+		}
+		else if (std::expected<void, int> const sent{ Send(request.address, (*conversation)->send) }; !sent.has_value())
+		{
 			if (stats.numSendFailures == 0)
 			{
 				stats.firstSendFailure = request.address;
@@ -409,6 +451,7 @@ void CQueryPump::ExpireRequests(Clock::time_point now)
 	{
 		SRefreshStats& stats{ GetRefresh(request.game).stats };
 
+		CloseConversation(m_serverConversations, ToConversationKey(request.game, request.address));
 		stats.firstNoAnswer = (stats.numNoAnswer == 0) ? request.address : stats.firstNoAnswer;
 		++stats.numNoAnswer;
 		Emit(SServerFailed{ request.game, request.address, EServerFailure::NoAnswer });
@@ -427,6 +470,10 @@ void CQueryPump::FinishRefreshes()
 
 		if (refresh.isActive && !m_masters.HasWork(game) && !m_scheduler.HasWork(game))
 		{
+			TGE_ASSERT(std::ranges::none_of(m_serverConversations, [game](auto const& entry) { return entry.second.game == game; })
+				&& std::ranges::none_of(m_masterConversations, [game](auto const& entry) { return entry.second.game == game; }),
+				"A finished refresh left a conversation open");
+
 			refresh.isActive = false;
 			ReportRefresh(game);
 			Emit(SRefreshFinished{ game });
@@ -449,11 +496,11 @@ void CQueryPump::ReceiveDatagrams()
 		{
 			Clock::time_point const now{ Clock::now() };
 			std::span<std::byte const> const datagram{ m_buffer.data(), received.value() };
-			std::optional<Query::EGame> const masterGame{ m_masters.OnDatagram(source, now) };
+			std::optional<SMasterId> const master{ m_masters.OnDatagram(source, now) };
 
-			if (masterGame.has_value())
+			if (master.has_value())
 			{
-				ReadMasterDatagram(masterGame.value(), source, datagram);
+				ReadMasterDatagram(*master, datagram);
 			}
 			else
 			{
@@ -494,31 +541,35 @@ void CQueryPump::CountReceiveError(int error)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CQueryPump::ReadMasterDatagram(Query::EGame game, Query::SServerAddress const& source, std::span<std::byte const> datagram)
+void CQueryPump::ReadMasterDatagram(SMasterId const& master, std::span<std::byte const> datagram)
 {
-	SRefreshStats& stats{ GetRefresh(game).stats };
-	Script::CProtocolScript& script{ GetScript(game) };
-	std::expected<void, Query::EParseError> const parsed{ script.ParseMasterReply(datagram, m_entries) };
+	SRefreshStats& stats{ GetRefresh(master.game).stats };
+	auto const it{ m_masterConversations.find(ToConversationKey(master)) };
 
-	if (!parsed.has_value() && parsed.error() == Query::EParseError::ScriptFailed)
+	TGE_ASSERT(it != m_masterConversations.end(), "A datagram from a master that was never asked");
+
+	std::expected<Script::SScriptAction, std::string> const action{ GetScript(master.game).Receive(it->second.conversation, datagram) };
+	std::span<Query::SServerAddress const> const servers{ action.has_value() ? std::span<Query::SServerAddress const>{ action->servers }
+		: std::span<Query::SServerAddress const>{} };
+	std::optional<Query::EParseError> const error{ action.has_value() ? action->reason : Query::EParseError::ScriptFailed };
+
+	if (!action.has_value())
 	{
-		RecordScriptFailure(stats, script.GetLastFailure());
+		RecordScriptFailure(stats, action.error());
 	}
 
-	if (!parsed.has_value())
+	if (error.has_value())
 	{
-		stats.firstBadMasterDatagramError = (stats.numBadMasterDatagrams == 0) ? parsed.error() : stats.firstBadMasterDatagramError;
+		stats.firstBadMasterDatagramError = (stats.numBadMasterDatagrams == 0) ? *error : stats.firstBadMasterDatagramError;
 		++stats.numBadMasterDatagrams;
 	}
 
-	size_t const numAdmitted{ m_masters.AdmitEntries(source, m_entries.size()) };
+	size_t const numAdmitted{ m_masters.AdmitEntries(master, servers.size()) };
 
-	stats.numCappedEntries += m_entries.size() - numAdmitted;
+	stats.numCappedEntries += servers.size() - numAdmitted;
 
-	for (size_t index{ 0 }; index < numAdmitted; ++index)
+	for (Query::SServerAddress const& address : servers.first(numAdmitted))
 	{
-		Query::SServerAddress const& address{ m_entries[index] };
-
 		if (Query::IsQueryable(address))
 		{
 			m_listed.emplace_back(address);
@@ -530,36 +581,50 @@ void CQueryPump::ReadMasterDatagram(Query::EGame game, Query::SServerAddress con
 		}
 	}
 
-	ListServers(game, m_listed);
-	m_entries.clear();
+	ListServers(master.game, m_listed);
 	m_listed.clear();
 }
 
 //////////////////////////////////////////////////////////////////////////
+// One datagram is all this engine takes, so a reply the script still waits on is finished right away.
 void CQueryPump::ReadStatusDatagram(SAnsweredRequest const& answered, std::span<std::byte const> datagram)
 {
 	Query::EGame const game{ answered.request.game };
 	SRefreshStats& stats{ GetRefresh(game).stats };
 	Script::CProtocolScript& script{ GetScript(game) };
-	std::expected<Query::SStatusReply, Query::EParseError> reply{ script.ParseStatusReply(datagram) };
+	auto const it{ m_serverConversations.find(ToConversationKey(game, answered.request.address)) };
 
-	if (reply.has_value())
+	TGE_ASSERT(it != m_serverConversations.end(), "An answered request without a conversation");
+
+	std::expected<Script::SScriptAction, std::string> action{ script.Receive(it->second.conversation, datagram) };
+
+	if (action.has_value() && !action->reply.has_value() && !action->reason.has_value())
+	{
+		action = script.Finish(it->second.conversation);
+	}
+
+	script.End(it->second.conversation);
+	m_serverConversations.erase(it);
+
+	if (action.has_value() && action->reply.has_value())
 	{
 		uint32_t const pingMs{ static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(answered.roundTrip).count()) };
 
 		++stats.numAnswered;
-		stats.numMalformedPlayerLines += reply->numMalformedPlayerLines;
-		Emit(SServerAnswered{ game, answered.request.address, pingMs, std::move(reply.value()) });
+		stats.numMalformedPlayerLines += action->reply->numMalformedPlayerLines;
+		Emit(SServerAnswered{ game, answered.request.address, pingMs, std::move(*action->reply) });
 	}
 	else
 	{
-		if (reply.error() == Query::EParseError::ScriptFailed)
+		Query::EParseError const error{ action.has_value() ? action->reason.value_or(Query::EParseError::Truncated) : Query::EParseError::ScriptFailed };
+
+		if (!action.has_value())
 		{
-			RecordScriptFailure(stats, script.GetLastFailure());
+			RecordScriptFailure(stats, action.error());
 		}
 
 		stats.firstBadReply = (stats.numBadReplies == 0) ? answered.request.address : stats.firstBadReply;
-		stats.firstBadReplyError = (stats.numBadReplies == 0) ? reply.error() : stats.firstBadReplyError;
+		stats.firstBadReplyError = (stats.numBadReplies == 0) ? error : stats.firstBadReplyError;
 		++stats.numBadReplies;
 		Emit(SServerFailed{ game, answered.request.address, EServerFailure::BadReply });
 	}
@@ -588,6 +653,81 @@ void CQueryPump::ListServers(Query::EGame game, std::span<Query::SServerAddress 
 }
 
 //////////////////////////////////////////////////////////////////////////
+// A retry finds its conversation open and resends what it started with.
+std::expected<SConversationRecord const*, std::string> CQueryPump::OpenConversation(std::unordered_map<uint64_t, SConversationRecord>& conversations,
+	uint64_t key, Query::EGame game, Script::EConversationKind kind)
+{
+	auto const it{ conversations.find(key) };
+	std::expected<SConversationRecord const*, std::string> result{ (it != conversations.end()) ? &it->second : nullptr };
+
+	if (it == conversations.end())
+	{
+		SConversationRecord record{ game, Script::SConversation{ kind, 0 }, {} };
+		std::expected<Script::SScriptAction, std::string> started{ GetScript(game).Start(record.conversation, Query::GetGame(game).protocolOptions) };
+
+		if (started.has_value())
+		{
+			record.send = std::move(started->send);
+			result = &conversations.emplace(key, std::move(record)).first->second;
+		}
+		else
+		{
+			result = std::unexpected{ std::move(started.error()) };
+		}
+	}
+
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CQueryPump::CloseConversation(std::unordered_map<uint64_t, SConversationRecord>& conversations, uint64_t key)
+{
+	auto const it{ conversations.find(key) };
+
+	if (it != conversations.end())
+	{
+		GetScript(it->second.game).End(it->second.conversation);
+		conversations.erase(it);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CQueryPump::CloseConversations(std::unordered_map<uint64_t, SConversationRecord>& conversations, Query::EGame game)
+{
+	for (auto it{ conversations.begin() }; it != conversations.end();)
+	{
+		if (it->second.game == game)
+		{
+			GetScript(game).End(it->second.conversation);
+			it = conversations.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Every datagram is sent; the first failure is the one reported.
+std::expected<void, int> CQueryPump::Send(Query::SServerAddress const& address, std::span<std::vector<std::byte> const> datagrams) const
+{
+	std::expected<void, int> result{};
+
+	for (std::vector<std::byte> const& datagram : datagrams)
+	{
+		std::expected<void, int> const sent{ m_socket.Send(address, datagram) };
+
+		if (result.has_value() && !sent.has_value())
+		{
+			result = sent;
+		}
+	}
+
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
 void CQueryPump::ReportRefresh(Query::EGame game) const
 {
 	SRefreshState const& refresh{ GetRefresh(game) };
@@ -609,7 +749,7 @@ void CQueryPump::ReportRefresh(Query::EGame game) const
 
 	if (stats.numScriptFailures > 0)
 	{
-		gLog.Warning("{}: the protocol script failed on {} replies, first: {}", name, stats.numScriptFailures, stats.firstScriptFailure);
+		gLog.Warning("{}: the protocol script failed {} times, first: {}", name, stats.numScriptFailures, stats.firstScriptFailure);
 	}
 
 	if (stats.numMalformedPlayerLines > 0)

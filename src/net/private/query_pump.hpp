@@ -1,7 +1,9 @@
 #pragma once
 
 #include "answered_request.hpp"
+#include "conversation_record.hpp"
 #include "dns_lookup.hpp"
+#include "master_id.hpp"
 #include "master_outcome.hpp"
 #include "master_query.hpp"
 #include "master_tracker.hpp"
@@ -12,6 +14,7 @@
 #include "net/query_event.hpp"
 #include "query/game.hpp"
 #include "query/server_address.hpp"
+#include "script/conversation_kind.hpp"
 #include "script/protocol_script.hpp"
 #include <tge/non_copyable.hpp>
 #include <tge/threading/event_loop.hpp>
@@ -19,9 +22,13 @@
 #include <tge/threading/timer_id.hpp>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
+#include <expected>
 #include <functional>
 #include <memory>
 #include <span>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Lkt::Net
@@ -59,9 +66,14 @@ private:
 	void FinishRefreshes();
 	void ReceiveDatagrams();
 	void CountReceiveError(int error);
-	void ReadMasterDatagram(Query::EGame game, Query::SServerAddress const& source, std::span<std::byte const> datagram);
+	void ReadMasterDatagram(SMasterId const& master, std::span<std::byte const> datagram);
 	void ReadStatusDatagram(SAnsweredRequest const& answered, std::span<std::byte const> datagram);
 	void ListServers(Query::EGame game, std::span<Query::SServerAddress const> servers);
+	std::expected<SConversationRecord const*, std::string> OpenConversation(std::unordered_map<uint64_t, SConversationRecord>& conversations, uint64_t key,
+		Query::EGame game, Script::EConversationKind kind);
+	void CloseConversation(std::unordered_map<uint64_t, SConversationRecord>& conversations, uint64_t key);
+	void CloseConversations(std::unordered_map<uint64_t, SConversationRecord>& conversations, Query::EGame game);
+	std::expected<void, int> Send(Query::SServerAddress const& address, std::span<std::vector<std::byte> const> datagrams) const;
 	void ReportRefresh(Query::EGame game) const;
 	void Emit(SQueryEvent event);
 	void NotifyIfNeeded();
@@ -83,12 +95,13 @@ private:
 	CMasterTracker m_masters;
 	std::vector<SRefreshState> m_refreshes;
 	std::vector<Script::CProtocolScript> m_scripts;
+	std::unordered_map<uint64_t, SConversationRecord> m_serverConversations;
+	std::unordered_map<uint64_t, SConversationRecord> m_masterConversations;
 
 	std::vector<std::byte> m_buffer;
 	std::vector<SMasterQuery> m_masterQueries;
 	std::vector<SMasterOutcome> m_masterOutcomes;
 	std::vector<SServerRequest> m_requests;
-	std::vector<Query::SServerAddress> m_entries;
 	std::vector<Query::SServerAddress> m_listed;
 };
 } // namespace Lkt::Net

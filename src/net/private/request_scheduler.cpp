@@ -76,6 +76,16 @@ void CRequestScheduler::TakeExpired(Clock::time_point now, std::vector<SServerRe
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Taken out of flight before it could be sent, so it neither expires nor is retried.
+void CRequestScheduler::Abandon(SServerRequest const& request)
+{
+	std::erase_if(m_inFlight, [&request](SInFlightRequest const& inFlight)
+	{
+		return inFlight.request.game == request.game && inFlight.request.address == request.address;
+	});
+}
+
+//////////////////////////////////////////////////////////////////////////
 void CRequestScheduler::Cancel(Query::EGame game)
 {
 	std::erase_if(m_pending, [game](SServerRequest const& request) { return request.game == game; });

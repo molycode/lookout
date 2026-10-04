@@ -1,6 +1,6 @@
 #pragma once
 
-#include "query/game.hpp"
+#include "master_id.hpp"
 #include <string>
 #include <string_view>
 
@@ -9,7 +9,7 @@ namespace Lkt::Net
 // An empty failure means the master answered.
 struct SMasterOutcome final
 {
-	Query::EGame game{ Query::NoGame };
+	SMasterId master;
 	std::string_view host;
 	std::string failure;
 };

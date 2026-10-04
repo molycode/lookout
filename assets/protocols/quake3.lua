@@ -4,6 +4,7 @@ local Prefix = "\xFF\xFF\xFF\xFF"
 local MasterReplyHeader = Prefix .. "getserversResponse"
 local StatusReplyHeader = Prefix .. "statusResponse\n"
 local EndOfList = "\\EOT"
+local MasterQuietMs = 1500
 local Backslash = 92
 local Space = 32
 local Minus = 45
@@ -143,6 +144,41 @@ local function parseStatusBody(body)
 	return reply
 end
 
+local function parseMasterDatagram(datagram)
+	local servers = {}
+
+	if not startsWith(datagram, MasterReplyHeader) then
+		return servers, "wrongHeader"
+	end
+
+	local position = #MasterReplyHeader + 1
+
+	while position <= #datagram do
+		local remaining = #datagram - position + 1
+
+		if isEndOfList(datagram, position, remaining) then
+			position = #datagram + 1
+		elseif string.byte(datagram, position) ~= Backslash then
+			return servers, "malformed"
+		elseif remaining < EntrySize then
+			return servers, "truncated"
+		else
+			servers[#servers + 1] = readAddress(datagram, position + 1)
+			position = position + EntrySize
+		end
+	end
+
+	return servers
+end
+
+local function parseStatusDatagram(datagram)
+	if not startsWith(datagram, StatusReplyHeader) then
+		return nil, "wrongHeader"
+	end
+
+	return parseStatusBody(string.sub(datagram, #StatusReplyHeader + 1))
+end
+
 return {
 	api = 1,
 
@@ -150,46 +186,30 @@ return {
 		masterQuery = { required = true, description = "The words after getservers: the protocol number, then filters such as \"empty full\"" },
 	},
 
-	masterRequest = function(options)
-		return Prefix .. "getservers " .. options.masterQuery
-	end,
+	master = {
+		transport = "udp",
 
-	statusRequest = function(options)
-		return Prefix .. "getstatus"
-	end,
+		start = function(options, state)
+			return { send = { Prefix .. "getservers " .. options.masterQuery } }
+		end,
 
-	parseMasterReply = function(datagram)
-		local servers = {}
+		-- \EOT never means done: UDP may deliver it before the datagrams sent ahead of it.
+		receive = function(state, datagram)
+			local servers, reason = parseMasterDatagram(datagram)
 
-		if not startsWith(datagram, MasterReplyHeader) then
-			return servers, "wrongHeader"
-		end
+			return { servers = servers, reason = reason, quiet = MasterQuietMs }
+		end,
+	},
 
-		local position = #MasterReplyHeader + 1
+	server = {
+		start = function(options, state)
+			return { send = { Prefix .. "getstatus" } }
+		end,
 
-		while position <= #datagram do
-			local remaining = #datagram - position + 1
+		receive = function(state, datagram)
+			local reply, reason = parseStatusDatagram(datagram)
 
-			if isEndOfList(datagram, position, remaining) then
-				position = #datagram + 1
-			elseif string.byte(datagram, position) ~= Backslash then
-				return servers, "malformed"
-			elseif remaining < EntrySize then
-				return servers, "truncated"
-			else
-				servers[#servers + 1] = readAddress(datagram, position + 1)
-				position = position + EntrySize
-			end
-		end
-
-		return servers
-	end,
-
-	parseStatusReply = function(datagram)
-		if not startsWith(datagram, StatusReplyHeader) then
-			return nil, "wrongHeader"
-		end
-
-		return parseStatusBody(string.sub(datagram, #StatusReplyHeader + 1))
-	end,
+			return { reply = reply, reason = reason }
+		end,
+	},
 }

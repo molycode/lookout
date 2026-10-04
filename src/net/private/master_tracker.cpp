@@ -1,6 +1,7 @@
 #include "master_tracker.hpp"
 #include <algorithm>
 #include <format>
+#include <utility>
 
 namespace Lkt::Net
 {
@@ -21,6 +22,13 @@ bool IsListening(SMasterRecord const& record)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// A datagram from a master not yet asked answers nothing Lookout sent.
+bool IsAsked(SMasterRecord const& record)
+{
+	return IsListening(record) && record.numAttempts > 0;
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool IsWaiting(SMasterRecord const& record)
 {
 	return IsListening(record) || record.state == EMasterState::Resolving;
@@ -32,11 +40,13 @@ void CMasterTracker::Begin(Query::EGame game, uint32_t generation, std::span<Que
 {
 	Cancel(game);
 
-	for (Query::SMasterEndpoint const& master : masters)
+	for (size_t index{ 0 }; index < masters.size(); ++index)
 	{
+		Query::SMasterEndpoint const& master{ masters[index] };
 		SMasterRecord record{};
 
 		record.game = game;
+		record.index = index;
 		record.generation = generation;
 		record.host = master.host;
 		record.port = master.port;
@@ -48,28 +58,21 @@ void CMasterTracker::Begin(Query::EGame game, uint32_t generation, std::span<Que
 //////////////////////////////////////////////////////////////////////////
 void CMasterTracker::OnResolved(Query::EGame game, uint32_t generation, size_t index, std::expected<uint32_t, std::string> const& result, Clock::time_point now)
 {
-	size_t position{ 0 };
-
 	for (SMasterRecord& record : m_records)
 	{
-		if (record.game == game)
+		if (record.game == game && record.generation == generation && record.index == index && record.state == EMasterState::Resolving)
 		{
-			if (record.generation == generation && position == index && record.state == EMasterState::Resolving)
+			if (result.has_value())
 			{
-				if (result.has_value())
-				{
-					record.address = Query::SServerAddress{ result.value(), record.port };
-					record.state = EMasterState::Querying;
-					record.deadline = now;
-				}
-				else
-				{
-					record.failure = std::format("cannot be resolved: {}", result.error());
-					record.state = EMasterState::Failed;
-				}
+				record.address = Query::SServerAddress{ result.value(), record.port };
+				record.state = EMasterState::Querying;
+				record.deadline = now;
 			}
-
-			++position;
+			else
+			{
+				record.failure = std::format("cannot be resolved: {}", result.error());
+				record.state = EMasterState::Failed;
+			}
 		}
 	}
 }
@@ -91,7 +94,7 @@ void CMasterTracker::Update(Clock::time_point now, std::vector<SMasterQuery>& qu
 			{
 				++record.numAttempts;
 				record.deadline = now + ReplyTimeout;
-				queries.emplace_back(record.game, record.address);
+				queries.emplace_back(SMasterId{ record.game, record.index }, record.address);
 			}
 			else
 			{
@@ -103,42 +106,45 @@ void CMasterTracker::Update(Clock::time_point now, std::vector<SMasterQuery>& qu
 		if (record.state == EMasterState::Receiving && record.deadline <= now)
 		{
 			record.state = EMasterState::Done;
-			outcomes.emplace_back(record.game, record.host, std::string{});
+			outcomes.emplace_back(SMasterId{ record.game, record.index }, record.host, std::string{});
 		}
 
 		if (record.state == EMasterState::Failed)
 		{
 			record.state = EMasterState::Done;
-			outcomes.emplace_back(record.game, record.host, record.failure);
+			outcomes.emplace_back(SMasterId{ record.game, record.index }, record.host, record.failure);
 		}
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Every listening record at that address hears it: two names of one game can resolve to the same master.
-std::optional<Query::EGame> CMasterTracker::OnDatagram(Query::SServerAddress const& source, Clock::time_point now)
+// Two names of one game can resolve to the same master, so every record there stays alive while it talks.
+std::optional<SMasterId> CMasterTracker::OnDatagram(Query::SServerAddress const& source, Clock::time_point now)
 {
-	std::optional<Query::EGame> game{};
+	std::optional<SMasterId> master{};
 
 	for (SMasterRecord& record : m_records)
 	{
-		if (IsListening(record) && record.address == source)
+		if (IsAsked(record) && record.address == source)
 		{
 			record.state = EMasterState::Receiving;
 			record.deadline = now + QuietPeriod;
-			game = record.game;
+			master = master.has_value() ? master : SMasterId{ record.game, record.index };
 		}
 	}
 
-	return game;
+	return master;
 }
 
 //////////////////////////////////////////////////////////////////////////
-size_t CMasterTracker::AdmitEntries(Query::SServerAddress const& source, size_t numEntries)
+size_t CMasterTracker::AdmitEntries(SMasterId const& master, size_t numEntries)
 {
 	size_t numAdmitted{ 0 };
 
-	auto const it{ std::ranges::find_if(m_records, [&source](SMasterRecord const& record) { return IsListening(record) && record.address == source; }) };
+	auto const it{ std::ranges::find_if(m_records, [&master](SMasterRecord const& record)
+	{
+		return IsAsked(record) && SMasterId{ record.game, record.index } == master;
+	}) };
 
 	if (it != m_records.end())
 	{
@@ -147,6 +153,22 @@ size_t CMasterTracker::AdmitEntries(Query::SServerAddress const& source, size_t 
 	}
 
 	return numAdmitted;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Reported at once: a failed record arms no timer, so waiting for the next update could leave the refresh hanging.
+void CMasterTracker::Fail(SMasterId const& master, std::string failure, std::vector<SMasterOutcome>& outcomes)
+{
+	auto const it{ std::ranges::find_if(m_records, [&master](SMasterRecord const& record)
+	{
+		return record.state != EMasterState::Done && SMasterId{ record.game, record.index } == master;
+	}) };
+
+	if (it != m_records.end())
+	{
+		it->state = EMasterState::Done;
+		outcomes.emplace_back(master, it->host, std::move(failure));
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////

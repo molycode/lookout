@@ -1,12 +1,15 @@
 #include "script/protocol_script.hpp"
+#include "callback.hpp"
+#include "conversation_call.hpp"
+#include "end_call.hpp"
 #include "load_call.hpp"
 #include "lua_api.hpp"
-#include "parse_call.hpp"
-#include "request_call.hpp"
 #include "script_calls.hpp"
 #include <tge/assert.hpp>
+#include <array>
 #include <cstdlib>
 #include <format>
+#include <string_view>
 #include <utility>
 
 namespace Lkt::Script
@@ -18,6 +21,9 @@ constexpr size_t MemoryLimit{ 16u << 20 };
 constexpr size_t LargeAllocation{ 64u << 10 };
 constexpr std::chrono::milliseconds CallTimeLimit{ 10 };
 constexpr int InstructionsPerCheck{ 1000 };
+
+constexpr std::array<std::string_view, 2> KindNames{ "master", "server" };
+constexpr std::array<std::string_view, 3> CallbackNames{ "start", "receive", "finish" };
 
 //////////////////////////////////////////////////////////////////////////
 int Panic(lua_State*)
@@ -55,10 +61,12 @@ std::expected<void, std::string> CProtocolScript::Initialize(std::string_view na
 
 		if (failure.empty())
 		{
-			m_masterRequest = call.masterRequest;
-			m_statusRequest = call.statusRequest;
-			m_parseMasterReply = call.parseMasterReply;
-			m_parseStatusReply = call.parseStatusReply;
+			m_masterStart = call.masterStart;
+			m_masterReceive = call.masterReceive;
+			m_serverStart = call.serverStart;
+			m_serverReceive = call.serverReceive;
+			m_serverFinish = call.serverFinish;
+			m_states = call.states;
 			m_options = std::move(call.options);
 		}
 		else
@@ -84,7 +92,6 @@ void CProtocolScript::Terminate()
 	}
 
 	m_options.clear();
-	m_lastFailure.clear();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -94,85 +101,60 @@ std::span<Query::SProtocolOption const> CProtocolScript::GetOptions() const
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<std::vector<std::byte>, std::string> CProtocolScript::MasterRequest(std::map<std::string, std::string> const& options)
+std::expected<SScriptAction, std::string> CProtocolScript::Start(SConversation& conversation, std::map<std::string, std::string> const& options)
 {
-	return Request(m_masterRequest, "masterRequest", options);
-}
+	TGE_ASSERT(conversation.id == 0, "The conversation has already started");
 
-//////////////////////////////////////////////////////////////////////////
-std::expected<std::vector<std::byte>, std::string> CProtocolScript::StatusRequest(std::map<std::string, std::string> const& options)
-{
-	return Request(m_statusRequest, "statusRequest", options);
-}
+	conversation.id = ++m_lastConversationId;
 
-//////////////////////////////////////////////////////////////////////////
-std::expected<void, Query::EParseError> CProtocolScript::ParseMasterReply(std::span<std::byte const> datagram, std::vector<Query::SServerAddress>& servers)
-{
-	std::expected<void, Query::EParseError> result{};
-	size_t const numKnown{ servers.size() };
-	SParseCall call{};
+	std::expected<SScriptAction, std::string> result{ Call(conversation, ECallback::Start, {}, &options) };
 
-	call.function = m_parseMasterReply;
-	call.datagram = datagram;
-	call.pServers = &servers;
-
-	std::string failure{ Run(&CallParseMasterReply, &call) };
-
-	if (failure.empty())
+	if (!result.has_value())
 	{
-		failure = std::move(call.problem);
-	}
-
-	if (!failure.empty())
-	{
-		servers.resize(numKnown);
-		m_lastFailure = std::format("parseMasterReply: {}", failure);
-		result = std::unexpected{ Query::EParseError::ScriptFailed };
-	}
-	else if (call.reason.has_value())
-	{
-		result = std::unexpected{ *call.reason };
+		End(conversation);
 	}
 
 	return result;
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<Query::SStatusReply, Query::EParseError> CProtocolScript::ParseStatusReply(std::span<std::byte const> datagram)
+std::expected<SScriptAction, std::string> CProtocolScript::Receive(SConversation const& conversation, std::span<std::byte const> data)
 {
-	Query::SStatusReply reply{};
-	SParseCall call{};
+	TGE_ASSERT(conversation.id != 0, "Receive on a conversation that has not started");
 
-	call.function = m_parseStatusReply;
-	call.datagram = datagram;
-	call.pReply = &reply;
+	return Call(conversation, ECallback::Receive, data, nullptr);
+}
 
-	std::string failure{ Run(&CallParseStatusReply, &call) };
+//////////////////////////////////////////////////////////////////////////
+std::expected<SScriptAction, std::string> CProtocolScript::Finish(SConversation const& conversation)
+{
+	TGE_ASSERT(conversation.kind == EConversationKind::Server && conversation.id != 0, "Finish on a server conversation that has not started");
 
-	if (failure.empty())
+	std::expected<SScriptAction, std::string> result{};
+
+	if (m_serverFinish != 0)
 	{
-		failure = std::move(call.problem);
-	}
-
-	std::expected<Query::SStatusReply, Query::EParseError> result{ std::move(reply) };
-
-	if (!failure.empty())
-	{
-		m_lastFailure = std::format("parseStatusReply: {}", failure);
-		result = std::unexpected{ Query::EParseError::ScriptFailed };
-	}
-	else if (call.reason.has_value())
-	{
-		result = std::unexpected{ *call.reason };
+		result = Call(conversation, ECallback::Finish, {}, nullptr);
 	}
 
 	return result;
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::string_view CProtocolScript::GetLastFailure() const
+void CProtocolScript::End(SConversation& conversation)
 {
-	return m_lastFailure;
+	if (conversation.id != 0)
+	{
+		SEndCall call{ m_states, conversation.id };
+		std::string const failure{ Run(&EndConversation, &call) };
+
+		if (!failure.empty())
+		{
+			TGE_FATAL("Releasing a conversation's state failed");
+		}
+
+		conversation.id = 0;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -266,25 +248,35 @@ std::string CProtocolScript::Run(int (*pBody)(lua_State*), void* pCall)
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<std::vector<std::byte>, std::string> CProtocolScript::Request(int function, char const* pFunctionName, std::map<std::string, std::string> const& options)
+std::expected<SScriptAction, std::string> CProtocolScript::Call(SConversation const& conversation, ECallback callback, std::span<std::byte const> data,
+	std::map<std::string, std::string> const* pOptions)
 {
-	SRequestCall call{};
+	std::array<int, 3> const masterFunctions{ m_masterStart, m_masterReceive, 0 };
+	std::array<int, 3> const serverFunctions{ m_serverStart, m_serverReceive, m_serverFinish };
+	size_t const kindIndex{ static_cast<size_t>(conversation.kind) };
+	size_t const callbackIndex{ static_cast<size_t>(callback) };
+	SConversationCall call{};
 
-	call.function = function;
-	call.pOptions = &options;
+	call.kind = conversation.kind;
+	call.callback = callback;
+	call.id = conversation.id;
+	call.states = m_states;
+	call.function = (conversation.kind == EConversationKind::Master) ? masterFunctions[callbackIndex] : serverFunctions[callbackIndex];
+	call.pOptions = pOptions;
+	call.data = data;
 
-	std::string failure{ Run(&CallRequest, &call) };
+	std::string failure{ Run(&CallConversation, &call) };
 
 	if (failure.empty())
 	{
 		failure = std::move(call.problem);
 	}
 
-	std::expected<std::vector<std::byte>, std::string> result{ std::move(call.bytes) };
+	std::expected<SScriptAction, std::string> result{ std::move(call.action) };
 
 	if (!failure.empty())
 	{
-		result = std::unexpected{ std::format("{}: {}", pFunctionName, failure) };
+		result = std::unexpected{ std::format("{}.{}: {}", KindNames[kindIndex], CallbackNames[callbackIndex], failure) };
 	}
 
 	return result;

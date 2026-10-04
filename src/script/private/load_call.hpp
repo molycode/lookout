@@ -7,14 +7,17 @@
 
 namespace Lkt::Script
 {
+// A function the script leaves out stays 0, which no registry reference is.
 struct SLoadCall final
 {
 	std::string_view source;
 	std::string chunkName;
-	int masterRequest{ 0 };
-	int statusRequest{ 0 };
-	int parseMasterReply{ 0 };
-	int parseStatusReply{ 0 };
+	int masterStart{ 0 };
+	int masterReceive{ 0 };
+	int serverStart{ 0 };
+	int serverReceive{ 0 };
+	int serverFinish{ 0 };
+	int states{ 0 };
 	std::vector<Query::SProtocolOption> options;
 	std::string unknownField;
 	std::string problem;

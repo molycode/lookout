@@ -245,6 +245,40 @@ TEST(RequestScheduler, CancelOnlyDropsThatGame)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(RequestScheduler, AbandonedRequestNeverExpires)
+{
+	CRequestScheduler scheduler{};
+	std::vector<SServerRequest> due{};
+	std::vector<SServerRequest> expired{};
+
+	scheduler.Add(MakeRequest(1));
+	scheduler.TakeDue(Start, due);
+	scheduler.Abandon(due[0]);
+	scheduler.TakeExpired(Start + 10s, expired);
+	scheduler.TakeDue(Start + 10s, due);
+
+	EXPECT_TRUE(expired.empty());
+	EXPECT_EQ(due.size(), 1u);
+	EXPECT_FALSE(scheduler.HasWork(Game));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(RequestScheduler, AbandonOnlyDropsThatGamesRequest)
+{
+	CRequestScheduler scheduler{};
+	std::vector<SServerRequest> due{};
+	Query::SServerAddress const address{ MakeRequest(1).address };
+
+	scheduler.Add(SServerRequest{ Game, address });
+	scheduler.Add(SServerRequest{ OtherGame, address });
+	scheduler.TakeDue(Start, due);
+	scheduler.Abandon(SServerRequest{ Game, address });
+
+	EXPECT_FALSE(scheduler.HasWork(Game));
+	EXPECT_TRUE(scheduler.HasWork(OtherGame));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(RequestScheduler, NextDeadlineIsTheTimeout)
 {
 	CRequestScheduler scheduler{};

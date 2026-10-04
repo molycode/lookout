@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <expected>
 #include <format>
+#include <map>
 #include <span>
 #include <string>
 #include <string_view>
@@ -41,27 +42,44 @@ void AddProtocol(std::string_view name, std::span<unsigned char const> bytes, Sc
 }
 
 //////////////////////////////////////////////////////////////////////////
-// The requests are built here, once: the network thread then only sends them.
+// Each kind of conversation is started once with the game's options, so a game the script cannot talk for fails here.
+std::expected<void, std::string> TryConversations(Script::CProtocolScript& script, std::map<std::string, std::string> const& options)
+{
+	std::expected<void, std::string> result{};
+
+	for (Script::EConversationKind const kind : { Script::EConversationKind::Master, Script::EConversationKind::Server })
+	{
+		Script::SConversation conversation{ kind, 0 };
+		std::expected<Script::SScriptAction, std::string> const started{ script.Start(conversation, options) };
+
+		script.End(conversation);
+
+		if (!started.has_value() && result.has_value())
+		{
+			result = std::unexpected{ started.error() };
+		}
+	}
+
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
 void AddGame(std::string_view key, std::span<unsigned char const> bytes, std::span<Script::CProtocolScript> scripts, SBuiltins& builtins)
 {
 	std::expected<Query::SGameDefinition, std::string> game{ ReadGameJson(AsText(bytes), builtins.protocols) };
 
 	if (game.has_value())
 	{
-		Script::CProtocolScript& script{ scripts[static_cast<size_t>(game->protocol)] };
-		std::expected<std::vector<std::byte>, std::string> masterRequest{ script.MasterRequest(game->protocolOptions) };
-		std::expected<std::vector<std::byte>, std::string> statusRequest{ script.StatusRequest(game->protocolOptions) };
+		std::expected<void, std::string> const tried{ TryConversations(scripts[static_cast<size_t>(game->protocol)], game->protocolOptions) };
 
-		if (masterRequest.has_value() && statusRequest.has_value())
+		if (tried.has_value())
 		{
 			game->key = key;
-			game->masterRequest = std::move(*masterRequest);
-			game->statusRequest = std::move(*statusRequest);
 			builtins.games.emplace_back(std::move(*game));
 		}
 		else
 		{
-			game = std::unexpected{ masterRequest.has_value() ? statusRequest.error() : masterRequest.error() };
+			game = std::unexpected{ tried.error() };
 		}
 	}
 

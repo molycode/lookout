@@ -24,6 +24,7 @@ public:
 	void TakeDue(Clock::time_point now, std::vector<SServerRequest>& due);
 	std::optional<SAnsweredRequest> Answer(Query::SServerAddress const& address, Clock::time_point now);
 	void TakeExpired(Clock::time_point now, std::vector<SServerRequest>& expired);
+	void Abandon(SServerRequest const& request);
 	void Cancel(Query::EGame game);
 
 	bool HasWork(Query::EGame game) const;

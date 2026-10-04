@@ -1,10 +1,12 @@
 #include "script_calls.hpp"
+#include "conversation_call.hpp"
+#include "end_call.hpp"
 #include "load_call.hpp"
-#include "parse_call.hpp"
-#include "request_call.hpp"
 #include "sandbox.hpp"
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <format>
 #include <limits>
@@ -18,9 +20,20 @@ namespace Lkt::Script
 namespace
 {
 constexpr lua_Integer Api{ 1 };
-constexpr std::array<std::string_view, 6> ModuleFields{ "api", "options", "masterRequest", "statusRequest", "parseMasterReply",
-	"parseStatusReply" };
+constexpr std::array<std::string_view, 4> ModuleFields{ "api", "options", "master", "server" };
+constexpr std::array<std::string_view, 3> MasterFields{ "transport", "start", "receive" };
+constexpr std::array<std::string_view, 3> ServerFields{ "start", "receive", "finish" };
 constexpr std::array<std::string_view, 2> OptionFields{ "description", "required" };
+
+constexpr std::array<std::string_view, 1> StartFields{ "send" };
+constexpr std::array<std::string_view, 5> MasterReceiveFields{ "send", "servers", "done", "quiet", "reason" };
+constexpr std::array<std::string_view, 4> ServerReceiveFields{ "send", "reply", "quiet", "reason" };
+constexpr std::array<std::string_view, 2> FinishFields{ "reply", "reason" };
+
+constexpr size_t MaxSends{ 8 };
+// The largest IPv4 UDP payload.
+constexpr size_t MaxSendSize{ 65507 };
+constexpr lua_Integer MaxQuietMs{ 10000 };
 
 constexpr std::array<std::pair<std::string_view, Query::EParseError>, 3> Reasons{ {
 	{ "wrongHeader", Query::EParseError::WrongHeader },
@@ -116,24 +129,6 @@ bool ReadString(lua_State* pState, int table, char const* pField, std::string& v
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Nil, or one of the reasons a reply can be wrong.
-bool ReadReason(lua_State* pState, int index, std::optional<Query::EParseError>& reason)
-{
-	bool isValid{ lua_isnil(pState, index) };
-
-	if (lua_type(pState, index) == LUA_TSTRING)
-	{
-		std::string_view const text{ ToStringView(pState, index) };
-		auto const it{ std::ranges::find(Reasons, text, &std::pair<std::string_view, Query::EParseError>::first) };
-
-		isValid = it != Reasons.end();
-		reason = isValid ? std::optional<Query::EParseError>{ it->second } : std::nullopt;
-	}
-
-	return isValid;
-}
-
-//////////////////////////////////////////////////////////////////////////
 // The smallest unknown name, so the problem names the same field whatever order the hash table iterates in.
 void FindUnknownField(lua_State* pState, int table, std::span<std::string_view const> fields, std::string& firstUnknown, bool& hasUnnamedKey)
 {
@@ -156,6 +151,25 @@ void FindUnknownField(lua_State* pState, int table, std::span<std::string_view c
 }
 
 //////////////////////////////////////////////////////////////////////////
+// path names the table in problems; empty for the module itself.
+void CheckModuleFields(lua_State* pState, int table, std::span<std::string_view const> fields, std::string_view path, SLoadCall& call)
+{
+	bool hasUnnamedKey{ false };
+
+	call.unknownField.clear();
+	FindUnknownField(pState, table, fields, call.unknownField, hasUnnamedKey);
+
+	if (hasUnnamedKey)
+	{
+		SetProblem(call.problem, std::format("{} may hold only named fields", path.empty() ? std::string_view{ "the returned table" } : path));
+	}
+	else if (!call.unknownField.empty())
+	{
+		SetProblem(call.problem, std::format("{}{}{} is not a field of script API {}", path, path.empty() ? "" : ".", call.unknownField, Api));
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool IsIdentifier(std::string_view name)
 {
 	auto const isWordCharacter{ [](char c) { return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); } };
@@ -164,16 +178,16 @@ bool IsIdentifier(std::string_view name)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadFunction(lua_State* pState, int module, char const* pName, int& reference, std::string& problem)
+void ReadFunction(lua_State* pState, int table, char const* pField, std::string_view path, int& reference, std::string& problem)
 {
-	if (PushField(pState, module, pName) == LUA_TFUNCTION)
+	if (PushField(pState, table, pField) == LUA_TFUNCTION)
 	{
 		reference = luaL_ref(pState, LUA_REGISTRYINDEX);
 	}
 	else
 	{
 		lua_pop(pState, 1);
-		SetProblem(problem, std::format("{} must be a function", pName));
+		SetProblem(problem, std::format("{} must be a function", path));
 	}
 }
 
@@ -268,10 +282,71 @@ void ReadOptions(lua_State* pState, int module, SLoadCall& call)
 }
 
 //////////////////////////////////////////////////////////////////////////
+void ReadMaster(lua_State* pState, int module, SLoadCall& call)
+{
+	if (PushField(pState, module, "master") == LUA_TTABLE)
+	{
+		int const master{ lua_gettop(pState) };
+		bool const isUdp{ PushField(pState, master, "transport") == LUA_TSTRING && ToStringView(pState, -1) == "udp" };
+
+		lua_pop(pState, 1);
+		CheckModuleFields(pState, master, MasterFields, "master", call);
+
+		if (!isUdp)
+		{
+			SetProblem(call.problem, "master.transport must be \"udp\"");
+		}
+
+		ReadFunction(pState, master, "start", "master.start", call.masterStart, call.problem);
+		ReadFunction(pState, master, "receive", "master.receive", call.masterReceive, call.problem);
+	}
+	else
+	{
+		SetProblem(call.problem, "master must be a table");
+	}
+
+	lua_pop(pState, 1);
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadServer(lua_State* pState, int module, SLoadCall& call)
+{
+	if (PushField(pState, module, "server") == LUA_TTABLE)
+	{
+		int const server{ lua_gettop(pState) };
+
+		CheckModuleFields(pState, server, ServerFields, "server", call);
+		ReadFunction(pState, server, "start", "server.start", call.serverStart, call.problem);
+		ReadFunction(pState, server, "receive", "server.receive", call.serverReceive, call.problem);
+
+		int const finishType{ PushField(pState, server, "finish") };
+
+		if (finishType == LUA_TFUNCTION)
+		{
+			call.serverFinish = luaL_ref(pState, LUA_REGISTRYINDEX);
+		}
+		else
+		{
+			lua_pop(pState, 1);
+
+			if (finishType != LUA_TNIL)
+			{
+				SetProblem(call.problem, "server.finish must be a function when present");
+			}
+		}
+	}
+	else
+	{
+		SetProblem(call.problem, "server must be a table");
+	}
+
+	lua_pop(pState, 1);
+}
+
+//////////////////////////////////////////////////////////////////////////
 void ReadModule(lua_State* pState, int module, SLoadCall& call)
 {
 	lua_Integer api{ 0 };
-	bool hasUnnamedKey{ false };
 
 	if (lua_type(pState, module) != LUA_TTABLE)
 	{
@@ -279,40 +354,80 @@ void ReadModule(lua_State* pState, int module, SLoadCall& call)
 	}
 	else
 	{
-		FindUnknownField(pState, module, ModuleFields, call.unknownField, hasUnnamedKey);
-
-		if (hasUnnamedKey)
-		{
-			SetProblem(call.problem, "the returned table may hold only named fields");
-		}
-		else if (!call.unknownField.empty())
-		{
-			SetProblem(call.problem, std::format("{} is not a field of script API {}", call.unknownField, Api));
-		}
+		CheckModuleFields(pState, module, ModuleFields, {}, call);
 
 		if (!ReadInteger(pState, module, "api", Api, Api, api))
 		{
 			SetProblem(call.problem, std::format("api must be {}, the script API this Lookout runs", Api));
 		}
 
-		ReadFunction(pState, module, "masterRequest", call.masterRequest, call.problem);
-		ReadFunction(pState, module, "statusRequest", call.statusRequest, call.problem);
-		ReadFunction(pState, module, "parseMasterReply", call.parseMasterReply, call.problem);
-		ReadFunction(pState, module, "parseStatusReply", call.parseStatusReply, call.problem);
+		ReadMaster(pState, module, call);
+		ReadServer(pState, module, call);
 		ReadOptions(pState, module, call);
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-void PushDatagram(lua_State* pState, std::span<std::byte const> datagram)
+void PushBytes(lua_State* pState, std::span<std::byte const> bytes)
 {
-	char const* const pBytes{ datagram.empty() ? "" : reinterpret_cast<char const*>(datagram.data()) };
+	char const* const pBytes{ bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()) };
 
-	lua_pushlstring(pState, pBytes, datagram.size());
+	lua_pushlstring(pState, pBytes, bytes.size());
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadServers(lua_State* pState, int servers, SParseCall& call)
+void PushOptions(lua_State* pState, std::map<std::string, std::string> const& options)
+{
+	lua_createtable(pState, 0, static_cast<int>(options.size()));
+
+	for (auto const& [name, value] : options)
+	{
+		lua_pushlstring(pState, name.data(), name.size());
+		lua_pushlstring(pState, value.data(), value.size());
+		lua_rawset(pState, -3);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void SetSendProblem(std::string& problem)
+{
+	SetProblem(problem, std::format("send must hold 1 to {} strings of 1 to {} bytes", MaxSends, MaxSendSize));
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadSend(lua_State* pState, int send, SConversationCall& call)
+{
+	bool isReading{ true };
+
+	for (lua_Integer index{ 1 }; isReading; ++index)
+	{
+		int const type{ lua_rawgeti(pState, send, index) };
+		size_t const size{ (type == LUA_TSTRING) ? lua_rawlen(pState, -1) : 0 };
+
+		if (size >= 1 && size <= MaxSendSize && call.action.send.size() < MaxSends)
+		{
+			std::string_view const bytes{ ToStringView(pState, -1) };
+			std::vector<std::byte>& datagram{ call.action.send.emplace_back(bytes.size()) };
+
+			std::ranges::transform(bytes, datagram.begin(), [](char c) { return static_cast<std::byte>(c); });
+		}
+		else if (type != LUA_TNIL)
+		{
+			SetSendProblem(call.problem);
+		}
+
+		isReading = type != LUA_TNIL && call.problem.empty();
+		lua_pop(pState, 1);
+	}
+
+	if (call.action.send.empty())
+	{
+		SetSendProblem(call.problem);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadServers(lua_State* pState, int servers, SConversationCall& call)
 {
 	constexpr lua_Integer MaxIp{ std::numeric_limits<uint32_t>::max() };
 	constexpr lua_Integer MaxPort{ std::numeric_limits<uint16_t>::max() };
@@ -327,7 +442,7 @@ void ReadServers(lua_State* pState, int servers, SParseCall& call)
 		if (type == LUA_TTABLE && ReadInteger(pState, lua_gettop(pState), "ip", 0, MaxIp, ip)
 			&& ReadInteger(pState, lua_gettop(pState), "port", 0, MaxPort, port))
 		{
-			call.pServers->emplace_back(Query::SServerAddress{ static_cast<uint32_t>(ip), static_cast<uint16_t>(port) });
+			call.action.servers.emplace_back(Query::SServerAddress{ static_cast<uint32_t>(ip), static_cast<uint16_t>(port) });
 		}
 		else if (type != LUA_TNIL)
 		{
@@ -340,7 +455,7 @@ void ReadServers(lua_State* pState, int servers, SParseCall& call)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadRules(lua_State* pState, int rules, SParseCall& call)
+void ReadRules(lua_State* pState, int rules, Query::SStatusReply& reply, std::string& problem)
 {
 	bool isReading{ true };
 
@@ -350,19 +465,19 @@ void ReadRules(lua_State* pState, int rules, SParseCall& call)
 
 		if (type == LUA_TTABLE)
 		{
-			Query::SRule& rule{ call.pReply->rules.emplace_back() };
+			Query::SRule& rule{ reply.rules.emplace_back() };
 
 			if (!ReadString(pState, lua_gettop(pState), "key", rule.key) || !ReadString(pState, lua_gettop(pState), "value", rule.value))
 			{
-				SetProblem(call.problem, std::format("rules[{}] must hold a string key and value", index));
+				SetProblem(problem, std::format("reply.rules[{}] must hold a string key and value", index));
 			}
 		}
 		else if (type != LUA_TNIL)
 		{
-			SetProblem(call.problem, std::format("rules[{}] must be a table", index));
+			SetProblem(problem, std::format("reply.rules[{}] must be a table", index));
 		}
 
-		isReading = type != LUA_TNIL && call.problem.empty();
+		isReading = type != LUA_TNIL && problem.empty();
 		lua_pop(pState, 1);
 	}
 }
@@ -390,7 +505,7 @@ bool ReadFields(lua_State* pState, int player, std::vector<Query::SRule>& fields
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadPlayers(lua_State* pState, int players, SParseCall& call)
+void ReadPlayers(lua_State* pState, int players, Query::SStatusReply& reply, std::string& problem)
 {
 	constexpr lua_Integer MinScore{ std::numeric_limits<int32_t>::min() };
 	constexpr lua_Integer MaxScore{ std::numeric_limits<int32_t>::max() };
@@ -404,7 +519,7 @@ void ReadPlayers(lua_State* pState, int players, SParseCall& call)
 		if (type == LUA_TTABLE)
 		{
 			int const entry{ lua_gettop(pState) };
-			Query::SPlayer& player{ call.pReply->players.emplace_back() };
+			Query::SPlayer& player{ reply.players.emplace_back() };
 			std::optional<lua_Integer> score{};
 			std::optional<lua_Integer> ping{};
 
@@ -416,66 +531,220 @@ void ReadPlayers(lua_State* pState, int players, SParseCall& call)
 			}
 			else
 			{
-				SetProblem(call.problem, std::format("players[{}] must hold a string name, and may hold an int32 score, a uint32 ping and "
+				SetProblem(problem, std::format("reply.players[{}] must hold a string name, and may hold an int32 score, a uint32 ping and "
 					"fields of string keys and values", index));
 			}
 		}
 		else if (type != LUA_TNIL)
 		{
-			SetProblem(call.problem, std::format("players[{}] must be a table", index));
+			SetProblem(problem, std::format("reply.players[{}] must be a table", index));
 		}
 
-		isReading = type != LUA_TNIL && call.problem.empty();
+		isReading = type != LUA_TNIL && problem.empty();
 		lua_pop(pState, 1);
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadStatusReply(lua_State* pState, int reply, SParseCall& call)
+void ReadStatusReply(lua_State* pState, int table, Query::SStatusReply& reply, std::string& problem)
 {
 	constexpr lua_Integer MaxCount{ std::numeric_limits<uint32_t>::max() };
 	constexpr lua_Integer MaxPort{ std::numeric_limits<uint16_t>::max() };
 	std::optional<lua_Integer> numMalformed{};
 	std::optional<lua_Integer> joinPort{};
 
-	if (PushField(pState, reply, "rules") == LUA_TTABLE)
+	if (PushField(pState, table, "rules") == LUA_TTABLE)
 	{
-		ReadRules(pState, lua_gettop(pState), call);
+		ReadRules(pState, lua_gettop(pState), reply, problem);
 	}
 	else
 	{
-		SetProblem(call.problem, "rules must be a table");
+		SetProblem(problem, "reply.rules must be a table");
 	}
 
 	lua_pop(pState, 1);
 
-	if (PushField(pState, reply, "players") == LUA_TTABLE)
+	if (PushField(pState, table, "players") == LUA_TTABLE)
 	{
-		ReadPlayers(pState, lua_gettop(pState), call);
+		ReadPlayers(pState, lua_gettop(pState), reply, problem);
 	}
 	else
 	{
-		SetProblem(call.problem, "players must be a table");
+		SetProblem(problem, "reply.players must be a table");
 	}
 
 	lua_pop(pState, 1);
 
-	if (ReadOptionalInteger(pState, reply, "malformedPlayerLines", 0, MaxCount, numMalformed))
+	if (ReadOptionalInteger(pState, table, "malformedPlayerLines", 0, MaxCount, numMalformed))
 	{
-		call.pReply->numMalformedPlayerLines = static_cast<uint32_t>(numMalformed.value_or(0));
+		reply.numMalformedPlayerLines = static_cast<uint32_t>(numMalformed.value_or(0));
 	}
 	else
 	{
-		SetProblem(call.problem, std::format("malformedPlayerLines must be an integer from 0 to {}", MaxCount));
+		SetProblem(problem, std::format("reply.malformedPlayerLines must be an integer from 0 to {}", MaxCount));
 	}
 
-	if (ReadOptionalInteger(pState, reply, "joinPort", 1, MaxPort, joinPort))
+	if (ReadOptionalInteger(pState, table, "joinPort", 1, MaxPort, joinPort))
 	{
-		call.pReply->joinPort = joinPort.transform([](lua_Integer port) { return static_cast<uint16_t>(port); });
+		reply.joinPort = joinPort.transform([](lua_Integer port) { return static_cast<uint16_t>(port); });
 	}
 	else
 	{
-		SetProblem(call.problem, std::format("joinPort must be an integer from 1 to {}", MaxPort));
+		SetProblem(problem, std::format("reply.joinPort must be an integer from 1 to {}", MaxPort));
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::span<std::string_view const> GetActionFields(EConversationKind kind, ECallback callback)
+{
+	std::span<std::string_view const> fields{ StartFields };
+
+	if (callback == ECallback::Receive && kind == EConversationKind::Master)
+	{
+		fields = MasterReceiveFields;
+	}
+	else if (callback == ECallback::Receive)
+	{
+		fields = ServerReceiveFields;
+	}
+	else if (callback == ECallback::Finish)
+	{
+		fields = FinishFields;
+	}
+
+	return fields;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Every field is read, allowed here or not: the unknown-field check has already set the first problem.
+void ReadActionFields(lua_State* pState, int table, SConversationCall& call)
+{
+	std::optional<lua_Integer> quiet{};
+
+	if (int const type{ PushField(pState, table, "send") }; type == LUA_TTABLE)
+	{
+		ReadSend(pState, lua_gettop(pState), call);
+	}
+	else if (type != LUA_TNIL)
+	{
+		SetSendProblem(call.problem);
+	}
+
+	lua_pop(pState, 1);
+
+	if (int const type{ PushField(pState, table, "servers") }; type == LUA_TTABLE)
+	{
+		ReadServers(pState, lua_gettop(pState), call);
+	}
+	else if (type != LUA_TNIL)
+	{
+		SetProblem(call.problem, "servers must be a table");
+	}
+
+	lua_pop(pState, 1);
+
+	if (int const type{ PushField(pState, table, "reply") }; type == LUA_TTABLE)
+	{
+		ReadStatusReply(pState, lua_gettop(pState), call.action.reply.emplace(), call.problem);
+	}
+	else if (type != LUA_TNIL)
+	{
+		SetProblem(call.problem, "reply must be a table");
+	}
+
+	lua_pop(pState, 1);
+
+	if (int const type{ PushField(pState, table, "done") }; type == LUA_TBOOLEAN && lua_toboolean(pState, -1) != 0)
+	{
+		call.action.isDone = true;
+	}
+	else if (type != LUA_TNIL)
+	{
+		SetProblem(call.problem, "done must be true");
+	}
+
+	lua_pop(pState, 1);
+
+	if (ReadOptionalInteger(pState, table, "quiet", 1, MaxQuietMs, quiet))
+	{
+		call.action.quiet = quiet.transform([](lua_Integer ms) { return std::chrono::milliseconds{ ms }; });
+	}
+	else
+	{
+		SetProblem(call.problem, std::format("quiet must be an integer from 1 to {} milliseconds", MaxQuietMs));
+	}
+
+	if (int const type{ PushField(pState, table, "reason") }; type != LUA_TNIL)
+	{
+		std::string_view const text{ (type == LUA_TSTRING) ? ToStringView(pState, -1) : std::string_view{} };
+		auto const it{ std::ranges::find(Reasons, text, &std::pair<std::string_view, Query::EParseError>::first) };
+
+		if (it != Reasons.end())
+		{
+			call.action.reason = it->second;
+		}
+		else
+		{
+			SetProblem(call.problem, "reason must be \"wrongHeader\", \"truncated\" or \"malformed\"");
+		}
+	}
+
+	lua_pop(pState, 1);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A server's reply or reason and a master's done end the conversation; a master's reason only counts a bad datagram.
+void CheckActionCombination(SConversationCall& call)
+{
+	SScriptAction const& action{ call.action };
+	bool const isSending{ !action.send.empty() };
+	bool const isEnding{ (call.kind == EConversationKind::Server) ? (action.reply.has_value() || action.reason.has_value()) : action.isDone };
+
+	if (isSending && action.quiet.has_value())
+	{
+		SetProblem(call.problem, "send and quiet exclude each other");
+	}
+	else if (action.reply.has_value() && action.reason.has_value())
+	{
+		SetProblem(call.problem, "reply and reason exclude each other");
+	}
+	else if (isEnding && (isSending || action.quiet.has_value()))
+	{
+		SetProblem(call.problem, "an action that ends the conversation excludes send and quiet");
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Nil means nothing to do yet. Every master is UDP so far, so every start must send.
+void ReadAction(lua_State* pState, int action, SConversationCall& call)
+{
+	if (lua_type(pState, action) == LUA_TTABLE)
+	{
+		bool hasUnnamedKey{ false };
+
+		call.unknownField.clear();
+		FindUnknownField(pState, action, GetActionFields(call.kind, call.callback), call.unknownField, hasUnnamedKey);
+
+		if (hasUnnamedKey)
+		{
+			SetProblem(call.problem, "the action may hold only named fields");
+		}
+		else if (!call.unknownField.empty())
+		{
+			SetProblem(call.problem, std::format("the action may not hold {}", call.unknownField));
+		}
+
+		ReadActionFields(pState, action, call);
+		CheckActionCombination(call);
+	}
+	else if (!lua_isnil(pState, action))
+	{
+		SetProblem(call.problem, "the result must be an action table or nil");
+	}
+
+	if (call.callback == ECallback::Start && call.action.send.empty())
+	{
+		SetProblem(call.problem, "a UDP conversation must start by sending");
 	}
 }
 } // namespace
@@ -499,93 +768,61 @@ int LoadScript(lua_State* pState)
 	lua_setupvalue(pState, -2, 1);
 	lua_call(pState, 0, 1);
 	ReadModule(pState, Module, call);
+	lua_newtable(pState);
+	call.states = luaL_ref(pState, LUA_REGISTRYINDEX);
 
 	return 0;
 }
 
 //////////////////////////////////////////////////////////////////////////
-int CallRequest(lua_State* pState)
+// start(options, state), receive(state, data), finish(state); start first gives the conversation its state table.
+int CallConversation(lua_State* pState)
 {
-	SRequestCall& call{ GetCall<SRequestCall>(pState) };
+	SConversationCall& call{ GetCall<SConversationCall>(pState) };
+	lua_Integer const id{ static_cast<lua_Integer>(call.id) };
+
+	lua_rawgeti(pState, LUA_REGISTRYINDEX, call.states);
+
+	int const states{ lua_gettop(pState) };
+
+	if (call.callback == ECallback::Start)
+	{
+		lua_newtable(pState);
+		lua_rawseti(pState, states, id);
+	}
 
 	lua_rawgeti(pState, LUA_REGISTRYINDEX, call.function);
-	lua_createtable(pState, 0, static_cast<int>(call.pOptions->size()));
 
-	for (auto const& [name, value] : *call.pOptions)
+	if (call.callback == ECallback::Start)
 	{
-		lua_pushlstring(pState, name.data(), name.size());
-		lua_pushlstring(pState, value.data(), value.size());
-		lua_rawset(pState, -3);
+		PushOptions(pState, *call.pOptions);
 	}
 
-	lua_call(pState, 1, 1);
-
-	if (lua_type(pState, -1) == LUA_TSTRING)
+	if (lua_rawgeti(pState, states, id) != LUA_TTABLE)
 	{
-		std::string_view const bytes{ ToStringView(pState, -1) };
+		luaL_error(pState, "the conversation has already ended");
+	}
 
-		call.bytes.resize(bytes.size());
-		std::ranges::transform(bytes, call.bytes.begin(), [](char c) { return static_cast<std::byte>(c); });
-	}
-	else
+	if (call.callback == ECallback::Receive)
 	{
-		SetProblem(call.problem, "the request must be a string");
+		PushBytes(pState, call.data);
 	}
+
+	lua_call(pState, lua_gettop(pState) - states - 1, 1);
+	ReadAction(pState, lua_gettop(pState), call);
 
 	return 0;
 }
 
 //////////////////////////////////////////////////////////////////////////
-int CallParseMasterReply(lua_State* pState)
+// Clears a slot without allocating, so it cannot fail; clearing it twice is harmless.
+int EndConversation(lua_State* pState)
 {
-	constexpr int Servers{ 2 };
-	constexpr int Reason{ 3 };
-	SParseCall& call{ GetCall<SParseCall>(pState) };
+	SEndCall const& call{ GetCall<SEndCall>(pState) };
 
-	lua_rawgeti(pState, LUA_REGISTRYINDEX, call.function);
-	PushDatagram(pState, call.datagram);
-	lua_call(pState, 1, 2);
-
-	if (lua_type(pState, Servers) == LUA_TTABLE)
-	{
-		ReadServers(pState, Servers, call);
-	}
-	else
-	{
-		SetProblem(call.problem, "the first result must be a table of servers");
-	}
-
-	if (!ReadReason(pState, Reason, call.reason))
-	{
-		SetProblem(call.problem, "the reason must be nil, \"wrongHeader\", \"truncated\" or \"malformed\"");
-	}
-
-	return 0;
-}
-
-//////////////////////////////////////////////////////////////////////////
-int CallParseStatusReply(lua_State* pState)
-{
-	constexpr int Reply{ 2 };
-	constexpr int Reason{ 3 };
-	SParseCall& call{ GetCall<SParseCall>(pState) };
-
-	lua_rawgeti(pState, LUA_REGISTRYINDEX, call.function);
-	PushDatagram(pState, call.datagram);
-	lua_call(pState, 1, 2);
-
-	if (lua_type(pState, Reply) == LUA_TTABLE && lua_isnil(pState, Reason))
-	{
-		ReadStatusReply(pState, Reply, call);
-	}
-	else if (!lua_isnil(pState, Reply) || lua_isnil(pState, Reason))
-	{
-		SetProblem(call.problem, "the result must be a reply table, or nil and a reason");
-	}
-	else if (!ReadReason(pState, Reason, call.reason))
-	{
-		SetProblem(call.problem, "the reason must be \"wrongHeader\", \"truncated\" or \"malformed\"");
-	}
+	lua_rawgeti(pState, LUA_REGISTRYINDEX, call.states);
+	lua_pushnil(pState);
+	lua_rawseti(pState, -2, static_cast<lua_Integer>(call.id));
 
 	return 0;
 }

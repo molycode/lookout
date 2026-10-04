@@ -1,5 +1,6 @@
 #include "master_tracker.hpp"
 #include <gtest/gtest.h>
+#include <optional>
 #include <vector>
 
 namespace Lkt::Net
@@ -161,8 +162,8 @@ TEST_F(CMasterTrackerTest, CapsTheServersOneMasterMayList)
 	tracker.Update(Start, queries, outcomes);
 	tracker.OnDatagram(MasterAddress, Start);
 
-	EXPECT_EQ(tracker.AdmitEntries(MasterAddress, 5000), 4096u);
-	EXPECT_EQ(tracker.AdmitEntries(MasterAddress, 10), 0u);
+	EXPECT_EQ(tracker.AdmitEntries(SMasterId{ Game, 0 }, 5000), 4096u);
+	EXPECT_EQ(tracker.AdmitEntries(SMasterId{ Game, 0 }, 10), 0u);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -190,6 +191,7 @@ TEST_F(CMasterTrackerTest, ResolvesEachMasterByItsIndex)
 	tracker.Update(Start, queries, outcomes);
 
 	ASSERT_EQ(queries.size(), 1u);
+	EXPECT_EQ(queries[0].master, (SMasterId{ Game, 1 }));
 	EXPECT_EQ(queries[0].address, (Query::SServerAddress{ SecondMasterIp, 27900 }));
 }
 
@@ -235,6 +237,82 @@ TEST_F(CMasterTrackerTest, LookupThatNeverReturnsTimesOut)
 
 	ASSERT_EQ(outcomes.size(), 1u);
 	EXPECT_EQ(outcomes[0].failure, "could not be resolved in time");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterTrackerTest, DatagramBeforeTheQueryIsIgnored)
+{
+	CMasterTracker tracker{};
+
+	BeginResolved(tracker);
+
+	EXPECT_FALSE(tracker.OnDatagram(MasterAddress, Start).has_value());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterTrackerTest, FirstMasterAtAnAddressTakesItsDatagrams)
+{
+	CMasterTracker tracker{};
+	std::vector<SMasterQuery> queries{};
+	std::vector<SMasterOutcome> outcomes{};
+
+	tracker.Begin(Game, 1, m_twoMasters, Start);
+	tracker.OnResolved(Game, 1, 0, MasterIp, Start);
+	tracker.OnResolved(Game, 1, 1, MasterIp, Start);
+	tracker.Update(Start, queries, outcomes);
+
+	EXPECT_EQ(tracker.OnDatagram(MasterAddress, Start + 100ms), (std::optional<SMasterId>{ SMasterId{ Game, 0 } }));
+	EXPECT_EQ(tracker.AdmitEntries(SMasterId{ Game, 0 }, 5000), 4096u);
+	EXPECT_EQ(tracker.AdmitEntries(SMasterId{ Game, 1 }, 10), 10u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterTrackerTest, EveryMasterAtAnAddressHearsIt)
+{
+	CMasterTracker tracker{};
+	std::vector<SMasterQuery> queries{};
+	std::vector<SMasterOutcome> outcomes{};
+
+	tracker.Begin(Game, 1, m_twoMasters, Start);
+	tracker.OnResolved(Game, 1, 0, MasterIp, Start);
+	tracker.OnResolved(Game, 1, 1, MasterIp, Start);
+	tracker.Update(Start, queries, outcomes);
+	tracker.OnDatagram(MasterAddress, Start + 100ms);
+	tracker.Update(Start + 2s, queries, outcomes);
+
+	EXPECT_EQ(queries.size(), 2u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterTrackerTest, FailureIsReportedAtOnce)
+{
+	CMasterTracker tracker{};
+	std::vector<SMasterQuery> queries{};
+	std::vector<SMasterOutcome> outcomes{};
+
+	BeginResolved(tracker);
+	tracker.Update(Start, queries, outcomes);
+	tracker.Fail(SMasterId{ Game, 0 }, "cannot be asked: master.start: broken", outcomes);
+
+	ASSERT_EQ(outcomes.size(), 1u);
+	EXPECT_EQ(outcomes[0].master, (SMasterId{ Game, 0 }));
+	EXPECT_EQ(outcomes[0].failure, "cannot be asked: master.start: broken");
+	EXPECT_FALSE(tracker.HasWork(Game));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterTrackerTest, FailedMasterIsNotReportedTwice)
+{
+	CMasterTracker tracker{};
+	std::vector<SMasterQuery> queries{};
+	std::vector<SMasterOutcome> outcomes{};
+
+	BeginResolved(tracker);
+	tracker.Update(Start, queries, outcomes);
+	tracker.Fail(SMasterId{ Game, 0 }, "cannot be asked: master.start: broken", outcomes);
+	tracker.Update(Start + 5s, queries, outcomes);
+
+	EXPECT_EQ(outcomes.size(), 1u);
 }
 
 //////////////////////////////////////////////////////////////////////////

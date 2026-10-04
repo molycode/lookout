@@ -9,7 +9,6 @@
 #include "query/protocol.hpp"
 #include "query/server_keys.hpp"
 #include "query/text_style.hpp"
-#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -32,8 +31,5 @@ struct SGameDefinition final
 	std::vector<SKeyMatch> foreignServers;
 	SLaunchHints launch;
 	SJoinCommand join;
-	// Built once from the protocol options, when the game is loaded.
-	std::vector<std::byte> masterRequest;
-	std::vector<std::byte> statusRequest;
 };
 } // namespace Lkt::Query

@@ -2,6 +2,7 @@
 
 #include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -23,8 +24,13 @@ public:
 
 	Query::SServerAddress GetAddress() const;
 	uint32_t GetNumRequests() const;
+	// Read once stopped.
+	std::vector<std::byte> GetFirstRequest() const;
+	bool AreRequestsAlike() const;
 
 private:
+
+	static constexpr size_t MaxRequestSize{ 2048 };
 
 	void Serve();
 
@@ -33,6 +39,9 @@ private:
 	std::vector<std::byte> m_reply;
 	std::atomic<bool> m_isServing{ false };
 	std::atomic<uint32_t> m_numRequests{ 0 };
+	std::array<std::byte, MaxRequestSize> m_firstRequest{};
+	size_t m_firstRequestSize{ 0 };
+	std::atomic<bool> m_areRequestsAlike{ true };
 	std::thread m_thread;
 };
 } // namespace Lkt::Fixtures

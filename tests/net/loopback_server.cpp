@@ -3,7 +3,10 @@
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/socket.h>
+#include <algorithm>
 #include <array>
+#include <cstddef>
+#include <span>
 #include <unistd.h>
 
 namespace Lkt::Fixtures
@@ -69,10 +72,22 @@ uint32_t CLoopbackServer::GetNumRequests() const
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::vector<std::byte> CLoopbackServer::GetFirstRequest() const
+{
+	return std::vector<std::byte>{ m_firstRequest.begin(), m_firstRequest.begin() + static_cast<std::ptrdiff_t>(m_firstRequestSize) };
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool CLoopbackServer::AreRequestsAlike() const
+{
+	return m_areRequestsAlike.load(std::memory_order_acquire);
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Allocates nothing, so it needs no thread setup for tge's allocator.
 void CLoopbackServer::Serve()
 {
-	std::array<std::byte, 2048> buffer{};
+	std::array<std::byte, MaxRequestSize> buffer{};
 
 	while (m_isServing.load(std::memory_order_acquire))
 	{
@@ -83,8 +98,22 @@ void CLoopbackServer::Serve()
 			sockaddr_in sender{};
 			socklen_t senderSize{ sizeof(sender) };
 
-			if (recvfrom(m_descriptor, buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&sender), &senderSize) >= 0)
+			ssize_t const size{ recvfrom(m_descriptor, buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&sender), &senderSize) };
+
+			if (size >= 0)
 			{
+				std::span<std::byte const> const request{ buffer.data(), static_cast<size_t>(size) };
+
+				if (m_numRequests.load(std::memory_order_acquire) == 0)
+				{
+					std::ranges::copy(request, m_firstRequest.begin());
+					m_firstRequestSize = request.size();
+				}
+				else if (!std::ranges::equal(request, std::span<std::byte const>{ m_firstRequest.data(), m_firstRequestSize }))
+				{
+					m_areRequestsAlike.store(false, std::memory_order_release);
+				}
+
 				m_numRequests.fetch_add(1, std::memory_order_acq_rel);
 
 				if (!m_reply.empty())

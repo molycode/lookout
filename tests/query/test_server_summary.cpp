@@ -1,3 +1,4 @@
+#include "conversation_driver.hpp"
 #include "fixtures.hpp"
 #include "query/game_definition.hpp"
 #include "query/game_catalog.hpp"
@@ -29,7 +30,7 @@ SServerSummary SummarizeFixture(std::string_view key, std::string_view path)
 	SProtocolDefinition const& protocol{ GetProtocol(definition.protocol) };
 	Script::CProtocolScript script{};
 	std::expected<void, std::string> const loaded{ script.Initialize(protocol.name, protocol.source) };
-	std::expected<SStatusReply, EParseError> const reply{ loaded.has_value() ? script.ParseStatusReply(Fixtures::LoadFixture(path)) : std::unexpected{ EParseError::ScriptFailed } };
+	std::expected<SStatusReply, EParseError> const reply{ loaded.has_value() ? Fixtures::ReadStatusDatagram(script, Fixtures::LoadFixture(path)) : std::unexpected{ EParseError::ScriptFailed } };
 
 	script.Terminate();
 

@@ -5,6 +5,7 @@ local MasterQuery = "query"
 local MasterReplyHeader = Prefix .. "servers"
 local StatusReplyHeader = Prefix .. "print\n"
 local AddressSize = 6
+local MasterQuietMs = 1500
 local Backslash = 92
 local Newline = 10
 local Space = 32
@@ -137,45 +138,64 @@ local function parseStatusBody(body)
 	return reply
 end
 
+-- Kingpin's master separates the header from the list with a newline, the Quake 2 masters with a space.
+local function parseMasterDatagram(datagram)
+	local servers = {}
+	local separator = string.byte(datagram, #MasterReplyHeader + 1)
+
+	if not startsWith(datagram, MasterReplyHeader) or (separator ~= Newline and separator ~= Space) then
+		return servers, "wrongHeader"
+	end
+
+	local position = #MasterReplyHeader + 2
+
+	while #datagram - position + 1 >= AddressSize do
+		servers[#servers + 1] = readAddress(datagram, position)
+		position = position + AddressSize
+	end
+
+	if position <= #datagram then
+		return servers, "truncated"
+	end
+
+	return servers
+end
+
+local function parseStatusDatagram(datagram)
+	if not startsWith(datagram, StatusReplyHeader) then
+		return nil, "wrongHeader"
+	end
+
+	return parseStatusBody(string.sub(datagram, #StatusReplyHeader + 1))
+end
+
 return {
 	api = 1,
 
-	masterRequest = function(options)
-		return MasterQuery
-	end,
+	master = {
+		transport = "udp",
 
-	statusRequest = function(options)
-		return Prefix .. "status\n"
-	end,
+		start = function(options, state)
+			return { send = { MasterQuery } }
+		end,
 
-	-- Kingpin's master separates the header from the list with a newline, the Quake 2 masters with a space.
-	parseMasterReply = function(datagram)
-		local servers = {}
-		local separator = string.byte(datagram, #MasterReplyHeader + 1)
+		-- The list has no end marker, so it ends once the master has been quiet a while.
+		receive = function(state, datagram)
+			local servers, reason = parseMasterDatagram(datagram)
 
-		if not startsWith(datagram, MasterReplyHeader) or (separator ~= Newline and separator ~= Space) then
-			return servers, "wrongHeader"
-		end
+			return { servers = servers, reason = reason, quiet = MasterQuietMs }
+		end,
+	},
 
-		local position = #MasterReplyHeader + 2
+	server = {
+		start = function(options, state)
+			return { send = { Prefix .. "status\n" } }
+		end,
 
-		while #datagram - position + 1 >= AddressSize do
-			servers[#servers + 1] = readAddress(datagram, position)
-			position = position + AddressSize
-		end
+		receive = function(state, datagram)
+			local reply, reason = parseStatusDatagram(datagram)
 
-		if position <= #datagram then
-			return servers, "truncated"
-		end
-
-		return servers
-	end,
-
-	parseStatusReply = function(datagram)
-		if not startsWith(datagram, StatusReplyHeader) then
-			return nil, "wrongHeader"
-		end
-
-		return parseStatusBody(string.sub(datagram, #StatusReplyHeader + 1))
-	end,
+			return { reply = reply, reason = reason }
+		end,
+	},
 }

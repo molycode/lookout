@@ -1,9 +1,15 @@
+#include "conversation_driver.hpp"
 #include "fixtures.hpp"
 #include "query/game_definition.hpp"
 #include "query/protocol_definition.hpp"
 #include "script/protocol_script.hpp"
 #include <gtest/gtest.h>
+#include <map>
+#include <string>
+#include <string_view>
+#include <vector>
 #include <algorithm>
+#include <chrono>
 #include <string>
 
 namespace Lkt::Query
@@ -38,7 +44,22 @@ protected:
 
 	std::expected<void, EParseError> ParseMaster(std::string_view entries, std::vector<SServerAddress>& servers)
 	{
-		return m_script.ParseMasterReply(ToBytes(std::string{ Header } + std::string{ entries }), servers);
+		return Fixtures::ReadMasterDatagram(m_script, MasterOptions(), ToBytes(std::string{ Header } + std::string{ entries }), servers);
+	}
+
+	std::map<std::string, std::string> const& MasterOptions() const
+	{
+		return Fixtures::GetGameByKey("quake3").protocolOptions;
+	}
+
+	// What a conversation of that kind starts by sending, for that game.
+	std::vector<std::vector<std::byte>> GetFirstSend(Script::EConversationKind kind, std::string_view game)
+	{
+		std::expected<Script::SScriptAction, std::string> const started{ Fixtures::StartOnce(m_script, kind, Fixtures::GetGameByKey(game).protocolOptions) };
+
+		EXPECT_TRUE(started.has_value()) << started.error_or("");
+
+		return started.has_value() ? started->send : std::vector<std::vector<std::byte>>{};
 	}
 
 	Script::CProtocolScript m_script;
@@ -47,13 +68,13 @@ protected:
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake3ProtocolTest, AsksMastersWithTheGamesProtocolNumber)
 {
-	EXPECT_EQ(Fixtures::GetGameByKey("et").masterRequest, ToBytes("\xFF\xFF\xFF\xFFgetservers 84 empty full"));
+	EXPECT_EQ(GetFirstSend(Script::EConversationKind::Master, "et"), std::vector<std::vector<std::byte>>{ ToBytes("\xFF\xFF\xFF\xFFgetservers 84 empty full") });
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake3ProtocolTest, AsksServersForStatus)
 {
-	EXPECT_EQ(Fixtures::GetGameByKey("et").statusRequest, ToBytes("\xFF\xFF\xFF\xFFgetstatus"));
+	EXPECT_EQ(GetFirstSend(Script::EConversationKind::Server, "et"), std::vector<std::vector<std::byte>>{ ToBytes("\xFF\xFF\xFF\xFFgetstatus") });
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -85,6 +106,17 @@ TEST_F(CQuake3ProtocolTest, EndMarkerWithoutPaddingEndsTheDatagram)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, EndMarkerLeavesTheEndToTheQuietPeriod)
+{
+	std::expected<Script::SScriptAction, std::string> const action{ Fixtures::ReceiveOnce(m_script, Script::EConversationKind::Master, MasterOptions(),
+		ToBytes(std::string{ Header } + std::string{ Entry } + "\\EOT")) };
+
+	ASSERT_TRUE(action.has_value()) << action.error_or("");
+	EXPECT_FALSE(action->isDone);
+	EXPECT_EQ(action->quiet, std::chrono::milliseconds{ 1500 });
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake3ProtocolTest, AddressThatSpellsTheEndMarkerIsAServer)
 {
 	std::vector<SServerAddress> servers{};
@@ -103,7 +135,7 @@ TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedMasterDatagram)
 		{
 			std::vector<SServerAddress> servers{};
 
-			EXPECT_TRUE(m_script.ParseMasterReply(LoadFixture(path.string()), servers).has_value() && !servers.empty()) << path;
+			EXPECT_TRUE(Fixtures::ReadMasterDatagram(m_script, MasterOptions(), LoadFixture(path.string()), servers).has_value() && !servers.empty()) << path;
 		}
 	}
 }
@@ -130,7 +162,7 @@ TEST_F(CQuake3ProtocolTest, RejectsQuake2MasterReply)
 {
 	std::vector<SServerAddress> servers{};
 
-	EXPECT_EQ(m_script.ParseMasterReply(LoadFixture("kingpin/master-master.kingpin.info-0.bin"), servers), std::unexpected{ EParseError::WrongHeader });
+	EXPECT_EQ(Fixtures::ReadMasterDatagram(m_script, MasterOptions(), LoadFixture("kingpin/master-master.kingpin.info-0.bin"), servers), std::unexpected{ EParseError::WrongHeader });
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -140,7 +172,7 @@ TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedStatus)
 	{
 		for (std::filesystem::path const& path : Fixtures::ListFixtures(game, "status-"))
 		{
-			std::expected<SStatusReply, EParseError> const reply{ m_script.ParseStatusReply(LoadFixture(path.string())) };
+			std::expected<SStatusReply, EParseError> const reply{ Fixtures::ReadStatusDatagram(m_script, LoadFixture(path.string())) };
 
 			EXPECT_TRUE(reply.has_value() && !FindRule(reply.value(), "sv_hostname").empty() && !reply->players.empty()
 				&& reply->numMalformedPlayerLines == 0) << path;
@@ -151,7 +183,7 @@ TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedStatus)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake3ProtocolTest, RejectsQuake2StatusReply)
 {
-	EXPECT_EQ(m_script.ParseStatusReply(LoadFixture("kingpin/status-93.226.82.165_31510.bin")), std::unexpected{ EParseError::WrongHeader });
+	EXPECT_EQ(Fixtures::ReadStatusDatagram(m_script, LoadFixture("kingpin/status-93.226.82.165_31510.bin")), std::unexpected{ EParseError::WrongHeader });
 }
 } // namespace
 } // namespace Lkt::Query
