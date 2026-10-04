@@ -98,7 +98,7 @@ void DrawSummary(Browser::SServerEntry const& entry, uint64_t key, SFrameIntents
 
 		std::string_view const load{ (summary.maxPlayers > 0)
 			? FormatTo(buffer, "{} of {} players · {} ms", summary.numPlayers, summary.maxPlayers, entry.pingMs)
-			: FormatTo(buffer, "{} players · {} ms", summary.numPlayers, entry.pingMs) };
+			: FormatTo(buffer, "{} {} · {} ms", summary.numPlayers, (summary.numPlayers == 1) ? "player" : "players", entry.pingMs) };
 
 		ImGui::TextUnformatted(load.data(), load.data() + load.size());
 	}

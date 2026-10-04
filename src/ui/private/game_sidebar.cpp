@@ -114,7 +114,8 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 	}
 
 	std::string_view const counts{ status.hasRefreshed
-		? FormatTo(buffer, "{} servers · {} players", status.numAnswered, status.numPlayers)
+		? FormatTo(buffer, "{} {} · {} {}", status.numAnswered, (status.numAnswered == 1) ? "server" : "servers",
+			status.numPlayers, (status.numPlayers == 1) ? "player" : "players")
 		: std::string_view{ "—" } };
 
 	DrawEllipsised(counts, ImVec2{ text.x, text.y + ImGui::GetTextLineHeightWithSpacing() }, start.x + size.x - padding.x, colors.textDisabled);

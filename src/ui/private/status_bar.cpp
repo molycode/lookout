@@ -17,7 +17,8 @@ void DrawStatusBar(Browser::CBrowser const& browser, std::string_view message)
 	std::array<char, 96> buffer{};
 
 	std::string_view const summary{ status.hasRefreshed
-		? FormatTo(buffer, "{} of {} servers answered · {} players", status.numAnswered, status.numListed, status.numPlayers)
+		? FormatTo(buffer, "{} of {} servers answered · {} {}", status.numAnswered, status.numListed, status.numPlayers,
+			(status.numPlayers == 1) ? "player" : "players")
 		: std::string_view{ "Not refreshed yet" } };
 
 	ImGui::PushStyleColor(ImGuiCol_Text, colors.textDisabled);
