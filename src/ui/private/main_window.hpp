@@ -1,7 +1,10 @@
 #pragma once
 
 #include "about_dialog.hpp"
+#include "add_game_prompt.hpp"
 #include "add_server_prompt.hpp"
+#include "discard_prompt.hpp"
+#include "game_editor.hpp"
 #include "game_settings_popup.hpp"
 #include "password_prompt.hpp"
 #include "selection.hpp"
@@ -10,6 +13,8 @@
 #include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
 #include <cstdint>
+#include <filesystem>
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -39,7 +44,9 @@ public:
 	CMainWindow() = default;
 	~CMainWindow() = default;
 
-	void Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutInfo const& about);
+	// requestReload has the games read again once no popup is open.
+	void Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutInfo const& about, std::filesystem::path const& userDir,
+		std::function<void()> requestReload);
 	void Draw(Browser::CBrowser& browser);
 	void OnCatalogChanged(std::span<std::string const> oldKeys);
 	uint32_t GetDetailsWidth() const;
@@ -50,6 +57,7 @@ private:
 	void DrawDetailsToggle();
 	void Apply(Browser::CBrowser& browser, SFrameIntents const& intents);
 	void SetGameListed(Browser::CBrowser& browser, Query::EGame game, bool isListed);
+	void DrawGamePrompts();
 	void Handle(Browser::CBrowser& browser, SServerAction const& action);
 	void Join(Browser::CBrowser& browser, Browser::SServerEntry const& entry, std::string_view launcherId);
 	void CopyAddress(Query::SServerAddress const& address);
@@ -60,6 +68,11 @@ private:
 	CAddServerPrompt m_addServerPrompt;
 	CAboutDialog m_aboutDialog;
 	CGameSettingsPopup m_gameSettings;
+	CAddGamePrompt m_addGamePrompt;
+	CGameEditor m_gameEditor;
+	CDiscardPrompt m_discardPrompt;
+	std::filesystem::path m_userDir;
+	std::function<void()> m_requestReload;
 	std::vector<uint64_t> m_selectedKeys;
 	std::string m_message;
 	float m_detailsEm{ 18.0f };

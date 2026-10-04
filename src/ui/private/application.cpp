@@ -132,11 +132,12 @@ float ReadPrimaryDisplayScale()
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-bool CApplication::Initialize(SAboutInfo const& about, Config::SWindowSettings const& window)
+bool CApplication::Initialize(SAboutInfo const& about, Config::SWindowSettings const& window, std::filesystem::path const& userDir)
 {
 	std::string const versionText{ about.version };
 
 	m_about = about;
+	m_userDir = userDir;
 
 	if (!SDL_SetAppMetadata("Lookout", versionText.c_str(), "lookout"))
 	{
@@ -200,7 +201,7 @@ void CApplication::Run(Browser::CBrowser& browser, std::function<void()> const& 
 	CMainWindow mainWindow{};
 	auto lastUpdate{ std::chrono::steady_clock::now() };
 
-	mainWindow.Initialize(m_pWindow, m_window.detailsWidth, m_about);
+	mainWindow.Initialize(m_pWindow, m_window.detailsWidth, m_about, m_userDir, MakeReloadCallback());
 	m_activeUntil = lastUpdate + ActiveDuration;
 
 	while (Tge::gRuntime->CanRun())

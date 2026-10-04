@@ -71,8 +71,11 @@ std::string GetDisplayName(Browser::SServerEntry const& entry)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutInfo const& about)
+void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutInfo const& about, std::filesystem::path const& userDir,
+	std::function<void()> requestReload)
 {
+	m_userDir = userDir;
+	m_requestReload = std::move(requestReload);
 	m_gameSettings.Initialize(pWindow);
 	m_aboutDialog.Initialize(pWindow, about);
 	m_detailsEm = static_cast<float>(detailsWidth) / BaseFontSize;
@@ -106,7 +109,7 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 
 	DrawMenuBar(intents);
 	ReadShortcuts(intents);
-	m_toolbar.Draw(browser, intents);
+	m_toolbar.Draw(browser, !m_userDir.empty(), intents);
 	DrawBody(browser, intents);
 	DrawStatusBar(browser, m_message);
 
@@ -131,6 +134,7 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 
 	m_passwordPrompt.Draw(browser, m_message);
 	m_aboutDialog.Draw();
+	DrawGamePrompts();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -151,7 +155,7 @@ void CMainWindow::DrawBody(Browser::CBrowser const& browser, SFrameIntents& inte
 	{
 		ImGui::SetNextWindowSizeConstraints(ImVec2{ MinSidebarEm * em, 0.0f }, ImVec2{ FLT_MAX, FLT_MAX });
 		ImGui::BeginChild("##games", ImVec2{ SidebarEm * em, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
-		DrawGameSidebar(browser, intents);
+		DrawGameSidebar(browser, m_userDir, intents);
 		ImGui::EndChild();
 		ImGui::SameLine();
 
@@ -283,6 +287,30 @@ void CMainWindow::Apply(Browser::CBrowser& browser, SFrameIntents const& intents
 		m_gameSettings.Open(*intents.openGameSettings);
 	}
 
+	if (intents.openAddGame)
+	{
+		m_addGamePrompt.Open();
+	}
+
+	if (intents.editGame.has_value())
+	{
+		m_gameEditor.Open(Query::GetGame(*intents.editGame), m_userDir);
+	}
+
+	if (intents.revertGame.has_value())
+	{
+		Query::SGameDefinition const& game{ Query::GetGame(*intents.revertGame) };
+
+		m_discardPrompt.Open(EDiscardKind::Changes, game.key, game.name, m_userDir);
+	}
+
+	if (intents.removeGame.has_value())
+	{
+		Query::SGameDefinition const& game{ Query::GetGame(*intents.removeGame) };
+
+		m_discardPrompt.Open(EDiscardKind::Game, game.key, game.name, m_userDir);
+	}
+
 	if (intents.quit)
 	{
 		Tge::gRuntime->Quit();
@@ -301,6 +329,26 @@ void CMainWindow::SetGameListed(Browser::CBrowser& browser, Query::EGame game, b
 	{
 		m_shouldScrollToSelection = true;
 		m_message.clear();
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// What they change in the data folder is read again at the end of a frame with no popup open.
+void CMainWindow::DrawGamePrompts()
+{
+	std::optional<SNewGame> newGame{ m_addGamePrompt.Draw(m_userDir) };
+
+	if (newGame.has_value())
+	{
+		m_gameEditor.OpenNew(std::move(*newGame), m_userDir);
+	}
+
+	bool const isSaved{ m_gameEditor.Draw(m_userDir, m_message) };
+	bool const isDiscarded{ m_discardPrompt.Draw(m_userDir, m_message) };
+
+	if (isSaved || isDiscarded)
+	{
+		m_requestReload();
 	}
 }
 

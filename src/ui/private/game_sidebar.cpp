@@ -8,6 +8,7 @@
 #include "theme_colors.hpp"
 #include "widgets.hpp"
 #include "browser/browser.hpp"
+#include "games/game_files.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <imgui.h>
@@ -76,6 +77,42 @@ void DragToReorder(Query::EGame game, SFrameIntents& intents)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// On the item drawn last. The data folder is read only while the menu is open.
+void DrawGameMenu(Query::SGameDefinition const& game, std::filesystem::path const& userDir, SFrameIntents& intents)
+{
+	if (ImGui::BeginPopupContextItem("##game-menu"))
+	{
+		Games::EGameSource const source{ Games::FindGameSource(userDir, game.key) };
+
+		ImGui::BeginDisabled(userDir.empty());
+
+		if (ImGui::MenuItem("Edit description…"))
+		{
+			intents.editGame = game.game;
+		}
+
+		ImGui::EndDisabled();
+
+		if (userDir.empty())
+		{
+			ImGui::SetItemTooltip("Lookout cannot locate its data folder");
+		}
+
+		if (source == Games::EGameSource::Patched && ImGui::MenuItem("Revert to built-in…"))
+		{
+			intents.revertGame = game.game;
+		}
+
+		if (source == Games::EGameSource::User && ImGui::MenuItem("Remove…"))
+		{
+			intents.removeGame = game.game;
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 // The selected card is a muted amber tint, so its amber name stands out on it.
 ImU32 GetCardFill(bool isSelected, bool isHovered, bool isActive)
 {
@@ -111,7 +148,8 @@ ImU32 GetCardFill(bool isSelected, bool isHovered, bool isActive)
 
 //////////////////////////////////////////////////////////////////////////
 // A group, so the layout carries on below the card.
-void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const& browser, bool isLastListed, SFrameIntents& intents)
+void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const& browser, std::filesystem::path const& userDir, bool isLastListed,
+	SFrameIntents& intents)
 {
 	SThemeColors const& colors{ GetThemeColors() };
 	ImGuiStyle const& style{ ImGui::GetStyle() };
@@ -139,6 +177,7 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 	}
 
 	DragToReorder(game.game, intents);
+	DrawGameMenu(game, userDir, intents);
 
 	bool const isHovered{ ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenOverlappedByItem) };
 
@@ -206,11 +245,17 @@ void DrawProblems(std::span<std::string const> problems)
 
 //////////////////////////////////////////////////////////////////////////
 // Flat and not selectable, since the selected game is always a listed one; inset to line up with the cards' text.
-void DrawHiddenGame(Query::SGameDefinition const& game, SFrameIntents& intents)
+void DrawHiddenGame(Query::SGameDefinition const& game, std::filesystem::path const& userDir, SFrameIntents& intents)
 {
 	ImGuiStyle const& style{ ImGui::GetStyle() };
 	float const lineHeight{ ImGui::GetTextLineHeight() };
 	ImVec2 const start{ ImGui::GetCursorScreenPos() };
+
+	ImGui::SetNextItemAllowOverlap();
+	ImGui::InvisibleButton("##row", ImVec2{ ImGui::GetContentRegionAvail().x, lineHeight });
+	DrawGameMenu(game, userDir, intents);
+	ImGui::SetCursorScreenPos(start);
+
 	float const gearX{ start.x + ImGui::GetContentRegionAvail().x - style.FramePadding.x - lineHeight };
 	float const showX{ gearX - style.ItemInnerSpacing.x - lineHeight };
 	ImVec2 const icon{ start.x + style.FramePadding.x, start.y };
@@ -234,7 +279,7 @@ void DrawHiddenGame(Query::SGameDefinition const& game, SFrameIntents& intents)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void DrawGameSidebar(Browser::CBrowser const& browser, SFrameIntents& intents)
+void DrawGameSidebar(Browser::CBrowser const& browser, std::filesystem::path const& userDir, SFrameIntents& intents)
 {
 	std::span<Config::SGameSettings const> const games{ browser.GetSettings().games };
 	std::span<Query::EGame const> const order{ browser.GetSettings().gameOrder };
@@ -246,7 +291,7 @@ void DrawGameSidebar(Browser::CBrowser const& browser, SFrameIntents& intents)
 		if (games[static_cast<size_t>(game)].isListed)
 		{
 			ImGui::PushID(static_cast<int>(game));
-			DrawListedGame(Query::GetGame(game), browser, numListed == 1, intents);
+			DrawListedGame(Query::GetGame(game), browser, userDir, numListed == 1, intents);
 			ImGui::PopID();
 		}
 	}
@@ -265,7 +310,7 @@ void DrawGameSidebar(Browser::CBrowser const& browser, SFrameIntents& intents)
 				if (!games[static_cast<size_t>(game)].isListed)
 				{
 					ImGui::PushID(static_cast<int>(game));
-					DrawHiddenGame(Query::GetGame(game), intents);
+					DrawHiddenGame(Query::GetGame(game), userDir, intents);
 					ImGui::PopID();
 				}
 			}

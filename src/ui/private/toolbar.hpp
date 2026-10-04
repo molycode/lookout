@@ -27,7 +27,7 @@ public:
 	CToolbar() = default;
 	~CToolbar() = default;
 
-	void Draw(Browser::CBrowser const& browser, SFrameIntents& intents);
+	void Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameIntents& intents);
 	void OnCatalogChanged();
 
 private:

@@ -19,12 +19,16 @@ struct SFrameIntents final
 	std::optional<Query::EGame> showGame;
 	std::optional<SGameMove> moveGame;
 	std::optional<Query::EGame> openGameSettings;
+	std::optional<Query::EGame> editGame;
+	std::optional<Query::EGame> revertGame;
+	std::optional<Query::EGame> removeGame;
 	std::optional<Config::SServerFilter> filter;
 	std::optional<Config::SSortOrder> sort;
 	std::optional<uint32_t> autoRefreshSeconds;
 	SServerAction action;
 	bool refresh{ false };
 	bool openAddServer{ false };
+	bool openAddGame{ false };
 	bool openAbout{ false };
 	bool quit{ false };
 };

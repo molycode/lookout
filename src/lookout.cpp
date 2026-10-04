@@ -112,7 +112,7 @@ bool CLookout::RunWindow()
 	m_browser.SetGameProblems(m_gameProblems);
 
 	Ui::SAboutInfo const about{ LKT_VERSION, m_configDir, m_logsDir };
-	bool const isReady{ m_application.Initialize(about, m_browser.GetSettings().window) && m_browser.Start(m_application.MakeWakeCallback()) };
+	bool const isReady{ m_application.Initialize(about, m_browser.GetSettings().window, m_userDir) && m_browser.Start(m_application.MakeWakeCallback()) };
 
 	if (isReady)
 	{

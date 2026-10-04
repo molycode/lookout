@@ -236,7 +236,7 @@ void DrawCountryFilter(Browser::CBrowser const& browser, Config::SServerFilter c
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CToolbar::Draw(Browser::CBrowser const& browser, SFrameIntents& intents)
+void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameIntents& intents)
 {
 	Query::EGame const game{ browser.GetSelectedGame() };
 	Config::SServerFilter const& filter{ browser.GetSettings().games[static_cast<size_t>(game)].filter };
@@ -257,6 +257,16 @@ void CToolbar::Draw(Browser::CBrowser const& browser, SFrameIntents& intents)
 	}
 
 	ImGui::SetItemTooltip("Add a server by its address (Ctrl+N)");
+	ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+	ImGui::BeginDisabled(!canEditGames);
+
+	if (ImGui::Button(LKT_ICON_GAMEPAD "##add-game", ImVec2{ ImGui::GetFrameHeight(), ImGui::GetFrameHeight() }))
+	{
+		intents.openAddGame = true;
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip(canEditGames ? "Add a game" : "Add a game: Lookout cannot locate its data folder");
 
 	bool showEmpty{ filter.showEmpty };
 	bool showFull{ filter.showFull };
