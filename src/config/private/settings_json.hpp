@@ -16,4 +16,6 @@ std::string WriteSettingsJson(SSettings const& settings, std::string_view kept =
 
 // Only a file that is not a JSON object fails as a whole; an invalid value falls back to its default and is counted.
 std::expected<SSettingsDocument, ESettingsJsonError> ReadSettingsJson(std::string_view text);
+// Where text that ReadSettingsJson found not to be JSON goes wrong.
+std::string DescribeSettingsSyntaxError(std::string_view text);
 } // namespace Lkt::Config

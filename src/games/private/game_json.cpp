@@ -21,6 +21,7 @@ namespace
 using JsonValue = nlohmann::ordered_json;
 
 constexpr bool AllowExceptions{ false };
+constexpr bool IgnoreComments{ false };
 constexpr uint64_t Format{ 1 };
 constexpr std::string_view CommentPrefix{ "//" };
 constexpr uint64_t MaxPort{ 65535 };
@@ -780,13 +781,13 @@ std::span<SGameField const> GetGameFields()
 //////////////////////////////////////////////////////////////////////////
 std::expected<Query::SGameDefinition, std::string> ReadGameJson(std::string_view text, std::span<Query::SProtocolDefinition const> protocols)
 {
-	JsonValue const root = JsonValue::parse(text, nullptr, AllowExceptions);
+	JsonValue const root = JsonValue::parse(text, nullptr, AllowExceptions, IgnoreComments);
 	Query::SGameDefinition game{};
 	std::string problem{};
 
 	if (root.is_discarded())
 	{
-		problem = std::format("it is not valid JSON: {}", Json::DescribeSyntaxError(text));
+		problem = std::format("it is not valid JSON: {}", Json::DescribeSyntaxError(text, IgnoreComments));
 	}
 	else if (!root.is_object())
 	{

@@ -433,6 +433,14 @@ TEST(SettingsJson, NotJsonIsRejected)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, NotJsonNamesWhereAfterAComment)
+{
+	std::string const error{ DescribeSettingsSyntaxError("// kept by hand\n{ \"game\": ") };
+
+	EXPECT_TRUE(error.starts_with("line 2, column ")) << error;
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(SettingsJson, RootThatIsNoObjectIsRejected)
 {
 	EXPECT_EQ(ReadSettingsJson("[ 1, 2 ]").error_or(ESettingsJsonError::NotJson), ESettingsJsonError::NotAnObject);

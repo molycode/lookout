@@ -72,6 +72,10 @@ SSettings CSettingsStore::Load()
 					KeepBackup(std::format("{} invalid (first: {})", document->numInvalid, document->firstInvalidPath));
 				}
 			}
+			else if (document.error() == ESettingsJsonError::NotJson)
+			{
+				MoveAside(std::format("{} ({})", ToString(document.error()), DescribeSettingsSyntaxError(*text)));
+			}
 			else
 			{
 				MoveAside(ToString(document.error()));

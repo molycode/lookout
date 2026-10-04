@@ -13,6 +13,7 @@ namespace
 using JsonValue = nlohmann::ordered_json;
 
 constexpr bool AllowExceptions{ false };
+constexpr bool IgnoreComments{ false };
 constexpr int Compact{ -1 };
 constexpr char Space{ ' ' };
 constexpr char IndentCharacter{ '\t' };
@@ -21,7 +22,7 @@ constexpr size_t MaxInlineLength{ 100 };
 //////////////////////////////////////////////////////////////////////////
 std::expected<JsonValue, std::string> ParseObject(std::string_view text, std::string_view notAnObject)
 {
-	JsonValue value = JsonValue::parse(text, nullptr, AllowExceptions);
+	JsonValue value = JsonValue::parse(text, nullptr, AllowExceptions, IgnoreComments);
 	std::expected<JsonValue, std::string> result{ std::unexpected{ std::string{ notAnObject } } };
 
 	if (value.is_object())
@@ -30,7 +31,7 @@ std::expected<JsonValue, std::string> ParseObject(std::string_view text, std::st
 	}
 	else if (value.is_discarded())
 	{
-		result = std::unexpected{ std::format("it is not valid JSON: {}", Json::DescribeSyntaxError(text)) };
+		result = std::unexpected{ std::format("it is not valid JSON: {}", Json::DescribeSyntaxError(text, IgnoreComments)) };
 	}
 
 	return result;
@@ -157,7 +158,7 @@ JsonValue Diff(JsonValue const& from, JsonValue const& to)
 //////////////////////////////////////////////////////////////////////////
 std::expected<std::string, std::string> ApplyPatch(std::string_view builtinText, std::string_view patchText)
 {
-	JsonValue game = JsonValue::parse(builtinText, nullptr, AllowExceptions);
+	JsonValue game = JsonValue::parse(builtinText, nullptr, AllowExceptions, IgnoreComments);
 	std::expected<JsonValue, std::string> const patch{ ParseObject(patchText, "a change to a built-in game must be a JSON object") };
 	std::expected<std::string, std::string> result{};
 
@@ -177,7 +178,7 @@ std::expected<std::string, std::string> ApplyPatch(std::string_view builtinText,
 //////////////////////////////////////////////////////////////////////////
 std::expected<std::optional<std::string>, std::string> MakePatch(std::string_view builtinText, std::string_view gameText)
 {
-	JsonValue const builtin = JsonValue::parse(builtinText, nullptr, AllowExceptions);
+	JsonValue const builtin = JsonValue::parse(builtinText, nullptr, AllowExceptions, IgnoreComments);
 	std::expected<JsonValue, std::string> const game{ ParseObject(gameText, "it must hold a JSON object") };
 	std::expected<std::optional<std::string>, std::string> result{};
 

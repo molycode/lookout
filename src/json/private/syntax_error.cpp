@@ -3,12 +3,17 @@
 
 namespace Lkt::Json
 {
+namespace
+{
+constexpr bool Strict{ true };
+} // namespace
+
 //////////////////////////////////////////////////////////////////////////
-std::string DescribeSyntaxError(std::string_view text)
+std::string DescribeSyntaxError(std::string_view text, bool ignoreComments)
 {
 	CSyntaxErrorHandler handler{};
 
-	CSyntaxErrorHandler::JsonValue::sax_parse(text, &handler);
+	CSyntaxErrorHandler::JsonValue::sax_parse(text, &handler, CSyntaxErrorHandler::JsonValue::input_format_t::json, Strict, ignoreComments);
 
 	return handler.GetError();
 }

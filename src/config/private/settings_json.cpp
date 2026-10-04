@@ -5,6 +5,7 @@
 #include "config/settings.hpp"
 #include "config/window_limits.hpp"
 #include "json/json.hpp"
+#include "json/syntax_error.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include "query/server_address.hpp"
@@ -701,5 +702,11 @@ std::expected<SSettingsDocument, ESettingsJsonError> ReadSettingsJson(std::strin
 	}
 
 	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::string DescribeSettingsSyntaxError(std::string_view text)
+{
+	return Lkt::Json::DescribeSyntaxError(text, IgnoreComments);
 }
 } // namespace Lkt::Config
