@@ -17,4 +17,3 @@ target_link_libraries(LktGames
 
 LktEmbedTree(LktGames Protocols ${PROJECT_SOURCE_DIR}/assets/protocols "*.lua")
 LktEmbedTree(LktGames Games ${PROJECT_SOURCE_DIR}/assets/games "*/game.json")
-LktEmbedFile(LktGames GameOrder ${PROJECT_SOURCE_DIR}/assets/games/order.json)

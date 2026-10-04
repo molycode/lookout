@@ -3,12 +3,9 @@
 #include "query/game_catalog.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <expected>
-#include <span>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace Lkt::Games
@@ -76,14 +73,9 @@ TEST(GameJson, AcceptsComments)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A position keys a game's saved table layout, so a game added since may only come after these.
-TEST(GameJson, BuiltinGamesKeepTheirPositions)
+TEST(GameJson, BuiltinGamesAreInNameOrder)
 {
-	constexpr std::array<std::string_view, 5> Keys{ "kingpin", "quake2", "rtcw", "et", "quake3" };
-	std::span<Query::SGameDefinition const> const games{ Query::GetGameCatalog() };
-
-	ASSERT_GE(games.size(), Keys.size());
-	EXPECT_TRUE(std::ranges::equal(games.first(Keys.size()), Keys, {}, &Query::SGameDefinition::key));
+	EXPECT_TRUE(std::ranges::is_sorted(Query::GetGameCatalog(), {}, &Query::SGameDefinition::name));
 }
 
 //////////////////////////////////////////////////////////////////////////

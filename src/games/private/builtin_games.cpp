@@ -1,7 +1,6 @@
 #include "games/builtin_games.hpp"
 #include "embedded_games.hpp"
 #include "game_json.hpp"
-#include "game_order.hpp"
 #include "script/protocol_script.hpp"
 #include <algorithm>
 #include <expected>
@@ -103,42 +102,15 @@ SBuiltins LoadBuiltins()
 		AddProtocol(name.substr(0, name.rfind('.')), Embedded::Protocols[index].bytes, scripts[index], builtins);
 	}
 
-	std::expected<std::vector<std::string>, std::string> const order{ ReadGameOrder(AsText(Embedded::GameOrder)) };
-
-	if (order.has_value())
-	{
-		for (Embedded::SEmbeddedFile const& file : Embedded::Games)
-		{
-			std::string_view const key{ file.name.substr(0, file.name.find('/')) };
-
-			if (!std::ranges::contains(*order, key))
-			{
-				builtins.problems.emplace_back(std::format("The built-in game '{}' is missing from order.json", key));
-			}
-		}
-	}
-	else
-	{
-		builtins.problems.emplace_back(std::format("The built-in game order cannot be read: {}", order.error()));
-	}
-
 	// Games name protocols by position, which holds only when every protocol loaded.
 	if (builtins.problems.empty())
 	{
-		for (std::string const& key : *order)
+		for (Embedded::SEmbeddedFile const& file : Embedded::Games)
 		{
-			std::string const path{ std::format("{}/game.json", key) };
-			auto const file{ std::ranges::find(Embedded::Games, std::string_view{ path }, &Embedded::SEmbeddedFile::name) };
-
-			if (file != Embedded::Games.end())
-			{
-				AddGame(key, file->bytes, scripts, builtins);
-			}
-			else
-			{
-				builtins.problems.emplace_back(std::format("order.json lists '{}', which has no game.json", key));
-			}
+			AddGame(file.name.substr(0, file.name.find('/')), file.bytes, scripts, builtins);
 		}
+
+		std::ranges::sort(builtins.games, {}, &Query::SGameDefinition::name);
 	}
 
 	for (Script::CProtocolScript& script : scripts)

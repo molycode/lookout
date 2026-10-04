@@ -262,7 +262,7 @@ TEST_F(CBrowserTest, UnselectedGameHasItsLaunchOptions)
 	WriteDesktopEntry("id-linux-rtcw-mp.desktop", std::format("[Desktop Entry]\nType=Application\nName=RTCW\nExec=\"{}\"\n", m_game.string()));
 	Initialize();
 
-	ASSERT_EQ(m_browser.GetSelectedGame(), Fixtures::GetGameId("kingpin"));
+	ASSERT_NE(m_browser.GetSelectedGame(), Fixtures::GetGameId("rtcw"));
 	EXPECT_EQ(m_browser.GetLaunchOptions(Fixtures::GetGameId("rtcw")).size(), 1u);
 }
 

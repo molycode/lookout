@@ -10,6 +10,8 @@
 #include "theme_colors.hpp"
 #include "browser/browser.hpp"
 #include "geo/countries.hpp"
+#include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
 #include <tge/assert.hpp>
 #include <imgui.h>
 #include <algorithm>
@@ -363,8 +365,10 @@ void DrawServerTable(Browser::CBrowser const& browser, uint64_t& selectedKey, bo
 	ImGuiTableFlags const flags{ ImGuiTableFlags_Sortable | ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollY
 		| ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV };
 	bool isJoinWanted{ false };
+	std::string_view const key{ Query::GetGame(game).key };
 
-	ImGui::PushID(static_cast<int>(game));
+	// The key, not the catalog position, names the saved table layout, so a change of game order keeps it.
+	ImGui::PushID(key.data(), key.data() + key.size());
 
 	if (ImGui::BeginTable("##servers", NumColumns, flags, ImGui::GetContentRegionAvail()))
 	{

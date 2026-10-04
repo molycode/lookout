@@ -2,12 +2,15 @@
 #include "settings_json.hpp"
 #include "config/default_settings.hpp"
 #include "config/settings.hpp"
+#include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
 #include "query/server_address.hpp"
 #include <gtest/gtest.h>
 #include <array>
 #include <cstddef>
 #include <expected>
 #include <format>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -31,7 +34,8 @@ SSettings MakeVariedSettings()
 	SSettings settings{ MakeDefaultSettings() };
 
 	settings.window = SWindowSettings{ 1600, 1000, true, 360, "[Table][0x1A2B3C4D,8]\nColumn 0  Width=40\n" };
-	settings.selectedGame = Fixtures::GetGameId("et");
+	// Odd positions are listed below, and the first is the default.
+	settings.selectedGame = Query::GetGameCatalog()[1].game;
 	settings.autoRefreshSeconds = 45;
 
 	for (size_t index{ 0 }; index < settings.games.size(); ++index)
@@ -192,15 +196,17 @@ TEST(SettingsJson, NoListedGameListsEveryGame)
 //////////////////////////////////////////////////////////////////////////
 TEST(SettingsJson, UnlistedSelectedGameGivesWayToTheFirstListed)
 {
+	std::span<Query::SGameDefinition const> const catalog{ Query::GetGameCatalog() };
 	SSettings settings{ MakeDefaultSettings() };
 
-	settings.selectedGame = Fixtures::GetGameId("kingpin");
-	settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].isListed = false;
-	settings.games[static_cast<size_t>(Fixtures::GetGameId("quake2"))].isListed = false;
+	ASSERT_GE(catalog.size(), 3u);
+	settings.selectedGame = catalog[1].game;
+	settings.games[static_cast<size_t>(catalog[0].game)].isListed = false;
+	settings.games[static_cast<size_t>(catalog[1].game)].isListed = false;
 
 	SSettingsDocument const document{ ReadValid(WriteSettingsJson(settings)) };
 
-	EXPECT_EQ(document.settings.selectedGame, Fixtures::GetGameId("rtcw"));
+	EXPECT_EQ(document.settings.selectedGame, catalog[2].game);
 	EXPECT_EQ(document.numInvalid, 1u);
 	EXPECT_EQ(document.firstInvalidPath, "game");
 }
@@ -250,7 +256,7 @@ TEST(SettingsJson, SortColumnNamesAreStable)
 
 		SSettingsDocument const document{ ReadValid(std::format(R"({{ "games": {{ "kingpin": {{ "sort": {{ "column": "{}" }} }} }} }})", name)) };
 
-		EXPECT_EQ(document.settings.games[0].sort.column, column);
+		EXPECT_EQ(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].sort.column, column);
 		EXPECT_EQ(document.numInvalid, 0u);
 	}
 }
