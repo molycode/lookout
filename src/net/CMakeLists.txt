@@ -11,6 +11,7 @@ target_link_libraries(LktNet
 	PUBLIC
 		Lkt::Query
 	PRIVATE
+		Lkt::Script
 		Tge::Logging
 		Tge::Threading
 )

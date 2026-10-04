@@ -15,6 +15,7 @@ std::span<SLicensedComponent const> GetLicensedComponents()
 		SLicensedComponent{ "SDL's Wayland protocols", "MIT and X11 licences", Embedded::SdlWaylandLicences },
 		SLicensedComponent{ "JSON for Modern C++", "MIT License", Embedded::JsonLicence },
 		SLicensedComponent{ "JSON's bundled code", "MIT, CC0 1.0 and Apache 2.0 licences", Embedded::JsonBundledLicences },
+		SLicensedComponent{ "Lua", "MIT License", Embedded::LuaLicence },
 		SLicensedComponent{ "tge-core", "MIT License", Embedded::TgeCoreLicence },
 		SLicensedComponent{ "rpmalloc", "Zero-Clause BSD", Embedded::RpmallocLicence },
 		SLicensedComponent{ "Roboto", "Apache License 2.0", Embedded::RobotoLicence },

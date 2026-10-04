@@ -12,9 +12,11 @@ target_link_libraries(LktGames
 		Lkt::Query
 	PRIVATE
 		Lkt::Json
-		Tge::Logging
+		Lkt::Script
 )
 
+LktEmbedFile(LktGames Quake2Protocol ${PROJECT_SOURCE_DIR}/assets/protocols/quake2.lua)
+LktEmbedFile(LktGames Quake3Protocol ${PROJECT_SOURCE_DIR}/assets/protocols/quake3.lua)
 LktEmbedFile(LktGames KingpinGame ${PROJECT_SOURCE_DIR}/assets/games/kingpin/game.json)
 LktEmbedFile(LktGames Quake2Game ${PROJECT_SOURCE_DIR}/assets/games/quake2/game.json)
 LktEmbedFile(LktGames RtcwGame ${PROJECT_SOURCE_DIR}/assets/games/rtcw/game.json)

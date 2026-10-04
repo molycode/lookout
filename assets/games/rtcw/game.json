@@ -3,7 +3,7 @@
 	"name": "Return to Castle Wolfenstein",
 	"protocol": "quake3",
 	"textStyle": "quake3",
-	"masterQuery": "60 empty full",
+	"protocolOptions": { "masterQuery": "60 empty full" },
 	"masters": [
 		{ "host": "wolfmaster.idsoftware.com", "port": 27950 }
 	],

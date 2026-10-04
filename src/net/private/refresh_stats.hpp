@@ -3,6 +3,7 @@
 #include "query/parse_error.hpp"
 #include "query/server_address.hpp"
 #include <cstdint>
+#include <string>
 
 namespace Lkt::Net
 {
@@ -15,6 +16,8 @@ struct SRefreshStats final
 	size_t numBadReplies{ 0 };
 	Query::SServerAddress firstBadReply;
 	Query::EParseError firstBadReplyError{ Query::EParseError::Malformed };
+	size_t numScriptFailures{ 0 };
+	std::string firstScriptFailure;
 	size_t numMalformedPlayerLines{ 0 };
 	size_t numUnqueryable{ 0 };
 	Query::SServerAddress firstUnqueryable;

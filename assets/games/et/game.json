@@ -3,7 +3,7 @@
 	"name": "Enemy Territory",
 	"protocol": "quake3",
 	"textStyle": "enemyTerritory",
-	"masterQuery": "84 empty full",
+	"protocolOptions": { "masterQuery": "84 empty full" },
 	"masters": [
 		{ "host": "etmaster.idsoftware.com", "port": 27950 },
 		{ "host": "etmaster.etlegacy.com", "port": 27950 }

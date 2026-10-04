@@ -100,4 +100,19 @@ Query::EGame GetGameId(std::string_view key)
 {
 	return GetGameByKey(key).game;
 }
+
+//////////////////////////////////////////////////////////////////////////
+Query::SProtocolDefinition const& GetProtocolByName(std::string_view name)
+{
+	std::span<Query::SProtocolDefinition const> const protocols{ Query::GetProtocolCatalog() };
+	auto const it{ std::ranges::find(protocols, name, &Query::SProtocolDefinition::name) };
+
+	if (it == protocols.end())
+	{
+		ADD_FAILURE() << "no protocol is named " << name;
+		TGE_FATAL("A test asked for a protocol the catalog does not have");
+	}
+
+	return *it;
+}
 } // namespace Lkt::Fixtures

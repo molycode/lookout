@@ -3,7 +3,7 @@
 	"name": "Quake III Arena",
 	"protocol": "quake3",
 	"textStyle": "quake3",
-	"masterQuery": "68 empty full",
+	"protocolOptions": { "masterQuery": "68 empty full" },
 	"masters": [
 		{ "host": "master.quake3arena.com", "port": 27950 },
 		{ "host": "master.ioquake3.org", "port": 27950 },

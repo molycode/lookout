@@ -8,15 +8,20 @@ namespace Lkt::Query
 {
 namespace
 {
+constinit std::vector<SProtocolDefinition> gProtocols{};
 constinit std::vector<SGameDefinition> gGames{};
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void InitializeGameCatalog(std::span<SGameDefinition const> games)
+void InitializeGameCatalog(std::span<SProtocolDefinition const> protocols, std::span<SGameDefinition const> games)
 {
-	TGE_ASSERT(gGames.empty(), "The game catalog is already initialized");
+	TGE_ASSERT(gGames.empty() && gProtocols.empty(), "The game catalog is already initialized");
 	TGE_ASSERT(games.size() < static_cast<size_t>(NoGame), "More games than EGame can number");
+	TGE_ASSERT(protocols.size() < static_cast<size_t>(NoProtocol), "More protocols than EProtocol can number");
+	TGE_ASSERT(std::ranges::all_of(games, [&protocols](SGameDefinition const& game) { return static_cast<size_t>(game.protocol) < protocols.size(); }),
+		"A game names a protocol the catalog does not have");
 
+	gProtocols.assign(protocols.begin(), protocols.end());
 	gGames.assign(games.begin(), games.end());
 
 	for (size_t index{ 0 }; index < gGames.size(); ++index)
@@ -32,6 +37,8 @@ void TerminateGameCatalog()
 {
 	gGames.clear();
 	gGames.shrink_to_fit();
+	gProtocols.clear();
+	gProtocols.shrink_to_fit();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -56,5 +63,21 @@ SGameDefinition const* FindGame(std::string_view key)
 	auto const it{ std::ranges::find(gGames, key, &SGameDefinition::key) };
 
 	return (it != gGames.end()) ? &*it : nullptr;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::span<SProtocolDefinition const> GetProtocolCatalog()
+{
+	return gProtocols;
+}
+
+//////////////////////////////////////////////////////////////////////////
+SProtocolDefinition const& GetProtocol(EProtocol protocol)
+{
+	size_t const index{ static_cast<size_t>(protocol) };
+
+	TGE_ASSERT(index < gProtocols.size(), "EProtocol value outside the catalog");
+
+	return gProtocols[index];
 }
 } // namespace Lkt::Query

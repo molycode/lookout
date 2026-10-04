@@ -1,10 +1,10 @@
 #pragma once
 
-#include "query/game_definition.hpp"
-#include <vector>
+#include "games/builtins.hpp"
 
 namespace Lkt::Games
 {
-// In sidebar order; a built-in game that cannot be read is logged and left out.
-std::vector<Query::SGameDefinition> LoadBuiltinGames();
+// The protocols and games compiled into Lookout, games in sidebar order; one that cannot be read is left out, and
+// its problem returned.
+SBuiltins LoadBuiltins();
 } // namespace Lkt::Games

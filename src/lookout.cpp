@@ -59,9 +59,10 @@ void PrintServers(Browser::CServerList const& servers)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-bool CLookout::Run(Query::SGameDefinition const* pListGame)
+bool CLookout::Run(Query::SGameDefinition const* pListGame, std::span<std::string const> loadProblems)
 {
 	PrepareDirectories();
+	m_startupProblems.insert(m_startupProblems.end(), loadProblems.begin(), loadProblems.end());
 
 	bool const isListing{ pListGame != nullptr };
 

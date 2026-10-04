@@ -11,6 +11,7 @@ extern std::span<unsigned char const> const SdlBundledLicences;
 extern std::span<unsigned char const> const SdlWaylandLicences;
 extern std::span<unsigned char const> const JsonLicence;
 extern std::span<unsigned char const> const JsonBundledLicences;
+extern std::span<unsigned char const> const LuaLicence;
 extern std::span<unsigned char const> const TgeCoreLicence;
 extern std::span<unsigned char const> const RpmallocLicence;
 extern std::span<unsigned char const> const RobotoLicence;

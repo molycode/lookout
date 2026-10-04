@@ -1,31 +1,14 @@
 #pragma once
 
-#include "query/game_definition.hpp"
-#include "query/parse_error.hpp"
-#include "query/protocol_family.hpp"
-#include "query/server_address.hpp"
-#include "query/status_reply.hpp"
-#include <tge/non_copyable.hpp>
-#include <cstddef>
-#include <expected>
-#include <span>
-#include <vector>
+#include <cstdint>
+#include <limits>
 
 namespace Lkt::Query
 {
-class IProtocol : private Tge::SNoCopyNoMove
+// A protocol's position in the catalog, numbered when Lookout starts.
+enum class EProtocol : uint8_t
 {
-public:
-
-	virtual ~IProtocol() = default;
-
-	virtual std::vector<std::byte> MasterRequest(SGameDefinition const& game) const = 0;
-
-	virtual std::expected<void, EParseError> ParseMasterReply(std::span<std::byte const> datagram, std::vector<SServerAddress>& servers) const = 0;
-
-	virtual std::vector<std::byte> StatusRequest() const = 0;
-	virtual std::expected<SStatusReply, EParseError> ParseStatusReply(std::span<std::byte const> datagram) const = 0;
 };
 
-IProtocol const& GetProtocol(EProtocolFamily family);
+inline constexpr EProtocol NoProtocol{ std::numeric_limits<uint8_t>::max() };
 } // namespace Lkt::Query

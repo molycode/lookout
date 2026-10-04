@@ -4,6 +4,7 @@
 #include "net/query_engine.hpp"
 #include "ui/application.hpp"
 #include <tge/non_copyable.hpp>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -21,7 +22,8 @@ public:
 	CLookout() = default;
 	~CLookout() = default;
 
-	bool Run(Query::SGameDefinition const* pListGame);
+	// Problems from loading the games are logged once logging reaches its file.
+	bool Run(Query::SGameDefinition const* pListGame, std::span<std::string const> loadProblems);
 
 private:
 

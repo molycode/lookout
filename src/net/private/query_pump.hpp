@@ -11,13 +11,12 @@
 #include "udp_socket.hpp"
 #include "net/query_event.hpp"
 #include "query/game.hpp"
-#include "query/protocol_family.hpp"
 #include "query/server_address.hpp"
+#include "script/protocol_script.hpp"
 #include <tge/non_copyable.hpp>
 #include <tge/threading/event_loop.hpp>
 #include <tge/threading/mpsc_queue.hpp>
 #include <tge/threading/timer_id.hpp>
-#include <array>
 #include <atomic>
 #include <cstddef>
 #include <functional>
@@ -67,6 +66,7 @@ private:
 	void Emit(SQueryEvent event);
 	void NotifyIfNeeded();
 	SRefreshState& GetRefresh(Query::EGame game);
+	Script::CProtocolScript& GetScript(Query::EGame game);
 	SRefreshState const& GetRefresh(Query::EGame game) const;
 
 	std::atomic<bool> m_isNotified{ false };
@@ -82,7 +82,7 @@ private:
 	CRequestScheduler m_scheduler;
 	CMasterTracker m_masters;
 	std::vector<SRefreshState> m_refreshes;
-	std::array<std::vector<std::byte>, Query::NumProtocolFamilies> m_statusRequests;
+	std::vector<Script::CProtocolScript> m_scripts;
 
 	std::vector<std::byte> m_buffer;
 	std::vector<SMasterQuery> m_masterQueries;

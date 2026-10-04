@@ -1,7 +1,7 @@
 #include "query_pump.hpp"
 #include "loggers.hpp"
 #include "query/game_catalog.hpp"
-#include "query/protocol.hpp"
+#include "query/protocol_definition.hpp"
 #include <tge/assert.hpp>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -12,7 +12,9 @@
 #include <cstring>
 #include <expected>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 
@@ -63,9 +65,14 @@ std::expected<uint32_t, std::string> TakeAddress(gaicb& request, int status)
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<std::byte> const& GetStatusRequest(std::array<std::vector<std::byte>, Query::NumProtocolFamilies> const& requests, Query::EGame game)
+void RecordScriptFailure(SRefreshStats& stats, std::string_view failure)
 {
-	return requests[static_cast<size_t>(Query::GetGame(game).family)];
+	if (stats.numScriptFailures == 0)
+	{
+		stats.firstScriptFailure = failure;
+	}
+
+	++stats.numScriptFailures;
 }
 } // namespace
 
@@ -76,12 +83,24 @@ bool CQueryPump::Initialize(std::function<void()> onEventsReady)
 	m_buffer.resize(MaxDatagramSize);
 	m_refreshes.assign(Query::GetGameCatalog().size(), SRefreshState{});
 
-	for (size_t family{ 0 }; family < Query::NumProtocolFamilies; ++family)
+	std::span<Query::SProtocolDefinition const> const protocols{ Query::GetProtocolCatalog() };
+	bool areScriptsReady{ true };
+
+	// Each script's state is created here and used only on the LookoutNet thread, which starts after this.
+	m_scripts = std::vector<Script::CProtocolScript>(protocols.size());
+
+	for (size_t index{ 0 }; index < protocols.size(); ++index)
 	{
-		m_statusRequests[family] = Query::GetProtocol(static_cast<Query::EProtocolFamily>(family)).StatusRequest();
+		std::expected<void, std::string> const loaded{ m_scripts[index].Initialize(protocols[index].name, protocols[index].source) };
+
+		if (!loaded.has_value())
+		{
+			gLog.Error("The protocol script '{}' cannot be loaded: {}", protocols[index].name, loaded.error());
+			areScriptsReady = false;
+		}
 	}
 
-	bool const isReady{ m_socket.Initialize() && m_loop.Initialize("LookoutNet") };
+	bool const isReady{ areScriptsReady && m_socket.Initialize() && m_loop.Initialize("LookoutNet") };
 
 	if (isReady)
 	{
@@ -110,6 +129,13 @@ void CQueryPump::Terminate()
 	m_loop.Terminate();
 	AbandonLookups();
 	m_socket.Terminate();
+
+	for (Script::CProtocolScript& script : m_scripts)
+	{
+		script.Terminate();
+	}
+
+	m_scripts.clear();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -327,7 +353,7 @@ void CQueryPump::UpdateMasters(Clock::time_point now)
 	for (SMasterQuery const& query : m_masterQueries)
 	{
 		Query::SGameDefinition const& game{ Query::GetGame(query.game) };
-		std::expected<void, int> const sent{ m_socket.Send(query.address, Query::GetProtocol(game.family).MasterRequest(game)) };
+		std::expected<void, int> const sent{ m_socket.Send(query.address, game.masterRequest) };
 
 		if (!sent.has_value())
 		{
@@ -355,7 +381,7 @@ void CQueryPump::SendDueRequests(Clock::time_point now)
 
 	for (SServerRequest const& request : m_requests)
 	{
-		std::expected<void, int> const sent{ m_socket.Send(request.address, GetStatusRequest(m_statusRequests, request.game)) };
+		std::expected<void, int> const sent{ m_socket.Send(request.address, Query::GetGame(request.game).statusRequest) };
 
 		if (!sent.has_value())
 		{
@@ -471,7 +497,13 @@ void CQueryPump::CountReceiveError(int error)
 void CQueryPump::ReadMasterDatagram(Query::EGame game, Query::SServerAddress const& source, std::span<std::byte const> datagram)
 {
 	SRefreshStats& stats{ GetRefresh(game).stats };
-	std::expected<void, Query::EParseError> const parsed{ Query::GetProtocol(Query::GetGame(game).family).ParseMasterReply(datagram, m_entries) };
+	Script::CProtocolScript& script{ GetScript(game) };
+	std::expected<void, Query::EParseError> const parsed{ script.ParseMasterReply(datagram, m_entries) };
+
+	if (!parsed.has_value() && parsed.error() == Query::EParseError::ScriptFailed)
+	{
+		RecordScriptFailure(stats, script.GetLastFailure());
+	}
 
 	if (!parsed.has_value())
 	{
@@ -508,7 +540,8 @@ void CQueryPump::ReadStatusDatagram(SAnsweredRequest const& answered, std::span<
 {
 	Query::EGame const game{ answered.request.game };
 	SRefreshStats& stats{ GetRefresh(game).stats };
-	std::expected<Query::SStatusReply, Query::EParseError> reply{ Query::GetProtocol(Query::GetGame(game).family).ParseStatusReply(datagram) };
+	Script::CProtocolScript& script{ GetScript(game) };
+	std::expected<Query::SStatusReply, Query::EParseError> reply{ script.ParseStatusReply(datagram) };
 
 	if (reply.has_value())
 	{
@@ -520,6 +553,11 @@ void CQueryPump::ReadStatusDatagram(SAnsweredRequest const& answered, std::span<
 	}
 	else
 	{
+		if (reply.error() == Query::EParseError::ScriptFailed)
+		{
+			RecordScriptFailure(stats, script.GetLastFailure());
+		}
+
 		stats.firstBadReply = (stats.numBadReplies == 0) ? answered.request.address : stats.firstBadReply;
 		stats.firstBadReplyError = (stats.numBadReplies == 0) ? reply.error() : stats.firstBadReplyError;
 		++stats.numBadReplies;
@@ -567,6 +605,11 @@ void CQueryPump::ReportRefresh(Query::EGame game) const
 	if (stats.numBadReplies > 0)
 	{
 		gLog.Warning("{}: {} status replies were unreadable, first from {} ({})", name, stats.numBadReplies, Query::FormatAddress(stats.firstBadReply), Query::ToString(stats.firstBadReplyError));
+	}
+
+	if (stats.numScriptFailures > 0)
+	{
+		gLog.Warning("{}: the protocol script failed on {} replies, first: {}", name, stats.numScriptFailures, stats.firstScriptFailure);
 	}
 
 	if (stats.numMalformedPlayerLines > 0)
@@ -636,5 +679,11 @@ SRefreshState& CQueryPump::GetRefresh(Query::EGame game)
 SRefreshState const& CQueryPump::GetRefresh(Query::EGame game) const
 {
 	return m_refreshes[static_cast<size_t>(game)];
+}
+
+//////////////////////////////////////////////////////////////////////////
+Script::CProtocolScript& CQueryPump::GetScript(Query::EGame game)
+{
+	return m_scripts[static_cast<size_t>(Query::GetGame(game).protocol)];
 }
 } // namespace Lkt::Net

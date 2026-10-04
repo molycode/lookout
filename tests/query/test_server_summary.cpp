@@ -1,6 +1,7 @@
 #include "fixtures.hpp"
 #include "query/game_definition.hpp"
-#include "query/protocol.hpp"
+#include "query/game_catalog.hpp"
+#include "script/protocol_script.hpp"
 #include "query/server_summary.hpp"
 #include <gtest/gtest.h>
 #include <initializer_list>
@@ -25,7 +26,12 @@ SStatusReply MakeReply(std::initializer_list<SRule> rules)
 SServerSummary SummarizeFixture(std::string_view key, std::string_view path)
 {
 	SGameDefinition const& definition{ Fixtures::GetGameByKey(key) };
-	std::expected<SStatusReply, EParseError> const reply{ GetProtocol(definition.family).ParseStatusReply(Fixtures::LoadFixture(path)) };
+	SProtocolDefinition const& protocol{ GetProtocol(definition.protocol) };
+	Script::CProtocolScript script{};
+	std::expected<void, std::string> const loaded{ script.Initialize(protocol.name, protocol.source) };
+	std::expected<SStatusReply, EParseError> const reply{ loaded.has_value() ? script.ParseStatusReply(Fixtures::LoadFixture(path)) : std::unexpected{ EParseError::ScriptFailed } };
+
+	script.Terminate();
 
 	EXPECT_TRUE(reply.has_value()) << path;
 

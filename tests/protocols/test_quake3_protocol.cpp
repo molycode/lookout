@@ -1,6 +1,7 @@
 #include "fixtures.hpp"
 #include "query/game_definition.hpp"
-#include "query/protocol.hpp"
+#include "query/protocol_definition.hpp"
+#include "script/protocol_script.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <string>
@@ -17,31 +18,46 @@ constexpr std::string_view Entry{ "\\\x2D\x5E\x3A\x3C\x6D\x38" };
 constexpr SServerAddress EntryAddress{ 0x2D5E3A3C, 27960 };
 
 //////////////////////////////////////////////////////////////////////////
-IProtocol const& Quake3()
+class CQuake3ProtocolTest : public testing::Test
 {
-	return GetProtocol(EProtocolFamily::Quake3);
+protected:
+
+	// testing::Test
+	void SetUp() override
+	{
+		std::expected<void, std::string> const loaded{ m_script.Initialize("quake3", Fixtures::GetProtocolByName("quake3").source) };
+
+		ASSERT_TRUE(loaded.has_value()) << loaded.error_or("");
+	}
+
+	void TearDown() override
+	{
+		m_script.Terminate();
+	}
+	// ~testing::Test
+
+	std::expected<void, EParseError> ParseMaster(std::string_view entries, std::vector<SServerAddress>& servers)
+	{
+		return m_script.ParseMasterReply(ToBytes(std::string{ Header } + std::string{ entries }), servers);
+	}
+
+	Script::CProtocolScript m_script;
+};
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, AsksMastersWithTheGamesProtocolNumber)
+{
+	EXPECT_EQ(Fixtures::GetGameByKey("et").masterRequest, ToBytes("\xFF\xFF\xFF\xFFgetservers 84 empty full"));
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<void, EParseError> ParseMaster(std::string_view entries, std::vector<SServerAddress>& servers)
+TEST_F(CQuake3ProtocolTest, AsksServersForStatus)
 {
-	return Quake3().ParseMasterReply(ToBytes(std::string{ Header } + std::string{ entries }), servers);
+	EXPECT_EQ(Fixtures::GetGameByKey("et").statusRequest, ToBytes("\xFF\xFF\xFF\xFFgetstatus"));
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, AsksMastersWithTheGamesProtocolNumber)
-{
-	EXPECT_EQ(Quake3().MasterRequest(Fixtures::GetGameByKey("et")), ToBytes("\xFF\xFF\xFF\xFFgetservers 84 empty full"));
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, AsksServersForStatus)
-{
-	EXPECT_EQ(Quake3().StatusRequest(), ToBytes("\xFF\xFF\xFF\xFFgetstatus"));
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, ReadsEntryAddressAndPort)
+TEST_F(CQuake3ProtocolTest, ReadsEntryAddressAndPort)
 {
 	std::vector<SServerAddress> servers{};
 
@@ -51,7 +67,7 @@ TEST(Quake3Protocol, ReadsEntryAddressAndPort)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, EndMarkerWithPaddingEndsTheDatagram)
+TEST_F(CQuake3ProtocolTest, EndMarkerWithPaddingEndsTheDatagram)
 {
 	std::vector<SServerAddress> servers{};
 
@@ -60,7 +76,7 @@ TEST(Quake3Protocol, EndMarkerWithPaddingEndsTheDatagram)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, EndMarkerWithoutPaddingEndsTheDatagram)
+TEST_F(CQuake3ProtocolTest, EndMarkerWithoutPaddingEndsTheDatagram)
 {
 	std::vector<SServerAddress> servers{};
 
@@ -69,7 +85,7 @@ TEST(Quake3Protocol, EndMarkerWithoutPaddingEndsTheDatagram)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, AddressThatSpellsTheEndMarkerIsAServer)
+TEST_F(CQuake3ProtocolTest, AddressThatSpellsTheEndMarkerIsAServer)
 {
 	std::vector<SServerAddress> servers{};
 
@@ -79,7 +95,7 @@ TEST(Quake3Protocol, AddressThatSpellsTheEndMarkerIsAServer)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, ReadsEveryCapturedMasterDatagram)
+TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedMasterDatagram)
 {
 	for (std::string_view const game : { "rtcw", "et", "quake3" })
 	{
@@ -87,13 +103,13 @@ TEST(Quake3Protocol, ReadsEveryCapturedMasterDatagram)
 		{
 			std::vector<SServerAddress> servers{};
 
-			EXPECT_TRUE(Quake3().ParseMasterReply(LoadFixture(path.string()), servers).has_value() && !servers.empty()) << path;
+			EXPECT_TRUE(m_script.ParseMasterReply(LoadFixture(path.string()), servers).has_value() && !servers.empty()) << path;
 		}
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, KeepsCompleteEntriesBeforeTruncation)
+TEST_F(CQuake3ProtocolTest, KeepsCompleteEntriesBeforeTruncation)
 {
 	std::vector<SServerAddress> servers{};
 
@@ -102,7 +118,7 @@ TEST(Quake3Protocol, KeepsCompleteEntriesBeforeTruncation)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, RejectsEntryWithoutSeparator)
+TEST_F(CQuake3ProtocolTest, RejectsEntryWithoutSeparator)
 {
 	std::vector<SServerAddress> servers{};
 
@@ -110,21 +126,21 @@ TEST(Quake3Protocol, RejectsEntryWithoutSeparator)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, RejectsQuake2MasterReply)
+TEST_F(CQuake3ProtocolTest, RejectsQuake2MasterReply)
 {
 	std::vector<SServerAddress> servers{};
 
-	EXPECT_EQ(Quake3().ParseMasterReply(LoadFixture("kingpin/master-master.kingpin.info-0.bin"), servers), std::unexpected{ EParseError::WrongHeader });
+	EXPECT_EQ(m_script.ParseMasterReply(LoadFixture("kingpin/master-master.kingpin.info-0.bin"), servers), std::unexpected{ EParseError::WrongHeader });
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, ReadsEveryCapturedStatus)
+TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedStatus)
 {
 	for (std::string_view const game : { "rtcw", "et", "quake3" })
 	{
 		for (std::filesystem::path const& path : Fixtures::ListFixtures(game, "status-"))
 		{
-			std::expected<SStatusReply, EParseError> const reply{ Quake3().ParseStatusReply(LoadFixture(path.string())) };
+			std::expected<SStatusReply, EParseError> const reply{ m_script.ParseStatusReply(LoadFixture(path.string())) };
 
 			EXPECT_TRUE(reply.has_value() && !FindRule(reply.value(), "sv_hostname").empty() && !reply->players.empty()
 				&& reply->numMalformedPlayerLines == 0) << path;
@@ -133,9 +149,9 @@ TEST(Quake3Protocol, ReadsEveryCapturedStatus)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(Quake3Protocol, RejectsQuake2StatusReply)
+TEST_F(CQuake3ProtocolTest, RejectsQuake2StatusReply)
 {
-	EXPECT_EQ(Quake3().ParseStatusReply(LoadFixture("kingpin/status-93.226.82.165_31510.bin")), std::unexpected{ EParseError::WrongHeader });
+	EXPECT_EQ(m_script.ParseStatusReply(LoadFixture("kingpin/status-93.226.82.165_31510.bin")), std::unexpected{ EParseError::WrongHeader });
 }
 } // namespace
 } // namespace Lkt::Query

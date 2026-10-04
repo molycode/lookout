@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <map>
 #include <span>
 #include <utility>
 #include <vector>
@@ -20,18 +21,13 @@ constexpr bool IgnoreComments{ true };
 constexpr uint64_t Format{ 1 };
 constexpr uint64_t MaxPort{ 65535 };
 
-constexpr std::array<std::string_view, 10> GameFields{ "format", "name", "protocol", "textStyle", "masterQuery", "masters", "keys",
+constexpr std::array<std::string_view, 10> GameFields{ "format", "name", "protocol", "textStyle", "protocolOptions", "masters", "keys",
 	"modes", "foreignServers", "launch" };
 constexpr std::array<std::string_view, 2> MasterFields{ "host", "port" };
 constexpr std::array<std::string_view, 5> KeyFields{ "hostname", "map", "maxPlayers", "password", "mods" };
 constexpr std::array<std::string_view, 3> ModeFields{ "key", "value", "label" };
 constexpr std::array<std::string_view, 2> MatchFields{ "key", "value" };
 constexpr std::array<std::string_view, 4> LaunchFields{ "desktopFiles", "installDir", "program", "requiredFiles" };
-
-constexpr std::array<std::pair<std::string_view, Query::EProtocolFamily>, 2> Protocols{ {
-	{ "quake2", Query::EProtocolFamily::Quake2 },
-	{ "quake3", Query::EProtocolFamily::Quake3 }
-} };
 
 constexpr std::array<std::pair<std::string_view, Query::ETextStyle>, 3> TextStyles{ {
 	{ "ascii7", Query::ETextStyle::Ascii7 },
@@ -355,22 +351,85 @@ void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, std::string&
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadGame(JsonValue const& root, Query::SGameDefinition& game, std::string& problem)
+// Null, with the problem set, when the protocol is not one of the loaded scripts.
+Query::SProtocolDefinition const* ReadProtocol(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::EProtocol& protocol,
+	std::string& problem)
+{
+	Query::SProtocolDefinition const* pFound{ nullptr };
+	std::string name{};
+
+	ReadRequiredString(root, {}, "protocol", name, problem);
+
+	auto const it{ std::ranges::find(protocols, name, &Query::SProtocolDefinition::name) };
+
+	if (it != protocols.end())
+	{
+		pFound = &*it;
+		protocol = static_cast<Query::EProtocol>(it - protocols.begin());
+	}
+	else if (!name.empty())
+	{
+		std::string known{};
+
+		for (Query::SProtocolDefinition const& candidate : protocols)
+		{
+			known += std::format("{}{}", known.empty() ? "" : ", ", candidate.name);
+		}
+
+		Fail(problem, "protocol", std::format("'{}' is not one of {}", name, known));
+	}
+
+	return pFound;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Checked against what the script declares, so a game cannot pass an option its protocol never reads, or leave out one
+// it needs.
+void ReadProtocolOptions(JsonValue const& root, Query::SProtocolDefinition const& protocol, std::map<std::string, std::string>& options,
+	std::string& problem)
+{
+	JsonValue const* const pOptions{ FindObject(root, "protocolOptions", false, problem) };
+
+	if (pOptions != nullptr)
+	{
+		for (auto const& item : pOptions->items())
+		{
+			std::string const path{ JoinPath("protocolOptions", item.key()) };
+
+			if (std::ranges::contains(protocol.options, item.key(), &Query::SProtocolOption::name))
+			{
+				ReadString(item.value(), path, options[item.key()], problem);
+			}
+			else
+			{
+				Fail(problem, path, std::format("is not an option of the {} protocol", protocol.name));
+			}
+		}
+	}
+
+	for (Query::SProtocolOption const& option : protocol.options)
+	{
+		if (option.isRequired && !options.contains(option.name))
+		{
+			Fail(problem, JoinPath("protocolOptions", option.name), std::format("is missing; the {} protocol requires it", protocol.name));
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::SGameDefinition& game, std::string& problem)
 {
 	CheckFields(root, {}, GameFields, problem);
 	ReadRequiredString(root, {}, "name", game.name, problem);
-	ReadName(root, "protocol", Protocols, game.family, problem);
+
+	Query::SProtocolDefinition const* const pProtocol{ ReadProtocol(root, protocols, game.protocol, problem) };
+
+	if (pProtocol != nullptr)
+	{
+		ReadProtocolOptions(root, *pProtocol, game.protocolOptions, problem);
+	}
+
 	ReadName(root, "textStyle", TextStyles, game.textStyle, problem);
-
-	if (game.family == Query::EProtocolFamily::Quake3)
-	{
-		ReadRequiredString(root, {}, "masterQuery", game.masterQueryArgs, problem);
-	}
-	else if (root.contains("masterQuery"))
-	{
-		Fail(problem, "masterQuery", "is only used by the quake3 protocol");
-	}
-
 	ReadMasters(root, game, problem);
 	ReadKeys(root, game.keys, problem);
 	ReadModes(root, game.modes, problem);
@@ -380,7 +439,7 @@ void ReadGame(JsonValue const& root, Query::SGameDefinition& game, std::string& 
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<Query::SGameDefinition, std::string> ReadGameJson(std::string_view text)
+std::expected<Query::SGameDefinition, std::string> ReadGameJson(std::string_view text, std::span<Query::SProtocolDefinition const> protocols)
 {
 	JsonValue const root = JsonValue::parse(text, nullptr, AllowExceptions, IgnoreComments);
 	Query::SGameDefinition game{};
@@ -396,7 +455,7 @@ std::expected<Query::SGameDefinition, std::string> ReadGameJson(std::string_view
 	}
 	else if (ReadFormat(root, problem))
 	{
-		ReadGame(root, game, problem);
+		ReadGame(root, protocols, game, problem);
 	}
 
 	std::expected<Query::SGameDefinition, std::string> result{ std::move(game) };

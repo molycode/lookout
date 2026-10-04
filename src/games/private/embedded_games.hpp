@@ -4,6 +4,8 @@
 
 namespace Lkt::Embedded
 {
+extern std::span<unsigned char const> const Quake2Protocol;
+extern std::span<unsigned char const> const Quake3Protocol;
 extern std::span<unsigned char const> const KingpinGame;
 extern std::span<unsigned char const> const Quake2Game;
 extern std::span<unsigned char const> const RtcwGame;

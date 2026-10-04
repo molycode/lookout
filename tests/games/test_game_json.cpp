@@ -7,12 +7,21 @@
 #include <expected>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace Lkt::Games
 {
 namespace
 {
 using JsonValue = nlohmann::ordered_json;
+
+//////////////////////////////////////////////////////////////////////////
+// Stand-ins for loaded scripts: the reader needs only their names and declared options.
+std::vector<Query::SProtocolDefinition> MakeProtocols()
+{
+	return { Query::SProtocolDefinition{ "quake2", {}, {} },
+		Query::SProtocolDefinition{ "quake3", {}, { Query::SProtocolOption{ "masterQuery", "Words after getservers", true } } } };
+}
 
 //////////////////////////////////////////////////////////////////////////
 JsonValue MakeMinimalGame()
@@ -31,7 +40,7 @@ JsonValue MakeMinimalGame()
 // Empty when the game reads.
 std::string ReadProblem(JsonValue const& game)
 {
-	std::expected<Query::SGameDefinition, std::string> const result{ ReadGameJson(game.dump()) };
+	std::expected<Query::SGameDefinition, std::string> const result{ ReadGameJson(game.dump(), MakeProtocols()) };
 
 	return result.has_value() ? std::string{} : result.error();
 }
@@ -39,11 +48,11 @@ std::string ReadProblem(JsonValue const& game)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameJson, ReadsAMinimalGame)
 {
-	std::expected<Query::SGameDefinition, std::string> const game{ ReadGameJson(MakeMinimalGame().dump()) };
+	std::expected<Query::SGameDefinition, std::string> const game{ ReadGameJson(MakeMinimalGame().dump(), MakeProtocols()) };
 
 	ASSERT_TRUE(game.has_value()) << game.error();
 	EXPECT_EQ(game->name, "Test Game");
-	EXPECT_EQ(game->family, Query::EProtocolFamily::Quake2);
+	EXPECT_EQ(game->protocol, Query::EProtocol{ 0 });
 	ASSERT_EQ(game->masters.size(), 1u);
 	EXPECT_EQ(game->masters.front().host, "master.example");
 	EXPECT_EQ(game->masters.front().port, 27900);
@@ -58,7 +67,7 @@ TEST(GameJson, AcceptsComments)
 	std::string const text{ MakeMinimalGame().dump(1, '\t') };
 	std::string const commented{ "// A game\n" + text };
 
-	EXPECT_TRUE(ReadGameJson(commented).has_value());
+	EXPECT_TRUE(ReadGameJson(commented, MakeProtocols()).has_value());
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -72,7 +81,7 @@ TEST(GameJson, BuiltinGamesKeepTheirOrder)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameJson, TextThatIsNotJsonIsRejected)
 {
-	EXPECT_FALSE(ReadGameJson("{ \"format\": 1,").has_value());
+	EXPECT_FALSE(ReadGameJson("{ \"format\": 1,", MakeProtocols()).has_value());
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -106,23 +115,38 @@ TEST(GameJson, UnknownProtocolIsRejected)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(GameJson, Quake3NeedsAMasterQuery)
+TEST(GameJson, ProtocolOptionsAreRead)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["protocol"] = "quake3";
+	game["protocolOptions"]["masterQuery"] = "68 empty full";
+
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->protocol, Query::EProtocol{ 1 });
+	EXPECT_EQ(read->protocolOptions.at("masterQuery"), "68 empty full");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, MissingRequiredOptionIsRejected)
 {
 	JsonValue game = MakeMinimalGame();
 
 	game["protocol"] = "quake3";
 
-	EXPECT_TRUE(ReadProblem(game).starts_with("masterQuery:"));
+	EXPECT_EQ(ReadProblem(game), "protocolOptions.masterQuery: is missing; the quake3 protocol requires it");
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(GameJson, Quake2RejectsAMasterQuery)
+TEST(GameJson, UndeclaredOptionIsRejected)
 {
 	JsonValue game = MakeMinimalGame();
 
-	game["masterQuery"] = "68 empty full";
+	game["protocolOptions"]["masterQuery"] = "68 empty full";
 
-	EXPECT_TRUE(ReadProblem(game).starts_with("masterQuery:"));
+	EXPECT_EQ(ReadProblem(game), "protocolOptions.masterQuery: is not an option of the quake2 protocol");
 }
 
 //////////////////////////////////////////////////////////////////////////

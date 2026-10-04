@@ -38,7 +38,9 @@ void PrintUsage(std::string_view executable)
 //////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-	Lkt::Query::InitializeGameCatalog(Lkt::Games::LoadBuiltinGames());
+	Lkt::Games::SBuiltins const builtins{ Lkt::Games::LoadBuiltins() };
+
+	Lkt::Query::InitializeGameCatalog(builtins.protocols, builtins.games);
 
 	std::span<char* const> const args{ argv, static_cast<size_t>(argc) };
 	std::string_view const executable{ args.empty() ? "lookout" : args.front() };
@@ -107,7 +109,7 @@ int main(int argc, char* argv[])
 	{
 		Lkt::CLookout lookout;
 
-		result = lookout.Run(pListGame) ? EXIT_SUCCESS : EXIT_FAILURE;
+		result = lookout.Run(pListGame, builtins.problems) ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
 	Lkt::Query::TerminateGameCatalog();
