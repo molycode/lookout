@@ -311,6 +311,21 @@ TEST(ServerList, PlayerNamesAreDecodedBesideThePlayers)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(ServerList, RulesAreDecodedLikeNames)
+{
+	CServerList list{};
+	Net::SServerAnswered answer{ MakeAnswer(Fixtures::GetGameId("quake3"), First, "baseq3") };
+
+	answer.reply.rules.emplace_back("^1sv_^7motd", "^3Welcome");
+	list.Apply(Fixtures::GetGameByKey("quake3"), std::move(answer));
+
+	ASSERT_EQ(list.GetEntries().size(), 1u);
+	ASSERT_EQ(list.GetEntries()[0].plainRules.size(), 3u);
+	EXPECT_EQ(list.GetEntries()[0].plainRules[2].key, "sv_motd");
+	EXPECT_EQ(list.GetEntries()[0].plainRules[2].value, "Welcome");
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(ServerList, SearchTextHoldsDecodedPlayerNames)
 {
 	CServerList list{};

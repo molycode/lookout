@@ -239,7 +239,7 @@ void DrawRules(Browser::SServerEntry const& entry)
 	{
 		if (ImGui::BeginTable("##rules", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoSavedSettings))
 		{
-			for (Query::SRule const& rule : entry.reply.rules)
+			for (Query::SRule const& rule : entry.plainRules)
 			{
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();

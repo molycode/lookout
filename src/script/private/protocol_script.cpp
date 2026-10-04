@@ -3,7 +3,6 @@
 #include "conversation_call.hpp"
 #include "end_call.hpp"
 #include "load_call.hpp"
-#include "lua_api.hpp"
 #include "script_calls.hpp"
 #include <tge/assert.hpp>
 #include <array>

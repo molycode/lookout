@@ -209,6 +209,12 @@ void CServerList::ApplyAnswer(Query::SGameDefinition const& game, Net::SServerAn
 		entry.joinAddress = Query::ToJoinAddress(game, entry.address, entry.reply.joinPort);
 		entry.playerNames.clear();
 		entry.playerFieldKeys.clear();
+		entry.plainRules.clear();
+
+		for (Query::SRule const& rule : entry.reply.rules)
+		{
+			entry.plainRules.emplace_back(Query::DecodeText(game.text, rule.key).plain, Query::DecodeText(game.text, rule.value).plain);
+		}
 
 		for (Query::SPlayer const& player : entry.reply.players)
 		{

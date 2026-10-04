@@ -3,6 +3,7 @@
 #include "browser/server_state.hpp"
 #include "geo/countries.hpp"
 #include "query/server_address.hpp"
+#include "query/rule.hpp"
 #include "query/server_summary.hpp"
 #include "query/status_reply.hpp"
 #include "query/styled_text.hpp"
@@ -22,6 +23,7 @@ struct SServerEntry final
 	Query::SServerSummary summary;
 	Query::SStatusReply reply;
 	std::vector<Query::SStyledText> playerNames;
+	std::vector<Query::SRule> plainRules;
 	std::vector<std::string> playerFieldKeys;
 	std::string searchText;
 	bool isFavourite{ false };
