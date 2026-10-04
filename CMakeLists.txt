@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 4.3.0)
 
-project(Lookout VERSION 1.1.0 LANGUAGES C CXX)
+project(Lookout VERSION 1.2.0 LANGUAGES C CXX)
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	message(FATAL_ERROR "Lookout is a Linux application; '${CMAKE_SYSTEM_NAME}' is not supported")
