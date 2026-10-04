@@ -189,6 +189,26 @@ TEST_F(CGameFilesTest, PatchedBuiltinOpensMerged)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CGameFilesTest, ShortListOfValuesStaysOnOneLine)
+{
+	WriteFile("games/quake3/game.json", R"json({ "name": "Quake III, mine" })json");
+
+	std::string const text{ ReadGameText(m_dir, "quake3").text };
+
+	EXPECT_TRUE(text.contains("\n\t\t\t\"palette\": [ \"#000000\", \"#ff0000\", ")) << text;
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameFilesTest, LongListTakesALineAValue)
+{
+	WriteFile("games/et/game.json", R"json({ "name": "Enemy Territory, mine" })json");
+
+	std::string const text{ ReadGameText(m_dir, "et").text };
+
+	EXPECT_TRUE(text.contains("\n\t\t\t\"palette\": [\n\t\t\t\t\"#000000\",\n\t\t\t\t\"#ff0000\",\n")) << text;
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CGameFilesTest, BrokenPatchOpensTheBuiltinWithItsProblem)
 {
 	WriteFile("games/quake3/game.json", "[ 1 ]");
