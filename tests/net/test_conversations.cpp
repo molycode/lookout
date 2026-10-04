@@ -1,5 +1,6 @@
 #include "catalog_fixture.hpp"
 #include "fixtures.hpp"
+#include "net/collect_events.hpp"
 #include "net/event_collector.hpp"
 #include "net/loopback_server.hpp"
 #include "net/query_engine.hpp"
@@ -27,23 +28,6 @@ using Fixtures::ToBytes;
 
 constexpr std::chrono::milliseconds Patience{ 10s };
 constexpr std::string_view Loopback{ "127.0.0.1" };
-
-//////////////////////////////////////////////////////////////////////////
-template<typename TEvent>
-std::vector<TEvent> Collect(std::span<SQueryEvent const> events)
-{
-	std::vector<TEvent> found{};
-
-	for (SQueryEvent const& event : events)
-	{
-		if (TEvent const* const pTyped{ std::get_if<TEvent>(&event) }; pTyped != nullptr)
-		{
-			found.emplace_back(*pTyped);
-		}
-	}
-
-	return found;
-}
 
 //////////////////////////////////////////////////////////////////////////
 // A Quake III master's list: each entry a backslash, then the address, then the end marker.
@@ -163,7 +147,7 @@ TEST_F(CConversationTest, TwoStepConversationIsAnswered)
 	ASSERT_TRUE(m_status.StartExchanges({ { ToBytes("token?"), { ToBytes("C42") } }, { ToBytes("status C42"), { ToBytes("hello") } } }));
 	ASSERT_TRUE(Run(game, m_status.GetAddress()));
 
-	std::vector<SServerAnswered> const answered{ Collect<SServerAnswered>(m_collector.GetEvents()) };
+	std::vector<SServerAnswered> const answered{ Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()) };
 
 	ASSERT_EQ(answered.size(), 1u);
 	EXPECT_EQ(Query::FindRule(answered[0].reply, "hostname"), "hello");
@@ -178,7 +162,7 @@ TEST_F(CConversationTest, ResendRepeatsEveryDatagramOfTheStep)
 	ASSERT_TRUE(m_status.Start({}));
 	ASSERT_TRUE(Run(game, m_status.GetAddress()));
 
-	std::vector<SServerFailed> const failed{ Collect<SServerFailed>(m_collector.GetEvents()) };
+	std::vector<SServerFailed> const failed{ Fixtures::CollectEvents<SServerFailed>(m_collector.GetEvents()) };
 
 	ASSERT_EQ(failed.size(), 1u);
 	EXPECT_EQ(failed[0].failure, EServerFailure::NoAnswer);
@@ -194,11 +178,11 @@ TEST_F(CConversationTest, ServerPastTheCapIsCutShortOnce)
 	ASSERT_TRUE(m_status.StartExchanges({ { ToBytes("one"), std::vector<std::vector<std::byte>>(70, ToBytes("x")) }, { ToBytes("two"), {} } }));
 	ASSERT_TRUE(Run(game, m_status.GetAddress()));
 
-	std::vector<SServerAnswered> const answered{ Collect<SServerAnswered>(m_collector.GetEvents()) };
+	std::vector<SServerAnswered> const answered{ Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()) };
 
 	ASSERT_EQ(answered.size(), 1u);
 	EXPECT_EQ(Query::FindRule(answered[0].reply, "count"), "64");
-	EXPECT_TRUE(Collect<SServerFailed>(m_collector.GetEvents()).empty());
+	EXPECT_TRUE(Fixtures::CollectEvents<SServerFailed>(m_collector.GetEvents()).empty());
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -212,10 +196,10 @@ TEST_F(CConversationTest, MasterOnLoopbackListsItsServers)
 
 	ASSERT_TRUE(Run(game));
 
-	std::vector<SServersListed> const listed{ Collect<SServersListed>(m_collector.GetEvents()) };
-	std::vector<SServerAnswered> const answered{ Collect<SServerAnswered>(m_collector.GetEvents()) };
+	std::vector<SServersListed> const listed{ Fixtures::CollectEvents<SServersListed>(m_collector.GetEvents()) };
+	std::vector<SServerAnswered> const answered{ Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()) };
 
-	EXPECT_TRUE(Collect<SMasterFailed>(m_collector.GetEvents()).empty());
+	EXPECT_TRUE(Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()).empty());
 	ASSERT_EQ(listed.size(), 1u);
 	EXPECT_EQ(listed[0].servers, std::vector<Query::SServerAddress>{ status });
 	ASSERT_EQ(answered.size(), 1u);
@@ -234,11 +218,11 @@ TEST_F(CConversationTest, MasterPastTheCapFails)
 
 	ASSERT_TRUE(Run(game));
 
-	std::vector<SMasterFailed> const failed{ Collect<SMasterFailed>(m_collector.GetEvents()) };
+	std::vector<SMasterFailed> const failed{ Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()) };
 
 	ASSERT_EQ(failed.size(), 1u);
 	EXPECT_EQ(failed[0].reason, "listed more servers than one master may; the rest were left out");
-	EXPECT_EQ(Collect<SServerAnswered>(m_collector.GetEvents()).size(), 1u);
+	EXPECT_EQ(Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()).size(), 1u);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -255,7 +239,7 @@ TEST_F(CConversationTest, RefusedMasterFailsAtOnce)
 
 	ASSERT_TRUE(Run(game));
 
-	std::vector<SMasterFailed> const failed{ Collect<SMasterFailed>(m_collector.GetEvents()) };
+	std::vector<SMasterFailed> const failed{ Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()) };
 
 	ASSERT_EQ(failed.size(), 1u);
 	EXPECT_EQ(failed[0].reason, "refused the query");
@@ -271,7 +255,7 @@ TEST_F(CConversationTest, SilentMasterIsAskedTwice)
 
 	ASSERT_TRUE(Run(game));
 
-	std::vector<SMasterFailed> const failed{ Collect<SMasterFailed>(m_collector.GetEvents()) };
+	std::vector<SMasterFailed> const failed{ Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()) };
 
 	ASSERT_EQ(failed.size(), 1u);
 	EXPECT_EQ(failed[0].reason, "did not answer");
@@ -288,8 +272,8 @@ TEST_F(CConversationTest, MastersAtOneAddressAreAskedApart)
 
 	ASSERT_TRUE(Run(game));
 
-	EXPECT_TRUE(Collect<SMasterFailed>(m_collector.GetEvents()).empty());
-	EXPECT_EQ(Collect<SServerAnswered>(m_collector.GetEvents()).size(), 1u);
+	EXPECT_TRUE(Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()).empty());
+	EXPECT_EQ(Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()).size(), 1u);
 	EXPECT_EQ(m_master.GetNumRequests(), 2u);
 }
 

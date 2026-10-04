@@ -30,6 +30,8 @@ public:
 	// Read once stopped.
 	std::vector<std::byte> GetFirstRequest() const;
 	bool AreRequestsAlike() const;
+	// Read once stopped.
+	uint32_t GetNumMatches(size_t exchange) const;
 
 private:
 
@@ -40,6 +42,7 @@ private:
 	int m_descriptor{ -1 };
 	uint16_t m_port{ 0 };
 	std::vector<SLoopbackExchange> m_exchanges;
+	std::vector<uint32_t> m_numMatches;
 	std::atomic<bool> m_isServing{ false };
 	std::atomic<uint32_t> m_numRequests{ 0 };
 	std::array<std::byte, MaxRequestSize> m_firstRequest{};

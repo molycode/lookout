@@ -1,6 +1,8 @@
 #include "catalog_fixture.hpp"
+#include "game_json.hpp"
 #include "query/game_catalog.hpp"
 #include "script/protocol_script.hpp"
+#include <algorithm>
 #include <expected>
 #include <filesystem>
 #include <format>
@@ -61,6 +63,30 @@ Query::EGame CCatalogTest::AddGame(Query::SGameDefinition game)
 	Install();
 
 	return static_cast<Query::EGame>(m_games.size() - 1);
+}
+
+//////////////////////////////////////////////////////////////////////////
+Query::EGame CCatalogTest::AddGameFile(std::string_view key, std::span<uint16_t const> masterPorts)
+{
+	std::filesystem::path const path{ std::filesystem::path{ LKT_TEST_GAMES_DIR } / key / "game.json" };
+	std::ifstream file{ path, std::ios::binary };
+	std::string const text{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} };
+	std::expected<Query::SGameDefinition, std::string> game{ Games::ReadGameJson(text, m_protocols) };
+
+	EXPECT_TRUE(file.is_open()) << path;
+	EXPECT_TRUE(game.has_value()) << game.error_or("");
+	EXPECT_EQ(game.has_value() ? game->masters.size() : masterPorts.size(), masterPorts.size());
+
+	Query::SGameDefinition definition{ game.value_or(Query::SGameDefinition{}) };
+
+	definition.key = key;
+
+	for (size_t index{ 0 }; index < std::min(definition.masters.size(), masterPorts.size()); ++index)
+	{
+		definition.masters[index].port = masterPorts[index];
+	}
+
+	return AddGame(std::move(definition));
 }
 
 //////////////////////////////////////////////////////////////////////////

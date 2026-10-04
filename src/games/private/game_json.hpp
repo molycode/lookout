@@ -9,7 +9,7 @@
 
 namespace Lkt::Games
 {
-// The error names where the file first went wrong ("masters[0].port: …"). The key and the requests are left for the
-// caller: the key is the name of the game's folder, and the requests need the protocol's script.
+// The error names where the file first went wrong ("masters[0].port: …"). The key is left for the caller: it is the
+// name of the game's folder.
 std::expected<Query::SGameDefinition, std::string> ReadGameJson(std::string_view text, std::span<Query::SProtocolDefinition const> protocols);
 } // namespace Lkt::Games

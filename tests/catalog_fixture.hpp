@@ -6,6 +6,8 @@
 #include "query/protocol_definition.hpp"
 #include <gtest/gtest.h>
 #include <cstddef>
+#include <cstdint>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -26,6 +28,8 @@ protected:
 	Query::EProtocol AddProtocol(std::string_view name);
 	// Under a key no other game has.
 	Query::EGame AddGame(Query::SGameDefinition game);
+	// tests/games/<key>/game.json, its masters' ports set to these, in order; its protocol must be added first.
+	Query::EGame AddGameFile(std::string_view key, std::span<uint16_t const> masterPorts);
 
 private:
 

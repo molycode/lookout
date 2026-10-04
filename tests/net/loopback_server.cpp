@@ -35,6 +35,7 @@ bool CLoopbackServer::Start(std::vector<std::byte> reply)
 bool CLoopbackServer::StartExchanges(std::vector<SLoopbackExchange> exchanges)
 {
 	m_exchanges = std::move(exchanges);
+	m_numMatches.assign(m_exchanges.size(), 0);
 	m_descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 
 	sockaddr_in local{};
@@ -98,6 +99,12 @@ bool CLoopbackServer::AreRequestsAlike() const
 }
 
 //////////////////////////////////////////////////////////////////////////
+uint32_t CLoopbackServer::GetNumMatches(size_t exchange) const
+{
+	return m_numMatches[exchange];
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Allocates nothing, so it needs no thread setup for tge's allocator.
 void CLoopbackServer::Serve()
 {
@@ -137,9 +144,16 @@ void CLoopbackServer::Serve()
 
 				if (exchange != m_exchanges.end())
 				{
-					for (std::vector<std::byte> const& reply : exchange->replies)
+					uint32_t& numMatches{ m_numMatches[static_cast<size_t>(exchange - m_exchanges.begin())] };
+
+					++numMatches;
+
+					if (numMatches > exchange->numIgnored)
 					{
-						sendto(m_descriptor, reply.data(), reply.size(), 0, reinterpret_cast<sockaddr const*>(&sender), senderSize);
+						for (std::vector<std::byte> const& reply : exchange->replies)
+						{
+							sendto(m_descriptor, reply.data(), reply.size(), 0, reinterpret_cast<sockaddr const*>(&sender), senderSize);
+						}
 					}
 				}
 			}

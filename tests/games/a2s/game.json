@@ -1,0 +1,22 @@
+{
+	"format": 1,
+	"name": "A2S Test",
+	"protocol": "a2s",
+	"protocolOptions": { "masterFilter": "\\appid\\440" },
+	"text": { "encoding": "utf8OrWindows1252" },
+	// The test sets the port to its emulated master's.
+	"masters": [ { "host": "127.0.0.1", "port": 27011 } ],
+	"keys": {
+		"hostname": "hostname",
+		"map": "map",
+		"numPlayers": "players",
+		"maxPlayers": "maxplayers",
+		"password": "password",
+		"mods": [ "folder" ]
+	},
+	"join": {
+		"arguments": [ "+connect", "{address}" ],
+		"passwordArguments": [ "+password", "{password}", "+connect", "{address}" ],
+		"password": { "maxLength": 63 }
+	}
+}
