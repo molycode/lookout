@@ -2,6 +2,7 @@
 #include "conversation_call.hpp"
 #include "end_call.hpp"
 #include "load_call.hpp"
+#include "lua_api.hpp"
 #include "sandbox.hpp"
 #include <algorithm>
 #include <array>

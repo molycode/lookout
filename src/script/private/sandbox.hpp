@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lua_api.hpp"
+struct lua_State;
 
 namespace Lkt::Script
 {
