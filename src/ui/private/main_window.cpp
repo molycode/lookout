@@ -215,6 +215,11 @@ void CMainWindow::Apply(Browser::CBrowser& browser, SFrameIntents const& intents
 		SetGameListed(browser, *intents.showGame, true);
 	}
 
+	if (intents.moveGame.has_value())
+	{
+		browser.MoveGame(intents.moveGame->game, intents.moveGame->target);
+	}
+
 	if (intents.filter.has_value())
 	{
 		browser.SetFilter(*intents.filter);

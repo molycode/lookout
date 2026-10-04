@@ -1,6 +1,7 @@
 #include "game_sidebar.hpp"
 #include "format_to.hpp"
 #include "frame_intents.hpp"
+#include "game_move.hpp"
 #include "icons.hpp"
 #include "theme.hpp"
 #include "theme_colors.hpp"
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstring>
 #include <span>
 #include <string_view>
 
@@ -24,6 +26,7 @@ constexpr float CardRoundingEm{ 0.5f };
 constexpr float SelectedFillAlpha{ 0.16f };
 constexpr float HoveredSelectedFillAlpha{ 0.22f };
 constexpr float ActiveSelectedFillAlpha{ 0.30f };
+constexpr char const* GamePayload{ "game" };
 
 //////////////////////////////////////////////////////////////////////////
 void DrawGearButton(Query::SGameDefinition const& game, SFrameIntents& intents)
@@ -38,6 +41,36 @@ void DrawGearButton(Query::SGameDefinition const& game, SFrameIntents& intents)
 	std::string_view const tooltip{ FormatTo(buffer, "How Lookout starts {}", game.name) };
 
 	ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
+}
+
+//////////////////////////////////////////////////////////////////////////
+void DragToReorder(Query::EGame game, SFrameIntents& intents)
+{
+	if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
+	{
+		ImGui::SetDragDropPayload(GamePayload, &game, sizeof(game));
+		ImGui::EndDragDropSource();
+	}
+
+	if (ImGui::BeginDragDropTarget())
+	{
+		ImGuiPayload const* const pPayload{ ImGui::AcceptDragDropPayload(GamePayload,
+			ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect) };
+
+		if (pPayload != nullptr)
+		{
+			Query::EGame dragged{ Query::NoGame };
+
+			std::memcpy(&dragged, pPayload->Data, sizeof(dragged));
+
+			if (dragged != game)
+			{
+				intents.moveGame = SGameMove{ dragged, game };
+			}
+		}
+
+		ImGui::EndDragDropTarget();
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -100,6 +133,8 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 	{
 		intents.selectGame = game.game;
 	}
+
+	DragToReorder(game.game, intents);
 
 	bool const isHovered{ ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenOverlappedByItem) };
 
@@ -168,15 +203,16 @@ void DrawHiddenGame(Query::SGameDefinition const& game, SFrameIntents& intents)
 void DrawGameSidebar(Browser::CBrowser const& browser, SFrameIntents& intents)
 {
 	std::span<Config::SGameSettings const> const games{ browser.GetSettings().games };
+	std::span<Query::EGame const> const order{ browser.GetSettings().gameOrder };
 	size_t const numListed{ static_cast<size_t>(std::ranges::count(games, true, &Config::SGameSettings::isListed)) };
 	size_t const numHidden{ games.size() - numListed };
 
-	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
+	for (Query::EGame const game : order)
 	{
-		if (games[static_cast<size_t>(game.game)].isListed)
+		if (games[static_cast<size_t>(game)].isListed)
 		{
-			ImGui::PushID(static_cast<int>(game.game));
-			DrawListedGame(game, browser, numListed == 1, intents);
+			ImGui::PushID(static_cast<int>(game));
+			DrawListedGame(Query::GetGame(game), browser, numListed == 1, intents);
 			ImGui::PopID();
 		}
 	}
@@ -190,12 +226,12 @@ void DrawGameSidebar(Browser::CBrowser const& browser, SFrameIntents& intents)
 
 		if (ImGui::TreeNodeEx(label.data(), ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth))
 		{
-			for (Query::SGameDefinition const& game : Query::GetGameCatalog())
+			for (Query::EGame const game : order)
 			{
-				if (!games[static_cast<size_t>(game.game)].isListed)
+				if (!games[static_cast<size_t>(game)].isListed)
 				{
-					ImGui::PushID(static_cast<int>(game.game));
-					DrawHiddenGame(game, intents);
+					ImGui::PushID(static_cast<int>(game));
+					DrawHiddenGame(Query::GetGame(game), intents);
 					ImGui::PopID();
 				}
 			}

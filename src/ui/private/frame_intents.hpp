@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game_move.hpp"
 #include "server_action.hpp"
 #include "config/server_filter.hpp"
 #include "config/sort_order.hpp"
@@ -16,6 +17,7 @@ struct SFrameIntents final
 	std::optional<Query::EGame> selectGame;
 	std::optional<Query::EGame> hideGame;
 	std::optional<Query::EGame> showGame;
+	std::optional<SGameMove> moveGame;
 	std::optional<Query::EGame> openGameSettings;
 	std::optional<Config::SServerFilter> filter;
 	std::optional<Config::SSortOrder> sort;
