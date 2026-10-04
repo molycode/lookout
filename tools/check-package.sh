@@ -1,15 +1,18 @@
 #!/bin/bash
-# Check a package in clean containers of the distros Lookout supports: it installs, lists servers and
-# uninstalls cleanly everywhere, and on two of them its window starts under Xvfb.
+# Check a package in clean containers of the distros Lookout supports: it installs, downloads games from
+# lookout-games, lists servers and uninstalls cleanly everywhere, and on two of them its window starts under Xvfb.
 #
 #   tools/check-package.sh [dist/lookout-<version>-x86_64.tar.xz]
 #
-# Needs the network: the images, their package mirrors, and live Kingpin and UT2004 masters.
+# Needs the network: the images, their package mirrors, GitHub, and live Kingpin and UT2004 masters.
 
 set -u
 
 LIST_IMAGES="ubuntu:22.04 ubuntu:24.04 debian:12 debian:13 fedora:latest archlinux:latest"
 GUI_IMAGES="ubuntu:22.04 fedora:latest"
+
+# CA certificates, which every desktop has and slim Ubuntu and Debian images lack; Fedora's and Arch's carry them.
+APT_CA="apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates"
 
 # Xvfb, Mesa and the X libraries SDL loads by soname; a desktop has them, a container does not.
 APT_GUI="apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -52,10 +55,12 @@ PACKAGE=$(find "$WORK/package" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 cat > "$WORK/checks/list.sh" <<'EOF'
 set -u
 fail() { echo "FAIL $1"; [ -f /tmp/out ] && tail -n 5 /tmp/out; exit 1; }
+sh -c "$SETUP" > /tmp/out 2>&1 || fail "installing the CA certificates"
 cp -R /pkg /tmp/pkg || fail "copying the package"
 sh /tmp/pkg/install.sh > /tmp/out 2>&1 || fail "install.sh"
 sh /tmp/pkg/install.sh > /tmp/out 2>&1 || fail "install.sh over an existing install"
 # One game on a UDP master and one on a TCP master, each through its own protocol script.
+"$HOME/.local/bin/lookout" --download kingpin ut2004 > /tmp/out 2>&1 || fail "lookout --download kingpin ut2004"
 listed=""
 for game in kingpin ut2004; do
 	"$HOME/.local/bin/lookout" --list "$game" > /tmp/list 2> /tmp/out || fail "lookout --list $game"
@@ -67,11 +72,13 @@ for uninstaller in "$HOME/.local/share/lookout/uninstall.sh" /tmp/pkg/uninstall.
 	sh "$uninstaller" > /tmp/out 2>&1 || fail "$uninstaller"
 	grep -q "is uninstalled" /tmp/out || fail "$uninstaller found nothing to remove"
 	for leftover in "$HOME/.local/bin/lookout" "$HOME/.local/share/applications/lookout.desktop" \
-		"$HOME/.local/share/icons/hicolor/scalable/apps/lookout.svg" "$HOME/.local/share/lookout"; do
+		"$HOME/.local/share/icons/hicolor/scalable/apps/lookout.svg" "$HOME/.local/share/lookout/uninstall.sh"; do
 		[ ! -e "$leftover" ] || fail "$uninstaller left $leftover"
 	done
+	# The downloaded games stay, as the settings do, and nothing else.
+	[ "$(ls -A "$HOME/.local/share/lookout")" = "downloaded" ] || fail "$uninstaller left $(ls -A "$HOME/.local/share/lookout")"
 done
-echo "PASS installs, lists $listed servers, uninstalls cleanly with either uninstaller"
+echo "PASS installs, downloads, lists $listed servers, uninstalls cleanly with either uninstaller"
 EOF
 
 cat > "$WORK/checks/gui.sh" <<'EOF'
@@ -119,7 +126,12 @@ note "$LIST_IMAGES; window on $GUI_IMAGES"
 failures=0
 
 for image in $LIST_IMAGES; do
-	run_check "$image" list.sh || failures=$((failures + 1))
+	case "$image" in
+		ubuntu:*|debian:*) setup="$APT_CA" ;;
+		*) setup="true" ;;
+	esac
+
+	run_check "$image" list.sh "$setup" || failures=$((failures + 1))
 done
 
 for image in $GUI_IMAGES; do

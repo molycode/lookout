@@ -17,6 +17,17 @@ Install
 This installs Lookout for your user only, under ~/.local, and adds it to the applications
 menu. It needs no root. To upgrade, unpack a newer package and run its install.sh.
 
+Games
+-----
+Lookout comes without games. On its first start it offers to download them from
+github.com/molycode/lookout-games; later, Lookout > Download games... installs, updates and
+removes them. From a terminal, the same is
+
+    lookout --download [game...]
+
+which downloads the games named, or every game missing or with an update. They are kept in
+~/.local/share/lookout/downloaded/.
+
 Starting a game
 ---------------
 Lookout finds most installs by itself. When it says it cannot start a game, it found no
@@ -30,8 +41,9 @@ keeps it in
 
     ~/.local/share/lookout/games/<name>/game.json
 
-where a built-in game's file holds only your changes. Protocol scripts of your own go in
-~/.local/share/lookout/protocols/. Lookout reloads both folders when they change.
+where a downloaded game's file holds only your changes, so updates of the game keep them.
+Protocol scripts of your own go in ~/.local/share/lookout/protocols/. Lookout reloads both
+folders when they change. To publish a game, see github.com/molycode/lookout-games.
 
 Uninstall
 ---------
@@ -46,7 +58,7 @@ stay:
 
     Settings  ~/.config/lookout/
     Logs      ~/.local/state/lookout/logs/
-    Games     ~/.local/share/lookout/games/ and protocols/
+    Games     ~/.local/share/lookout/ (downloaded/, and your own games/ and protocols/)
 
 These paths, and that of the uninstaller's copy, follow $XDG_CONFIG_HOME, $XDG_STATE_HOME
 and $XDG_DATA_HOME when those are set.

@@ -34,7 +34,7 @@ done
 
 rmdir "$UNINSTALL_DIR" 2>/dev/null || true
 
-# Still there, it holds the user's own games or protocols.
+# Still there, it holds the downloaded games or the user's own.
 if [ "$isFound" = true ] && [ -d "$UNINSTALL_DIR" ]; then
 	echo "Lookout is uninstalled. Its settings in $CONFIG_DIR, logs in $STATE_DIR and game descriptions in $UNINSTALL_DIR are kept."
 elif [ "$isFound" = true ]; then
