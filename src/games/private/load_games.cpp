@@ -1,5 +1,6 @@
 #include "games/load_games.hpp"
 #include "game_json.hpp"
+#include "layer_name.hpp"
 #include "merge_patch.hpp"
 #include "try_conversations.hpp"
 #include "user_file_size.hpp"
@@ -311,15 +312,6 @@ void AddGame(std::string_view key, std::optional<std::filesystem::path> const& d
 	{
 		content.games.emplace_back(std::move(*game));
 	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-// A folder path that ends in a separator still names its folder.
-std::string NameLayer(std::filesystem::path const& folder)
-{
-	std::filesystem::path const name{ folder.has_filename() ? folder.filename() : folder.parent_path().filename() };
-
-	return name.string();
 }
 } // namespace
 

@@ -2,6 +2,7 @@
 #include "lookout.hpp"
 #include "loggers.hpp"
 #include "config/xdg_paths.hpp"
+#include "games/check_folder.hpp"
 #include "games/game_files.hpp"
 #include "games/load_games.hpp"
 #include "query/game_catalog.hpp"
@@ -9,6 +10,7 @@
 #include <expected>
 #include <filesystem>
 #include <format>
+#include <optional>
 #include <print>
 #include <span>
 #include <string>
@@ -35,9 +37,28 @@ void PrintUsage(std::string_view executable)
 {
 	std::println("Usage: {} [options]", executable);
 	std::println("Options:");
-	std::println("  --list <game>  Print the game's servers and exit; <game> is one of: {}", GetGameKeys());
-	std::println("  --version      Show the version");
-	std::println("  --help         Show this help message");
+	std::println("  --list <game>     Print the game's servers and exit; <game> is one of: {}", GetGameKeys());
+	std::println("  --check <folder>  Check the games and protocols of a lookout-games folder, print each problem and exit");
+	std::println("  --version         Show the version");
+	std::println("  --help            Show this help message");
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Everything on stdout, so a pull request's check log reads in order.
+int CheckFolder(std::filesystem::path const& folder)
+{
+	Lkt::Games::SGameContent const content{ Lkt::Games::CheckGameFolder(folder) };
+	size_t const numProblems{ content.problems.size() };
+
+	for (Lkt::Query::SGameProblem const& problem : content.problems)
+	{
+		std::println("{}", problem.text);
+	}
+
+	std::println("{} games, {} protocols, {} {}", content.games.size(), content.protocols.size(), (numProblems == 0) ? std::string{ "no" }
+		: std::to_string(numProblems), (numProblems == 1) ? "problem" : "problems");
+
+	return (numProblems == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 } // namespace
 
@@ -64,7 +85,9 @@ int main(int argc, char* argv[])
 	bool showHelp{ false };
 	bool showVersion{ false };
 	bool isExpectingGame{ false };
+	bool isExpectingFolder{ false };
 	Lkt::Query::SGameDefinition const* pListGame{ nullptr };
+	std::optional<std::filesystem::path> checkFolder{};
 
 	for (std::string_view const arg : options)
 	{
@@ -81,6 +104,11 @@ int main(int argc, char* argv[])
 					Lkt::gLog.Error("Unknown game '{}' - expected one of: {}", arg, GetGameKeys());
 				}
 			}
+			else if (isExpectingFolder)
+			{
+				checkFolder = std::filesystem::path{ arg };
+				isExpectingFolder = false;
+			}
 			else if (arg == "--help")
 			{
 				showHelp = true;
@@ -92,6 +120,10 @@ int main(int argc, char* argv[])
 			else if (arg == "--list")
 			{
 				isExpectingGame = true;
+			}
+			else if (arg == "--check")
+			{
+				isExpectingFolder = true;
 			}
 			else
 			{
@@ -106,6 +138,11 @@ int main(int argc, char* argv[])
 		Lkt::gLog.Error("--list needs a game, one of: {}", GetGameKeys());
 		valid = false;
 	}
+	else if (valid && isExpectingFolder)
+	{
+		Lkt::gLog.Error("--check needs the folder to check");
+		valid = false;
+	}
 
 	int result{ EXIT_FAILURE };
 
@@ -118,6 +155,10 @@ int main(int argc, char* argv[])
 	{
 		std::println("Lookout {}", LKT_VERSION);
 		result = EXIT_SUCCESS;
+	}
+	else if (valid && checkFolder.has_value())
+	{
+		result = CheckFolder(*checkFolder);
 	}
 	else if (valid)
 	{
