@@ -25,3 +25,6 @@ MIT — see `LICENSE`.
 
 Country data: [IP Geolocation by DB-IP](https://db-ip.com), under CC BY 4.0. Flags from
 [flag-icons](https://github.com/lipis/flag-icons), under the MIT License.
+
+The built-in games' icons are not Lookout's: `assets/games/<key>/icon-licence.txt` gives each one's source and licence,
+and the games' names and marks belong to their owners.

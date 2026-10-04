@@ -52,6 +52,13 @@ STAGE="$WORK/$NAME"
 mkdir -m 755 "$STAGE" || die "cannot create $STAGE"
 install -m 755 "$BINARY" tools/package/install.sh tools/package/uninstall.sh "$STAGE/" || die "cannot stage the programs"
 install -m 644 data/lookout.desktop data/lookout.svg LICENSE tools/package/README.txt "$STAGE/" || die "cannot stage the files"
+mkdir -m 755 "$STAGE/game-icons" || die "cannot create $STAGE/game-icons"
+
+for icon in assets/games/*/icon.png; do
+	game="$(basename "$(dirname "$icon")")"
+	[ -f "assets/games/$game/icon-licence.txt" ] || die "$icon has no icon-licence.txt beside it"
+	install -m 644 "assets/games/$game/icon-licence.txt" "$STAGE/game-icons/$game.txt" || die "cannot stage $game's icon licence"
+done
 
 tar -C "$WORK" --owner=0 --group=0 --numeric-owner --sort=name -cJf "$OUT" "$NAME" || die "cannot write $OUT"
 

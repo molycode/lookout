@@ -41,4 +41,5 @@ and $XDG_DATA_HOME when those are set.
 Licence
 -------
 MIT, see LICENSE. The notices of the libraries and fonts Lookout includes are in the
-program, under Lookout > About Lookout > Licences.
+program, under Lookout > About Lookout > Licences. The built-in games' icons are not
+Lookout's: game-icons/ gives each one's source and licence.

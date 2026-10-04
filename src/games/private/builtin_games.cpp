@@ -3,6 +3,7 @@
 #include "game_json.hpp"
 #include "script/protocol_script.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <expected>
 #include <format>
 #include <map>
@@ -73,6 +74,16 @@ void AddGame(std::string_view key, std::span<unsigned char const> bytes, std::sp
 
 		if (tried.has_value())
 		{
+			std::string const iconPath{ std::format("{}/icon.png", key) };
+			auto const icon{ std::ranges::find(Embedded::GameIcons, std::string_view{ iconPath }, &Embedded::SEmbeddedFile::name) };
+
+			if (icon != Embedded::GameIcons.end())
+			{
+				std::span<std::byte const> const bytes{ std::as_bytes(icon->bytes) };
+
+				game->icon.assign(bytes.begin(), bytes.end());
+			}
+
 			game->key = key;
 			builtins.games.emplace_back(std::move(*game));
 		}

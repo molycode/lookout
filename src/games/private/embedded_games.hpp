@@ -7,4 +7,5 @@ namespace Lkt::Embedded
 {
 extern std::span<SEmbeddedFile const> const Protocols;
 extern std::span<SEmbeddedFile const> const Games;
+extern std::span<SEmbeddedFile const> const GameIcons;
 } // namespace Lkt::Embedded

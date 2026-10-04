@@ -9,6 +9,7 @@
 #include "query/protocol.hpp"
 #include "query/server_keys.hpp"
 #include "query/text_style.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -31,5 +32,6 @@ struct SGameDefinition final
 	std::vector<SKeyMatch> foreignServers;
 	SLaunchHints launch;
 	SJoinCommand join;
+	std::vector<std::byte> icon;
 };
 } // namespace Lkt::Query
