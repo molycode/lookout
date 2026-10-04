@@ -8,17 +8,17 @@
 //////////////////////////////////////////////////////////////////////////
 int main(int argc, char** argv)
 {
-	Lkt::Games::SGameContent const builtins{ Lkt::Games::LoadGames({}) };
+	Lkt::Games::SGameContent const downloaded{ Lkt::Games::LoadGames(LKT_LOOKOUT_GAMES_DIR, {}) };
 	int result{ EXIT_FAILURE };
 
-	for (Lkt::Query::SGameProblem const& problem : builtins.problems)
+	for (Lkt::Query::SGameProblem const& problem : downloaded.problems)
 	{
 		std::fprintf(stderr, "%s\n", problem.text.c_str());
 	}
 
-	if (builtins.problems.empty())
+	if (downloaded.problems.empty())
 	{
-		Lkt::Query::InitializeGameCatalog(builtins.protocols, builtins.games);
+		Lkt::Query::InitializeGameCatalog(downloaded.protocols, downloaded.games);
 		testing::InitGoogleTest(&argc, argv);
 		testing::AddGlobalTestEnvironment(new Lkt::Fixtures::CTgeEnvironment{});
 		result = RUN_ALL_TESTS();

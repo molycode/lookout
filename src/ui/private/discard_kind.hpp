@@ -6,7 +6,7 @@ namespace Lkt::Ui
 {
 enum class EDiscardKind : uint8_t
 {
-	// A built-in's changes, which leaves the built-in.
+	// The changes to a downloaded game, which leaves it as downloaded.
 	Changes,
 	// A game of the user's own, with its folder.
 	Game

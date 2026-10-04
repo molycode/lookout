@@ -3,7 +3,8 @@ file(GLOB_RECURSE LKT_TEST_SOURCES CONFIGURE_DEPENDS "*.cpp" "*.hpp")
 LktApp(LookoutTests ${LKT_TEST_SOURCES})
 
 target_compile_definitions(LookoutTests PRIVATE LKT_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
-	LKT_TEST_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/scripts" LKT_TEST_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games")
+	LKT_TEST_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/scripts" LKT_TEST_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
+	LKT_LOOKOUT_GAMES_DIR="${PROJECT_SOURCE_DIR}/external/lookout-games")
 
 # Pure logic private to its module by design, such as the network scheduler or the settings reader; reaching in
 # beats widening an interface for a test.

@@ -35,6 +35,15 @@ constexpr std::string_view UserGame{ R"json({
 })json" };
 
 //////////////////////////////////////////////////////////////////////////
+// As lookout-games has it, which the tests' data folder takes as its download.
+std::string ReadDownloadedText(std::string_view key)
+{
+	std::ifstream file{ std::filesystem::path{ LKT_LOOKOUT_GAMES_DIR } / "games" / key / "game.json", std::ios::binary };
+
+	return std::string{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} };
+}
+
+//////////////////////////////////////////////////////////////////////////
 class CGameFilesTest : public testing::Test
 {
 protected:
@@ -47,6 +56,8 @@ protected:
 
 		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
 		m_dir = pattern;
+		std::filesystem::create_directory_symlink(LKT_LOOKOUT_GAMES_DIR, GetDownloadedDir(m_dir), error);
+		ASSERT_EQ(error.value(), 0) << error.message();
 	}
 
 	void TearDown() override
@@ -77,11 +88,11 @@ protected:
 		return std::string{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} };
 	}
 
-	// The built-in's text as the editor opens it, changed by edit.
+	// The downloaded text, changed by edit.
 	template<typename TEdit>
-	std::string EditBuiltin(std::string_view key, TEdit&& edit) const
+	std::string EditDownloaded(std::string_view key, TEdit&& edit) const
 	{
-		JsonValue game = JsonValue::parse(ReadGameText({}, key).text);
+		JsonValue game = JsonValue::parse(ReadDownloadedText(key));
 
 		edit(game);
 
@@ -92,16 +103,16 @@ protected:
 };
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameFilesTest, UnchangedBuiltinWritesNoFile)
+TEST_F(CGameFilesTest, UnchangedDownloadWritesNoFile)
 {
-	EXPECT_TRUE(SaveGame(m_dir, "quake3", ReadGameText({}, "quake3").text).has_value());
+	EXPECT_TRUE(SaveGame(m_dir, "quake3", ReadDownloadedText("quake3")).has_value());
 	EXPECT_FALSE(std::filesystem::exists(m_dir / "games"));
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameFilesTest, EditedBuiltinWritesOnlyTheChanges)
+TEST_F(CGameFilesTest, EditedDownloadWritesOnlyTheChanges)
 {
-	std::string const text{ EditBuiltin("quake3", [](JsonValue& game) { game["masters"][0]["port"] = 27951; }) };
+	std::string const text{ EditDownloaded("quake3", [](JsonValue& game) { game["masters"][0]["port"] = 27951; }) };
 
 	ASSERT_TRUE(SaveGame(m_dir, "quake3", text).has_value());
 
@@ -113,9 +124,9 @@ TEST_F(CGameFilesTest, EditedBuiltinWritesOnlyTheChanges)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameFilesTest, EditedBuiltinLoadsAsEdited)
+TEST_F(CGameFilesTest, EditedDownloadLoadsAsEdited)
 {
-	std::string const text{ EditBuiltin("quake3", [](JsonValue& game)
+	std::string const text{ EditDownloaded("quake3", [](JsonValue& game)
 	{
 		game.erase("modes");
 		game.erase("//foreignServers");
@@ -126,7 +137,7 @@ TEST_F(CGameFilesTest, EditedBuiltinLoadsAsEdited)
 
 	ASSERT_TRUE(SaveGame(m_dir, "quake3", text).has_value());
 
-	SGameContent const content{ LoadGames(m_dir) };
+	SGameContent const content{ LoadGames(GetDownloadedDir(m_dir), m_dir) };
 	auto const game{ std::ranges::find(content.games, "quake3", &Query::SGameDefinition::key) };
 
 	EXPECT_TRUE(content.problems.empty()) << content.problems.front().text;
@@ -143,7 +154,7 @@ TEST_F(CGameFilesTest, UnchangedSaveRemovesEarlierChanges)
 {
 	WriteFile("games/quake3/game.json", R"json({ "name": "Quake III, mine" })json");
 
-	ASSERT_TRUE(SaveGame(m_dir, "quake3", ReadGameText({}, "quake3").text).has_value());
+	ASSERT_TRUE(SaveGame(m_dir, "quake3", ReadDownloadedText("quake3")).has_value());
 	EXPECT_FALSE(std::filesystem::exists(m_dir / "games/quake3"));
 }
 
@@ -176,7 +187,7 @@ TEST_F(CGameFilesTest, RemoveDeletesTheWholeFolder)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameFilesTest, PatchedBuiltinOpensMerged)
+TEST_F(CGameFilesTest, PatchedDownloadOpensMerged)
 {
 	WriteFile("games/quake3/game.json", R"json({ "name": "Quake III, mine" })json");
 
@@ -209,24 +220,24 @@ TEST_F(CGameFilesTest, LongListTakesALineAValue)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameFilesTest, BrokenPatchOpensTheBuiltinWithItsProblem)
+TEST_F(CGameFilesTest, BrokenPatchOpensTheDownloadWithItsProblem)
 {
 	WriteFile("games/quake3/game.json", "[ 1 ]");
 
 	SEditableGame const game{ ReadGameText(m_dir, "quake3") };
 
-	EXPECT_EQ(game.text, ReadGameText({}, "quake3").text);
-	EXPECT_EQ(game.problem, "games/quake3/game.json: a change to a built-in game must be a JSON object");
+	EXPECT_EQ(game.text, ReadDownloadedText("quake3"));
+	EXPECT_EQ(game.problem, "games/quake3/game.json: a change to a downloaded game must be a JSON object");
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameFilesTest, BuiltinWithoutChangesIsBuiltin)
+TEST_F(CGameFilesTest, DownloadWithoutChangesIsDownloaded)
 {
-	EXPECT_EQ(FindGameSource(m_dir, "quake3"), EGameSource::Builtin);
+	EXPECT_EQ(FindGameSource(m_dir, "quake3"), EGameSource::Downloaded);
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameFilesTest, BuiltinWithChangesIsPatched)
+TEST_F(CGameFilesTest, DownloadWithChangesIsPatched)
 {
 	WriteFile("games/quake3/game.json", R"json({ "name": "Quake III, mine" })json");
 
@@ -265,11 +276,11 @@ TEST(GameFiles, KeysThatAreNoSafeFolderNameAreInvalid)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(GameFiles, EveryBuiltinPassesTheCheck)
+TEST(GameFiles, EveryDownloadedGamePassesTheCheck)
 {
 	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
 	{
-		std::expected<void, std::string> const checked{ CheckGameText(ReadGameText({}, game.key).text, Query::GetProtocolCatalog()) };
+		std::expected<void, std::string> const checked{ CheckGameText(ReadDownloadedText(game.key), Query::GetProtocolCatalog()) };
 
 		EXPECT_TRUE(checked.has_value()) << game.key << ": " << checked.error();
 	}

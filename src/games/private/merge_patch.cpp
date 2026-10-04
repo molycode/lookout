@@ -108,7 +108,7 @@ void Write(JsonValue const& value, size_t depth, std::string& text)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// As the built-ins are written: a list or object of plain values on one line while it is short, the rest a line each.
+// As lookout-games writes them: a list or object of plain values on one line while it is short, the rest a line each.
 std::string Dump(JsonValue const& value)
 {
 	std::string text{};
@@ -156,10 +156,10 @@ JsonValue Diff(JsonValue const& from, JsonValue const& to)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<std::string, std::string> ApplyPatch(std::string_view builtinText, std::string_view patchText)
+std::expected<std::string, std::string> ApplyPatch(std::string_view baseText, std::string_view patchText)
 {
-	JsonValue game = JsonValue::parse(builtinText, nullptr, AllowExceptions, IgnoreComments);
-	std::expected<JsonValue, std::string> const patch{ ParseObject(patchText, "a change to a built-in game must be a JSON object") };
+	JsonValue game = JsonValue::parse(baseText, nullptr, AllowExceptions, IgnoreComments);
+	std::expected<JsonValue, std::string> const patch{ ParseObject(patchText, "a change to a downloaded game must be a JSON object") };
 	std::expected<std::string, std::string> result{};
 
 	if (patch.has_value())
@@ -176,15 +176,15 @@ std::expected<std::string, std::string> ApplyPatch(std::string_view builtinText,
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<std::optional<std::string>, std::string> MakePatch(std::string_view builtinText, std::string_view gameText)
+std::expected<std::optional<std::string>, std::string> MakePatch(std::string_view baseText, std::string_view gameText)
 {
-	JsonValue const builtin = JsonValue::parse(builtinText, nullptr, AllowExceptions, IgnoreComments);
+	JsonValue const base = JsonValue::parse(baseText, nullptr, AllowExceptions, IgnoreComments);
 	std::expected<JsonValue, std::string> const game{ ParseObject(gameText, "it must hold a JSON object") };
 	std::expected<std::optional<std::string>, std::string> result{};
 
 	if (game.has_value())
 	{
-		JsonValue const patch = Diff(builtin, *game);
+		JsonValue const patch = Diff(base, *game);
 
 		result = patch.empty() ? std::nullopt : std::optional<std::string>{ Dump(patch) };
 	}

@@ -119,7 +119,7 @@ TEST(GameJson, SlashCommentIsNotJson)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(GameJson, BuiltinGamesAreInNameOrder)
+TEST(GameJson, LoadedGamesAreInNameOrder)
 {
 	EXPECT_TRUE(std::ranges::is_sorted(Query::GetGameCatalog(), {}, &Query::SGameDefinition::name));
 }

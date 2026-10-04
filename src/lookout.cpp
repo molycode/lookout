@@ -4,6 +4,7 @@
 #include "run_context.hpp"
 #include "browser/server_list.hpp"
 #include "config/xdg_paths.hpp"
+#include "games/game_files.hpp"
 #include "games/load_games.hpp"
 #include "launch/launch_environment.hpp"
 #include "query/game_definition.hpp"
@@ -138,7 +139,7 @@ bool CLookout::RunWindow()
 // A save in the editor reloads at once and again when the watcher sees it; the second has nothing new to say.
 void CLookout::ReloadGames()
 {
-	Games::SGameContent content{ Games::LoadGames(m_userDir) };
+	Games::SGameContent content{ Games::LoadGames(Games::GetDownloadedDir(m_userDir), m_userDir) };
 	size_t const numGames{ content.games.size() };
 	bool const hasNewProblems{ !std::ranges::equal(content.problems, m_browser.GetGameProblems()) };
 	bool const isReplaced{ m_browser.ReplaceCatalog(std::move(content.protocols), std::move(content.games)) };

@@ -12,7 +12,7 @@ readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "${ROOT}"
 
-echo "== tge-core, SDL, Dear ImGui, nlohmann/json, Lua, googletest"
+echo "== tge-core, SDL, Dear ImGui, nlohmann/json, Lua, googletest, lookout-games"
 git submodule update --init --filter=blob:none
 
 # Core compiles GLM and rpmalloc into its own targets, so both are needed and neither declares submodules of

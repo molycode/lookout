@@ -36,7 +36,8 @@ if(PROJECT_IS_TOP_LEVEL
 				AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/tge-core/CMakeLists.txt)
 			OR NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/json/single_include/nlohmann/json.hpp
 			OR NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/lua/lua.h
-			OR (LKT_BUILD_TESTS AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/googletest/CMakeLists.txt)))
+			OR (LKT_BUILD_TESTS AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/googletest/CMakeLists.txt)
+			OR (LKT_BUILD_TESTS AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/lookout-games/index.json)))
 	if(NOT LKT_AUTO_INIT_SUBMODULES)
 		message(FATAL_ERROR
 			"Lookout: external/ holds empty submodule mount points. Run scripts/init_submodules.sh, or "

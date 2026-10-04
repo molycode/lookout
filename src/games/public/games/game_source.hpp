@@ -8,8 +8,8 @@ namespace Lkt::Games
 enum class EGameSource : uint8_t
 {
 	None,
-	Builtin,
-	// A built-in with the user's changes to it.
+	Downloaded,
+	// A downloaded game with the user's changes to it.
 	Patched,
 	User
 };

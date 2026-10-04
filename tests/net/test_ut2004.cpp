@@ -29,12 +29,12 @@ constexpr std::chrono::milliseconds Patience{ 10s };
 constexpr uint16_t JoinPort{ 7777 };
 
 //////////////////////////////////////////////////////////////////////////
-// The built-in UT2004 game against emulated servers and a master on loopback.
+// lookout-games' UT2004 against emulated servers and a master on loopback.
 class CUt2004Test : public Fixtures::CCatalogTest
 {
 protected:
 
-	// The built-in game, listed by the emulated master alone.
+	// The downloaded game, listed by the emulated master alone.
 	Query::EGame AddLoopbackGame(uint16_t masterPort)
 	{
 		Query::SGameDefinition game{ GetUt2004Game() };

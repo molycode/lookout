@@ -37,10 +37,10 @@ void CGameEditor::Open(std::string_view key, std::filesystem::path const& userDi
 
 	m_key = key;
 	m_name = (pGame != nullptr) ? pGame->name : m_key;
-	m_isBuiltin = source == Games::EGameSource::Builtin || source == Games::EGameSource::Patched;
+	m_isDownloaded = source == Games::EGameSource::Downloaded || source == Games::EGameSource::Patched;
 	m_text = opened.text.empty() ? std::string{ Games::GetNewGameText() } : std::move(opened.text);
 	m_openedText = m_text;
-	m_note = (m_isBuiltin && !opened.problem.empty()) ? std::format("Your changes cannot be opened, so this is the built-in: {}", opened.problem) : opened.problem;
+	m_note = (m_isDownloaded && !opened.problem.empty()) ? std::format("Your changes cannot be opened, so this is as downloaded: {}", opened.problem) : opened.problem;
 	m_isNew = false;
 	Opened(userDir);
 }
@@ -53,7 +53,7 @@ void CGameEditor::OpenNew(SNewGame game, std::filesystem::path const& userDir)
 	m_text = std::move(game.text);
 	m_openedText = m_text;
 	m_note.clear();
-	m_isBuiltin = false;
+	m_isDownloaded = false;
 	m_isNew = true;
 	Opened(userDir);
 }
@@ -127,7 +127,7 @@ void CGameEditor::Opened(std::filesystem::path const& userDir)
 {
 	std::string const file{ (userDir / "games" / m_key / "game.json").string() };
 
-	m_savedAs = m_isBuiltin ? std::format("Saved as your changes to the built-in, in {}", file) : std::format("Saved as {}", file);
+	m_savedAs = m_isDownloaded ? std::format("Saved as your changes to the download, in {}", file) : std::format("Saved as {}", file);
 	m_shouldOpen = true;
 	Check();
 }

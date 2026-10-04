@@ -2,6 +2,7 @@
 #include "lookout.hpp"
 #include "loggers.hpp"
 #include "config/xdg_paths.hpp"
+#include "games/game_files.hpp"
 #include "games/load_games.hpp"
 #include "query/game_catalog.hpp"
 #include <cstdlib>
@@ -26,7 +27,7 @@ std::string GetGameKeys()
 		keys += game.key;
 	}
 
-	return keys;
+	return keys.empty() ? std::string{ "none, as no game is installed" } : keys;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -45,11 +46,11 @@ int main(int argc, char* argv[])
 {
 	std::expected<std::filesystem::path, Lkt::Config::EXdgError> const dataHome{ Lkt::Config::GetDataHome() };
 	std::filesystem::path const userDir{ dataHome.has_value() ? *dataHome / Lkt::AppDirName : std::filesystem::path{} };
-	Lkt::Games::SGameContent content{ Lkt::Games::LoadGames(userDir) };
+	Lkt::Games::SGameContent content{ Lkt::Games::LoadGames(Lkt::Games::GetDownloadedDir(userDir), userDir) };
 
 	if (!dataHome.has_value())
 	{
-		content.problems.emplace_back(Lkt::Query::SGameProblem{ std::format("Cannot locate the data directory, so only the built-in games are loaded: {}",
+		content.problems.emplace_back(Lkt::Query::SGameProblem{ std::format("Cannot locate the data directory, so no games can be loaded: {}",
 			Lkt::Config::ToString(dataHome.error())), {} });
 	}
 

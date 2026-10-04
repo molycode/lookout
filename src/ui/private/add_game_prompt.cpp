@@ -154,9 +154,9 @@ std::optional<SNewGame> CAddGamePrompt::Submit(std::filesystem::path const& user
 	{
 		m_error = std::format("{} already has this name.", pSameKey->name);
 	}
-	else if (source == Games::EGameSource::Builtin || source == Games::EGameSource::Patched)
+	else if (source == Games::EGameSource::Downloaded || source == Games::EGameSource::Patched)
 	{
-		m_error = "A built-in game has this name.";
+		m_error = "A downloaded game has this name.";
 	}
 	else if (source == Games::EGameSource::User)
 	{

@@ -52,8 +52,8 @@ if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null \
 	die "Lookout $VERSION is released - build it only from a clean checkout of v$VERSION, or raise the version in CMakeLists.txt's project()"
 fi
 
-for submodule in external/tge-core external/sdl external/imgui external/json external/lua external/googletest; do
-	[ -f "$submodule/CMakeLists.txt" ] || [ -f "$submodule/imgui.h" ] || [ -f "$submodule/lua.h" ] \
+for submodule in external/tge-core external/sdl external/imgui external/json external/lua external/googletest external/lookout-games; do
+	[ -f "$submodule/CMakeLists.txt" ] || [ -f "$submodule/imgui.h" ] || [ -f "$submodule/lua.h" ] || [ -f "$submodule/index.json" ] \
 		|| die "$submodule is not populated - run scripts/init_submodules.sh"
 done
 

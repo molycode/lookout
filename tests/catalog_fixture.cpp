@@ -23,15 +23,15 @@ void CCatalogTest::SetUp()
 
 	m_protocols.assign(protocols.begin(), protocols.end());
 	m_games.assign(games.begin(), games.end());
-	m_numBuiltinProtocols = m_protocols.size();
-	m_numBuiltinGames = m_games.size();
+	m_numLoadedProtocols = m_protocols.size();
+	m_numLoadedGames = m_games.size();
 }
 
 //////////////////////////////////////////////////////////////////////////
 void CCatalogTest::TearDown()
 {
-	m_protocols.resize(m_numBuiltinProtocols);
-	m_games.resize(m_numBuiltinGames);
+	m_protocols.resize(m_numLoadedProtocols);
+	m_games.resize(m_numLoadedGames);
 	Install();
 }
 

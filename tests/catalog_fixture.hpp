@@ -13,7 +13,7 @@
 
 namespace Lkt::Fixtures
 {
-// Adds test protocols and games to the catalog for one test, after the built-ins so their ids stay, and puts the
+// Adds test protocols and games to the catalog for one test, after lookout-games' so their ids stay, and puts the
 // catalog back afterwards. An engine reads the catalog when it initializes, so add before that.
 class CCatalogTest : public testing::Test
 {
@@ -37,7 +37,7 @@ private:
 
 	std::vector<Query::SProtocolDefinition> m_protocols;
 	std::vector<Query::SGameDefinition> m_games;
-	size_t m_numBuiltinProtocols{ 0 };
-	size_t m_numBuiltinGames{ 0 };
+	size_t m_numLoadedProtocols{ 0 };
+	size_t m_numLoadedGames{ 0 };
 };
 } // namespace Lkt::Fixtures

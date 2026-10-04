@@ -38,7 +38,7 @@ private:
 	std::string m_saveError;
 	std::string m_savedAs;
 	float m_footerHeight{ 0.0f };
-	bool m_isBuiltin{ false };
+	bool m_isDownloaded{ false };
 	bool m_isNew{ false };
 	bool m_shouldOpen{ false };
 };

@@ -4,7 +4,7 @@
 
 namespace Lkt::Games
 {
-// The problem says why the user's file could not be opened; the text is then the built-in's, or empty.
+// The problem says why the user's file could not be opened; the text is then the downloaded one, or empty.
 struct SEditableGame final
 {
 	std::string text;

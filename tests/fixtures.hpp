@@ -16,10 +16,10 @@ std::vector<std::filesystem::path> ListFixtures(std::string_view game, std::stri
 
 std::vector<std::byte> ToBytes(std::string_view text);
 
-// A built-in game by its key; an unknown key fails the calling test and stops the run.
+// A game of lookout-games by its key; an unknown key fails the calling test and stops the run.
 Query::SGameDefinition const& GetGameByKey(std::string_view key);
 Query::EGame GetGameId(std::string_view key);
 
-// A built-in protocol by its name; an unknown name fails the calling test and stops the run.
+// A protocol of lookout-games by its name; an unknown name fails the calling test and stops the run.
 Query::SProtocolDefinition const& GetProtocolByName(std::string_view name);
 } // namespace Lkt::Fixtures

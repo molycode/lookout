@@ -15,7 +15,7 @@ using Arguments = std::vector<std::string>;
 constexpr Query::SServerAddress Server{ 0xCB007107, 31510 };
 
 //////////////////////////////////////////////////////////////////////////
-// The built-in games share these rules; Kingpin's stand for them.
+// The Quake engine games of lookout-games share these rules; Kingpin's stand for them.
 Query::SJoinCommand const& Join()
 {
 	return Fixtures::GetGameByKey("kingpin").join;

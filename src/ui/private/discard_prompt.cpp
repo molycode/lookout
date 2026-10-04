@@ -39,7 +39,7 @@ bool CDiscardPrompt::Draw(std::filesystem::path const& userDir, std::string& mes
 
 	ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2{ 0.5f, 0.5f });
 
-	if (ImGui::BeginPopupModal(isChanges ? "Revert to built-in###discard" : "Remove game###discard", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	if (ImGui::BeginPopupModal(isChanges ? "Revert to downloaded###discard" : "Remove game###discard", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
 		ImGui::PushTextWrapPos(width);
 		ImGui::TextUnformatted(m_question.data(), m_question.data() + m_question.size());
@@ -75,7 +75,7 @@ void CDiscardPrompt::Discard(std::filesystem::path const& userDir, std::string& 
 
 	if (discarded.has_value())
 	{
-		message = isChanges ? std::format("{} is the built-in again", m_name) : std::format("Removed {}", m_name);
+		message = isChanges ? std::format("{} is as downloaded again", m_name) : std::format("Removed {}", m_name);
 	}
 	else
 	{

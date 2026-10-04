@@ -98,7 +98,7 @@ void DrawGameMenu(Query::SGameDefinition const& game, std::filesystem::path cons
 			ImGui::SetItemTooltip("Lookout cannot locate its data folder");
 		}
 
-		if (source == Games::EGameSource::Patched && ImGui::MenuItem("Revert to built-in…"))
+		if (source == Games::EGameSource::Patched && ImGui::MenuItem("Revert to downloaded…"))
 		{
 			intents.revertGame = game.game;
 		}
