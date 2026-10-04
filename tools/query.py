@@ -4,8 +4,8 @@
     tools/query.py <game>                          list the game's servers, one line each
     tools/query.py <game> --save-fixtures <dir>    also save raw replies as parser test data
 
-Each line is "<address> <players>/<max> <map> <name>", sorted by address. Compare `lookout --list <game>` with it
-on the first three columns: names are only roughly decoded here.
+Each line is "<address> <players>/<max> <map> <name>", sorted by address, the address being the one queried. Compare
+`lookout --list <game>` with it on the first three columns: names are only roughly decoded here.
 """
 
 import argparse
@@ -23,6 +23,7 @@ GAMES = {
 	"rtcw": ("quake3", [("wolfmaster.idsoftware.com", 27950)], "60 empty full"),
 	"et": ("quake3", [("etmaster.idsoftware.com", 27950), ("etmaster.etlegacy.com", 27950)], "84 empty full"),
 	"quake3": ("quake3", [("master.quake3arena.com", 27950), ("master.ioquake3.org", 27950), ("dpmaster.deathmask.net", 27950)], "68 empty full"),
+	"ut2004": ("unreal2", [("ut2004master.333networks.com", 28902), ("utmaster.openspy.net", 28902)], ""),
 }
 
 HEADER = b"\xff\xff\xff\xff"
@@ -31,6 +32,13 @@ MAX_KEYS = ("maxclients", "sv_maxclients")
 MASTER_WAIT = 2.0
 STATUS_WAIT = 1.5
 IN_FLIGHT = 32
+
+# Unreal Engine 2: TCP masters that speak first in frames of a u32 length, and servers that answer each command in
+# packets with no count or end, so a server is done once quiet. No master checks the CD key hashes.
+UNREAL2_KEY_HASH = "0" * 32
+UNREAL2_QUERIES = [b"\x79\x00\x00\x00" + bytes([command]) for command in (0, 1, 2)]
+UNREAL2_QUIET = 0.6
+UNREAL2_INFO = 0
 
 
 def master_request(family, args):
@@ -130,6 +138,152 @@ def describe(packet):
 	return f"{len(players)}/{maximum} {info.get('mapname', '?')} {plain}"
 
 
+def unreal2_string(text):
+	return bytes([len(text) + 1]) + text.encode("ascii") + b"\0"
+
+
+def unreal2_frame(payload):
+	return struct.pack("<I", len(payload)) + payload
+
+
+def unreal2_client_response():
+	key = unreal2_string(UNREAL2_KEY_HASH)
+	return unreal2_frame(key + key + unreal2_string("UT2K4CLIENT") + struct.pack("<IB", 3369, 0) + unreal2_string("int") + struct.pack("<IIIB", 0, 0, 0, 0))
+
+
+def query_unreal2_master(host, port):
+	"""Everything the master sent, and the query addresses it listed."""
+	stream = bytearray()
+	servers = []
+
+	def read_frame(sock):
+		size = struct.unpack("<I", read_exactly(sock, 4))[0]
+		return read_exactly(sock, size)
+
+	def read_exactly(sock, size):
+		data = b""
+
+		while len(data) < size:
+			chunk = sock.recv(size - len(data))
+
+			if not chunk:
+				raise OSError("the master closed the connection early")
+
+			data += chunk
+
+		stream.extend(data)
+		return data
+
+	try:
+		with socket.create_connection((host, port), timeout=MASTER_WAIT * 5) as sock:
+			read_frame(sock)
+			sock.sendall(unreal2_client_response())
+			read_frame(sock)
+			sock.sendall(unreal2_frame(unreal2_string(UNREAL2_KEY_HASH)))
+			read_frame(sock)
+			sock.sendall(unreal2_frame(b"\0\0"))
+			count = struct.unpack("<I", read_frame(sock)[:4])[0]
+
+			for _ in range(count):
+				entry = read_frame(sock)
+				servers.append((socket.inet_ntoa(entry[0:4]), struct.unpack("<H", entry[6:8])[0]))
+	except OSError as error:
+		print(f"master {host}: {error}", file=sys.stderr)
+
+	return bytes(stream), servers
+
+
+def query_unreal2_status(servers):
+	"""Each server's packets, for those whose info packet came."""
+	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	pending = list(servers)
+	last_heard = {}
+	packets = {}
+
+	while pending or last_heard:
+		while pending and len(last_heard) < IN_FLIGHT:
+			server = pending.pop()
+
+			try:
+				for query in UNREAL2_QUERIES:
+					sock.sendto(query, server)
+
+				last_heard[server] = time.time()
+				packets[server] = []
+			except OSError as error:
+				print(f"server {server[0]}:{server[1]}: {error}", file=sys.stderr)
+
+		ready, _, _ = select.select([sock], [], [], 0.05)
+
+		if ready:
+			packet, source = sock.recvfrom(65535)
+
+			if source in last_heard:
+				packets[source].append(packet)
+				last_heard[source] = time.time()
+
+		for server, heard in list(last_heard.items()):
+			if time.time() - heard > (UNREAL2_QUIET if packets[server] else STATUS_WAIT):
+				del last_heard[server]
+
+	return {server: found for server, found in packets.items() if any(len(packet) > 4 and packet[4] == UNREAL2_INFO for packet in found)}
+
+
+def read_unreal2_string(data, pos):
+	"""A string whose length is a compact index: Latin-1 bytes when positive, UTF-16 units when negative."""
+	first = data[pos]
+	value, more, shift = first & 0x3F, first & 0x40, 6
+	pos += 1
+
+	while more:
+		value |= (data[pos] & 0x7F) << shift
+		more, shift = data[pos] & 0x80, shift + 7
+		pos += 1
+
+	length = -value if first & 0x80 else value
+
+	if length < 0:
+		return data[pos:pos - 2 * length].decode("utf-16-le", "replace").rstrip("\0"), pos - 2 * length
+
+	return data[pos:pos + length].decode("latin-1").rstrip("\0"), pos + length
+
+
+def describe_unreal2(packets):
+	info = next(packet for packet in packets if len(packet) > 4 and packet[4] == UNREAL2_INFO)
+	_, pos = read_unreal2_string(info, 9)
+	name, pos = read_unreal2_string(info, pos + 8)
+	map_name, pos = read_unreal2_string(info, pos)
+	_, pos = read_unreal2_string(info, pos)
+	players, maximum = struct.unpack("<ii", info[pos:pos + 8])
+	plain = re.sub(r"\x1b...", "", name, flags=re.DOTALL)
+	return f"{players}/{maximum} {map_name} {''.join(ch for ch in plain if ord(ch) >= 32)}"
+
+
+def main_unreal2(options, masters):
+	answers = [(host, *query_unreal2_master(host, port)) for host, port in masters]
+	servers = sorted({server for _, _, listed in answers for server in listed}, key=lambda server: (socket.inet_aton(server[0]), server[1]))
+	replies = query_unreal2_status(servers)
+
+	for server in servers:
+		if server in replies:
+			print(f"{server[0]}:{server[1]} {describe_unreal2(replies[server])}")
+
+	print(f"{len(replies)} of {len(servers)} servers answered", file=sys.stderr)
+
+	if options.save_fixtures is not None:
+		target = options.save_fixtures / options.game
+		target.mkdir(parents=True, exist_ok=True)
+
+		for host, stream, _ in answers:
+			(target / f"master-{host}-stream.bin").write_bytes(stream)
+
+		chosen = sorted(replies.items(), key=lambda item: -int(describe_unreal2(item[1]).split("/")[0]))
+
+		for (address, port), packets in chosen[:options.count]:
+			for index, packet in enumerate(packets):
+				(target / f"status-{address}_{port}-{index:02}.bin").write_bytes(packet)
+
+
 def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("game", choices=sorted(GAMES))
@@ -138,6 +292,11 @@ def main():
 	options = parser.parse_args()
 
 	family, masters, args = GAMES[options.game]
+
+	if family == "unreal2":
+		main_unreal2(options, masters)
+		return
+
 	answers = query_masters(family, masters, args)
 	servers = sorted({server for _, packets in answers for packet in packets for server in parse_master(family, packet)},
 		key=lambda server: (socket.inet_aton(server[0]), server[1]))
