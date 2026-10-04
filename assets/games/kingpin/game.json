@@ -2,7 +2,8 @@
 	"format": 1,
 	"name": "Kingpin: Life of Crime",
 	"protocol": "quake2",
-	"textStyle": "ascii7",
+	// Quake 2 engines mark coloured text with the high bit, which only their own font can show.
+	"text": { "encoding": "ascii7" },
 	// master1 and master2.kingpin.info speak only GameSpy's TCP protocol, never the Quake 2 query.
 	"masters": [
 		{ "host": "master.kingpin.info", "port": 27900 }

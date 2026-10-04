@@ -49,9 +49,9 @@ SServerSummary Summarize(SGameDefinition const& game, SStatusReply const& reply)
 {
 	SServerSummary summary{};
 
-	summary.name = DecodeText(game.textStyle, FindRule(reply, game.keys.hostname));
-	summary.map = DecodeText(game.textStyle, FindRule(reply, game.keys.map)).plain;
-	summary.mod = DecodeText(game.textStyle, FindFirstRule(reply, game.keys.mods)).plain;
+	summary.name = DecodeText(game.text, FindRule(reply, game.keys.hostname));
+	summary.map = DecodeText(game.text, FindRule(reply, game.keys.map)).plain;
+	summary.mod = DecodeText(game.text, FindFirstRule(reply, game.keys.mods)).plain;
 	summary.mode = FindMode(reply, game.modes);
 	summary.numPlayers = static_cast<uint32_t>(reply.players.size());
 	summary.maxPlayers = ParseCount(FindRule(reply, game.keys.maxPlayers));

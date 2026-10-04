@@ -201,7 +201,7 @@ void CServerList::ApplyAnswer(Query::SGameDefinition const& game, Net::SServerAn
 
 		for (Query::SPlayer const& player : entry.reply.players)
 		{
-			entry.playerNames.emplace_back(Query::DecodeText(game.textStyle, player.name));
+			entry.playerNames.emplace_back(Query::DecodeText(game.text, player.name));
 		}
 
 		entry.searchText = BuildSearchText(entry);

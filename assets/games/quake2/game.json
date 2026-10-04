@@ -2,7 +2,8 @@
 	"format": 1,
 	"name": "Quake II",
 	"protocol": "quake2",
-	"textStyle": "ascii7",
+	// Quake 2 engines mark coloured text with the high bit, which only their own font can show.
+	"text": { "encoding": "ascii7" },
 	"masters": [
 		{ "host": "master.quakeservers.net", "port": 27900 },
 		{ "host": "master.maraakate.org", "port": 27900 }

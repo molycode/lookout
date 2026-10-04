@@ -15,5 +15,5 @@ struct SStyledText final
 	std::vector<STextRun> runs;
 };
 
-SStyledText DecodeText(ETextStyle style, std::string_view raw);
+SStyledText DecodeText(STextStyle const& style, std::string_view raw);
 } // namespace Lkt::Query

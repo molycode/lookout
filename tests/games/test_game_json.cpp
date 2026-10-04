@@ -30,7 +30,7 @@ JsonValue MakeMinimalGame()
 		"format": 1,
 		"name": "Test Game",
 		"protocol": "quake2",
-		"textStyle": "ascii7",
+		"text": { "encoding": "ascii7" },
 		"masters": [ { "host": "master.example", "port": 27900 } ],
 		"keys": { "hostname": "hostname", "map": "mapname", "maxPlayers": "maxclients", "password": "needpass" }
 	})json");
@@ -210,6 +210,67 @@ TEST(GameJson, WrongTypeIsRejected)
 	game["name"] = 5;
 
 	EXPECT_TRUE(ReadProblem(game).starts_with("name:"));
+}
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, ColourCodesAreRead)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "utf8OrWindows1252",
+		"colourCodes": { "escape": "^", "codes": "printable", "palette": [ "#ff8000", "#000000" ] } })json");
+
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->text.codes, Query::EColorCodes::Printable);
+	EXPECT_EQ(read->text.escape, '^');
+	ASSERT_EQ(read->text.palette.size(), 2u);
+	EXPECT_EQ(read->text.palette[0].r, 0xFF);
+	EXPECT_EQ(read->text.palette[0].g, 0x80);
+	EXPECT_EQ(read->text.palette[0].b, 0x00);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, PaletteMustBeAPowerOfTwo)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7",
+		"colourCodes": { "escape": "^", "codes": "alphanumeric", "palette": [ "#000000", "#000000", "#000000" ] } })json");
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.palette:"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, ColourMustBeHex)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7",
+		"colourCodes": { "escape": "^", "codes": "alphanumeric", "palette": [ "#00ff0g" ] } })json");
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.palette[0]:"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, RgbCodesTakeNoPalette)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7",
+		"colourCodes": { "escape": "\u001b", "codes": "rgb", "palette": [ "#000000" ] } })json");
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.palette:"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, EscapeMustBeOneCharacter)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7", "colourCodes": { "escape": "^^", "codes": "rgb" } })json");
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.escape:"));
 }
 } // namespace
 } // namespace Lkt::Games

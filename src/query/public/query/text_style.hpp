@@ -1,14 +1,18 @@
 #pragma once
 
-#include <cstdint>
+#include "query/color_codes.hpp"
+#include "query/text_encoding.hpp"
+#include <tge/color.hpp>
+#include <vector>
 
 namespace Lkt::Query
 {
-// How a game encodes colour in names: Quake 2 engines set the high bit, the Quake 3 family uses ^ codes.
-enum class ETextStyle : uint8_t
+// A palette code picks palette[(code - '0') & (palette.size() - 1)]; the palette's size is a power of two.
+struct STextStyle final
 {
-	Ascii7,
-	Quake3,
-	EnemyTerritory
+	ETextEncoding encoding{ ETextEncoding::Utf8OrWindows1252 };
+	EColorCodes codes{ EColorCodes::None };
+	char escape{ '\0' };
+	std::vector<Tge::SColor> palette;
 };
 } // namespace Lkt::Query

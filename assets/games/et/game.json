@@ -2,7 +2,20 @@
 	"format": 1,
 	"name": "Enemy Territory",
 	"protocol": "quake3",
-	"textStyle": "enemyTerritory",
+	"text": {
+		"encoding": "utf8OrWindows1252",
+		// ET: Legacy takes any printable ASCII but a caret after the escape; this is its g_color_table.
+		"colourCodes": {
+			"escape": "^",
+			"codes": "printable",
+			"palette": [
+				"#000000", "#ff0000", "#00ff00", "#ffff00", "#0000ff", "#00ffff", "#ff00ff", "#ffffff",
+				"#ff8000", "#808080", "#bfbfbf", "#bfbfbf", "#008000", "#808000", "#000080", "#800000",
+				"#804000", "#ff991a", "#008080", "#800080", "#0080ff", "#8000ff", "#3399cc", "#ccffcc",
+				"#006633", "#ff0033", "#b31a1a", "#993300", "#cc9933", "#999933", "#ffffbf", "#ffff80"
+			]
+		}
+	},
 	"protocolOptions": { "masterQuery": "84 empty full" },
 	"masters": [
 		{ "host": "etmaster.idsoftware.com", "port": 27950 },

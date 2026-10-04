@@ -21,7 +21,7 @@ struct SGameDefinition final
 	std::string key;
 	std::string name;
 	EProtocol protocol{ NoProtocol };
-	ETextStyle textStyle{ ETextStyle::Ascii7 };
+	STextStyle text;
 	std::vector<SMasterEndpoint> masters;
 	std::map<std::string, std::string> protocolOptions;
 	SServerKeys keys;

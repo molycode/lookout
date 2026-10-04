@@ -2,6 +2,8 @@
 #include "json/json.hpp"
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -21,7 +23,7 @@ constexpr bool IgnoreComments{ true };
 constexpr uint64_t Format{ 1 };
 constexpr uint64_t MaxPort{ 65535 };
 
-constexpr std::array<std::string_view, 10> GameFields{ "format", "name", "protocol", "textStyle", "protocolOptions", "masters", "keys",
+constexpr std::array<std::string_view, 10> GameFields{ "format", "name", "protocol", "text", "protocolOptions", "masters", "keys",
 	"modes", "foreignServers", "launch" };
 constexpr std::array<std::string_view, 2> MasterFields{ "host", "port" };
 constexpr std::array<std::string_view, 5> KeyFields{ "hostname", "map", "maxPlayers", "password", "mods" };
@@ -29,10 +31,19 @@ constexpr std::array<std::string_view, 3> ModeFields{ "key", "value", "label" };
 constexpr std::array<std::string_view, 2> MatchFields{ "key", "value" };
 constexpr std::array<std::string_view, 4> LaunchFields{ "desktopFiles", "installDir", "program", "requiredFiles" };
 
-constexpr std::array<std::pair<std::string_view, Query::ETextStyle>, 3> TextStyles{ {
-	{ "ascii7", Query::ETextStyle::Ascii7 },
-	{ "quake3", Query::ETextStyle::Quake3 },
-	{ "enemyTerritory", Query::ETextStyle::EnemyTerritory }
+constexpr std::array<std::string_view, 2> TextFields{ "encoding", "colourCodes" };
+constexpr std::array<std::string_view, 3> ColourCodeFields{ "escape", "codes", "palette" };
+constexpr size_t MaxPaletteSize{ 256 };
+
+constexpr std::array<std::pair<std::string_view, Query::ETextEncoding>, 2> Encodings{ {
+	{ "ascii7", Query::ETextEncoding::Ascii7 },
+	{ "utf8OrWindows1252", Query::ETextEncoding::Utf8OrWindows1252 }
+} };
+
+constexpr std::array<std::pair<std::string_view, Query::EColorCodes>, 3> ColourCodes{ {
+	{ "alphanumeric", Query::EColorCodes::Alphanumeric },
+	{ "printable", Query::EColorCodes::Printable },
+	{ "rgb", Query::EColorCodes::Rgb }
 } };
 
 //////////////////////////////////////////////////////////////////////////
@@ -131,12 +142,12 @@ void ReadRequiredStrings(JsonValue const& object, std::string_view parent, std::
 
 //////////////////////////////////////////////////////////////////////////
 template<typename TEnum, size_t NumNames>
-void ReadName(JsonValue const& object, std::string_view key, std::array<std::pair<std::string_view, TEnum>, NumNames> const& names, TEnum& value,
-	std::string& problem)
+void ReadName(JsonValue const& object, std::string_view parent, std::string_view key, std::array<std::pair<std::string_view, TEnum>, NumNames> const& names,
+	TEnum& value, std::string& problem)
 {
 	std::string name{};
 
-	ReadRequiredString(object, {}, key, name, problem);
+	ReadRequiredString(object, parent, key, name, problem);
 
 	auto const it{ std::ranges::find(names, std::string_view{ name }, &std::pair<std::string_view, TEnum>::first) };
 
@@ -153,7 +164,7 @@ void ReadName(JsonValue const& object, std::string_view key, std::array<std::pai
 			known += std::format("{}{}", known.empty() ? "" : ", ", entry.first);
 		}
 
-		Fail(problem, key, std::format("'{}' is not one of {}", name, known));
+		Fail(problem, JoinPath(parent, key), std::format("'{}' is not one of {}", name, known));
 	}
 }
 
@@ -351,6 +362,114 @@ void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, std::string&
 }
 
 //////////////////////////////////////////////////////////////////////////
+// "#rrggbb"
+bool ReadColour(JsonValue const& json, Tge::SColor& colour)
+{
+	constexpr size_t Length{ 7 };
+	constexpr int Base{ 16 };
+	bool isValid{ json.is_string() && json.get_ref<std::string const&>().size() == Length && json.get_ref<std::string const&>().front() == '#' };
+	uint32_t value{ 0 };
+
+	if (isValid)
+	{
+		std::string const& text{ json.get_ref<std::string const&>() };
+		std::from_chars_result const result{ std::from_chars(text.data() + 1, text.data() + text.size(), value, Base) };
+
+		isValid = result.ec == std::errc{} && result.ptr == text.data() + text.size();
+	}
+
+	if (isValid)
+	{
+		colour = Tge::SColor{ static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 8), static_cast<uint8_t>(value) };
+	}
+
+	return isValid;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A power of two, so a code's palette index is a mask, as the games compute it.
+void ReadPalette(JsonValue const& codes, std::vector<Tge::SColor>& palette, std::string& problem)
+{
+	constexpr std::string_view Path{ "text.colourCodes.palette" };
+	JsonValue::const_iterator const it{ codes.find("palette") };
+
+	if (it == codes.cend())
+	{
+		Fail(problem, Path, "is missing");
+	}
+	else if (!it->is_array() || it->empty() || it->size() > MaxPaletteSize || !std::has_single_bit(it->size()))
+	{
+		Fail(problem, Path, std::format("must list a power of two of colours, from 1 to {}", MaxPaletteSize));
+	}
+	else
+	{
+		size_t index{ 0 };
+
+		for (JsonValue const& entry : *it)
+		{
+			if (!ReadColour(entry, palette.emplace_back()))
+			{
+				Fail(problem, std::format("{}[{}]", Path, index), "must be a colour written #rrggbb");
+			}
+
+			++index;
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadColourCodes(JsonValue const& text, Query::STextStyle& style, std::string& problem)
+{
+	constexpr std::string_view Path{ "text.colourCodes" };
+	JsonValue::const_iterator const it{ text.find("colourCodes") };
+
+	if (it != text.cend() && !it->is_object())
+	{
+		Fail(problem, Path, "must be an object");
+	}
+	else if (it != text.cend())
+	{
+		std::string escape{};
+
+		CheckFields(*it, Path, ColourCodeFields, problem);
+		ReadRequiredString(*it, Path, "escape", escape, problem);
+
+		if (escape.size() == 1 && static_cast<unsigned char>(escape.front()) < 0x80)
+		{
+			style.escape = escape.front();
+		}
+		else if (!escape.empty())
+		{
+			Fail(problem, JoinPath(Path, "escape"), "must be one ASCII character");
+		}
+
+		ReadName(*it, Path, "codes", ColourCodes, style.codes, problem);
+
+		if (style.codes == Query::EColorCodes::Rgb && it->contains("palette"))
+		{
+			Fail(problem, JoinPath(Path, "palette"), "is not used by rgb codes, which carry their colour");
+		}
+		else if (style.codes == Query::EColorCodes::Alphanumeric || style.codes == Query::EColorCodes::Printable)
+		{
+			ReadPalette(*it, style.palette, problem);
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadText(JsonValue const& root, Query::STextStyle& style, std::string& problem)
+{
+	JsonValue const* const pText{ FindObject(root, "text", true, problem) };
+
+	if (pText != nullptr)
+	{
+		CheckFields(*pText, "text", TextFields, problem);
+		ReadName(*pText, "text", "encoding", Encodings, style.encoding, problem);
+		ReadColourCodes(*pText, style, problem);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Null, with the problem set, when the protocol is not one of the loaded scripts.
 Query::SProtocolDefinition const* ReadProtocol(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::EProtocol& protocol,
 	std::string& problem)
@@ -429,7 +548,7 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 		ReadProtocolOptions(root, *pProtocol, game.protocolOptions, problem);
 	}
 
-	ReadName(root, "textStyle", TextStyles, game.textStyle, problem);
+	ReadText(root, game.text, problem);
 	ReadMasters(root, game, problem);
 	ReadKeys(root, game.keys, problem);
 	ReadModes(root, game.modes, problem);
