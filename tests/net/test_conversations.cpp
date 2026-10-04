@@ -4,12 +4,12 @@
 #include "net/event_collector.hpp"
 #include "net/loopback_server.hpp"
 #include "net/query_engine.hpp"
+#include "net/socket_table.hpp"
 #include "query/status_reply.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
-#include <filesystem>
 #include <iterator>
 #include <optional>
 #include <span>
@@ -49,12 +49,6 @@ std::vector<std::byte> MakeMasterList(Query::SServerAddress const& server, size_
 	std::ranges::copy(ToBytes("\\EOT"), std::back_inserter(list));
 
 	return list;
-}
-
-//////////////////////////////////////////////////////////////////////////
-size_t CountOpenDescriptors()
-{
-	return static_cast<size_t>(std::ranges::distance(std::filesystem::directory_iterator{ "/proc/self/fd" }, std::filesystem::directory_iterator{}));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -279,12 +273,11 @@ TEST_F(CConversationTest, MastersAtOneAddressAreAskedApart)
 
 //////////////////////////////////////////////////////////////////////////
 // Masters still waiting when their refresh is replaced, cancelled, or the engine stops.
-TEST_F(CConversationTest, EndedConversationsLeaveNoDescriptorOpen)
+TEST_F(CConversationTest, EndedConversationsLeaveNoSocketOpen)
 {
 	ASSERT_TRUE(m_master.Start({}));
 
 	Query::EGame const game{ AddMasterGame("silent-master", { m_master.GetAddress().port }) };
-	size_t const numBefore{ CountOpenDescriptors() };
 
 	ASSERT_TRUE(m_engine.Initialize(m_collector.MakeCallback()));
 
@@ -292,12 +285,13 @@ TEST_F(CConversationTest, EndedConversationsLeaveNoDescriptorOpen)
 	EXPECT_TRUE(WaitForRequests(m_master, 1));
 	m_engine.Refresh(game, {});
 	EXPECT_TRUE(WaitForRequests(m_master, 2));
+	EXPECT_EQ(Fixtures::CountSocketsTo(m_master.GetAddress()), 1u);
 	m_engine.Cancel(game);
 	m_engine.Refresh(game, {});
 	EXPECT_TRUE(WaitForRequests(m_master, 3));
 	m_engine.Terminate();
 
-	EXPECT_EQ(CountOpenDescriptors(), numBefore);
+	EXPECT_EQ(Fixtures::CountSocketsTo(m_master.GetAddress()), 0u);
 
 	m_master.Stop();
 }

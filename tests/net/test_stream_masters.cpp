@@ -5,12 +5,11 @@
 #include "net/loopback_server.hpp"
 #include "net/loopback_stream_server.hpp"
 #include "net/query_engine.hpp"
+#include "net/socket_table.hpp"
 #include <gtest/gtest.h>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
-#include <iterator>
 #include <string>
 #include <thread>
 #include <vector>
@@ -39,12 +38,6 @@ void AppendFrame(std::vector<std::byte>& stream, char kind, Query::SServerAddres
 
 	stream.emplace_back(static_cast<std::byte>(address.port >> 8));
 	stream.emplace_back(static_cast<std::byte>(address.port));
-}
-
-//////////////////////////////////////////////////////////////////////////
-size_t CountOpenDescriptors()
-{
-	return static_cast<size_t>(std::ranges::distance(std::filesystem::directory_iterator{ "/proc/self/fd" }, std::filesystem::directory_iterator{}));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -242,12 +235,11 @@ TEST_F(CStreamMasterTest, StreamPastTheCapFails)
 
 //////////////////////////////////////////////////////////////////////////
 // Connections still open when their refresh is replaced, cancelled, or the engine stops.
-TEST_F(CStreamMasterTest, EndedMastersLeaveNoDescriptorOpen)
+TEST_F(CStreamMasterTest, EndedMastersLeaveNoSocketOpen)
 {
 	ASSERT_TRUE(m_master.Start(Fixtures::SLoopbackStream{}));
 
 	Query::EGame const game{ AddStreamGame(m_master.GetAddress().port) };
-	size_t const numBefore{ CountOpenDescriptors() };
 
 	ASSERT_TRUE(m_engine.Initialize(m_collector.MakeCallback()));
 
@@ -255,12 +247,13 @@ TEST_F(CStreamMasterTest, EndedMastersLeaveNoDescriptorOpen)
 	EXPECT_TRUE(WaitForConnections(m_master, 1));
 	m_engine.Refresh(game, {});
 	EXPECT_TRUE(WaitForConnections(m_master, 2));
+	EXPECT_EQ(Fixtures::CountSocketsTo(m_master.GetAddress()), 1u);
 	m_engine.Cancel(game);
 	m_engine.Refresh(game, {});
 	EXPECT_TRUE(WaitForConnections(m_master, 3));
 	m_engine.Terminate();
 
-	EXPECT_EQ(CountOpenDescriptors(), numBefore);
+	EXPECT_EQ(Fixtures::CountSocketsTo(m_master.GetAddress()), 0u);
 
 	m_master.Stop();
 }
