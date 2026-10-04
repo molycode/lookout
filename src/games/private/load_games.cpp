@@ -3,6 +3,7 @@
 #include "game_json.hpp"
 #include "json/files.hpp"
 #include "json/json.hpp"
+#include "json/syntax_error.hpp"
 #include "script/protocol_script.hpp"
 #include <algorithm>
 #include <cstddef>
@@ -239,16 +240,16 @@ std::expected<std::string, std::string> ApplyPatch(std::string_view builtinText,
 {
 	JsonValue game = JsonValue::parse(builtinText, nullptr, AllowExceptions);
 	JsonValue const patch = JsonValue::parse(patchText, nullptr, AllowExceptions);
-	std::expected<std::string, std::string> result{ std::unexpected{ std::string{ "it is not valid JSON" } } };
+	std::expected<std::string, std::string> result{ std::unexpected{ std::string{ "a change to a built-in game must be a JSON object" } } };
 
 	if (patch.is_object())
 	{
 		game.merge_patch(patch);
 		result = game.dump(-1, ' ', false, JsonValue::error_handler_t::replace);
 	}
-	else if (!patch.is_discarded())
+	else if (patch.is_discarded())
 	{
-		result = std::unexpected{ std::string{ "a change to a built-in game must be a JSON object" } };
+		result = std::unexpected{ std::format("it is not valid JSON: {}", Json::DescribeSyntaxError(patchText)) };
 	}
 
 	return result;

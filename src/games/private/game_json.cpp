@@ -1,5 +1,6 @@
 #include "game_json.hpp"
 #include "json/json.hpp"
+#include "json/syntax_error.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -723,7 +724,7 @@ std::expected<Query::SGameDefinition, std::string> ReadGameJson(std::string_view
 
 	if (root.is_discarded())
 	{
-		problem = "it is not valid JSON";
+		problem = std::format("it is not valid JSON: {}", Json::DescribeSyntaxError(text));
 	}
 	else if (!root.is_object())
 	{

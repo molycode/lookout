@@ -131,6 +131,15 @@ TEST(GameJson, TextThatIsNotJsonIsRejected)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(GameJson, TextThatIsNotJsonNamesItsLine)
+{
+	std::expected<Query::SGameDefinition, std::string> const game{ ReadGameJson("{\n\t\"format\": 1\n\t\"name\": \"Test Game\"\n}", MakeProtocols()) };
+
+	ASSERT_FALSE(game.has_value());
+	EXPECT_TRUE(game.error().starts_with("it is not valid JSON: line 3, column ")) << game.error();
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(GameJson, NewerFormatAsksForANewerLookout)
 {
 	JsonValue game = MakeMinimalGame();
