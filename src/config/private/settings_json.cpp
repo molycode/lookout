@@ -1,4 +1,5 @@
 #include "settings_json.hpp"
+#include "config/default_settings.hpp"
 #include "config/first_listed_game.hpp"
 #include "config/install_ids.hpp"
 #include "config/settings.hpp"
@@ -575,6 +576,7 @@ std::expected<SSettingsDocument, ESettingsJsonError> ReadSettingsJson(std::strin
 	{
 		SSettingsDocument document{};
 
+		document.settings = MakeDefaultSettings();
 		document.version = SettingsVersion;
 		ReadDocument(root, document);
 		result = std::move(document);

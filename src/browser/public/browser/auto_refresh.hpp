@@ -3,9 +3,10 @@
 #include "net/clock.hpp"
 #include "query/game.hpp"
 #include <tge/non_copyable.hpp>
-#include <array>
 #include <chrono>
+#include <cstddef>
 #include <optional>
+#include <vector>
 
 namespace Lkt::Browser
 {
@@ -17,6 +18,7 @@ public:
 	CAutoRefresh() = default;
 	~CAutoRefresh() = default;
 
+	void Initialize(size_t numGames);
 	void OnRefreshStarted(Query::EGame game, Net::Clock::time_point now);
 
 	// A game never refreshed has no deadline: the browser refreshes it when it is first selected.
@@ -24,6 +26,6 @@ public:
 
 private:
 
-	std::array<std::optional<Net::Clock::time_point>, Query::NumGames> m_startedAt;
+	std::vector<std::optional<Net::Clock::time_point>> m_startedAt;
 };
 } // namespace Lkt::Browser

@@ -45,6 +45,13 @@ size_t ToIndex(Query::EGame game)
 //////////////////////////////////////////////////////////////////////////
 void CBrowser::Initialize(std::string_view configDir, std::string_view logsDir, Launch::SLaunchEnvironment environment)
 {
+	size_t const numGames{ Query::GetGameCatalog().size() };
+
+	m_lists = std::vector<CServerList>(numGames);
+	m_statuses.assign(numGames, SGameStatus{});
+	m_launchStates.assign(numGames, SLaunchState{});
+	m_hasChanged.assign(numGames, false);
+	m_autoRefresh.Initialize(numGames);
 	m_environment = std::move(environment);
 	m_settingsStore.Initialize(configDir);
 	m_settings = m_settingsStore.Load();
@@ -93,7 +100,7 @@ void CBrowser::Terminate()
 //////////////////////////////////////////////////////////////////////////
 void CBrowser::Update()
 {
-	std::array<bool, Query::NumGames> hasChanged{};
+	std::ranges::fill(m_hasChanged, false);
 
 	if (m_isStarted)
 	{
@@ -110,20 +117,20 @@ void CBrowser::Update()
 			m_statuses[index].isRefreshing = false;
 		}
 
-		hasChanged[index] = true;
+		m_hasChanged[index] = true;
 	}
 
 	m_events.clear();
 
 	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
 	{
-		if (hasChanged[ToIndex(game.game)])
+		if (m_hasChanged[ToIndex(game.game)])
 		{
 			Recount(game.game);
 		}
 	}
 
-	if (hasChanged[GetSelectedIndex()])
+	if (m_hasChanged[GetSelectedIndex()])
 	{
 		CollectMods(GetEntries(), m_mods);
 		CollectCountries(GetEntries(), m_countries);

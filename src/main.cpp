@@ -1,5 +1,6 @@
 #include "lookout.hpp"
 #include "loggers.hpp"
+#include "query/builtin_games.hpp"
 #include "query/game_catalog.hpp"
 #include <cstdlib>
 #include <print>
@@ -37,6 +38,8 @@ void PrintUsage(std::string_view executable)
 //////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
+	Lkt::Query::InitializeGameCatalog(Lkt::Query::GetBuiltinGames());
+
 	std::span<char* const> const args{ argv, static_cast<size_t>(argc) };
 	std::string_view const executable{ args.empty() ? "lookout" : args.front() };
 	std::span<char* const> const options{ args.empty() ? args : args.subspan(1) };
@@ -106,6 +109,8 @@ int main(int argc, char* argv[])
 
 		result = lookout.Run(pListGame) ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
+
+	Lkt::Query::TerminateGameCatalog();
 
 	return result;
 }

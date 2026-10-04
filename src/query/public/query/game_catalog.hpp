@@ -7,6 +7,10 @@
 
 namespace Lkt::Query
 {
+// Filled before any thread starts and read-only until terminated; each game's id is its position.
+void InitializeGameCatalog(std::span<SGameDefinition const> games);
+void TerminateGameCatalog();
+
 std::span<SGameDefinition const> GetGameCatalog();
 SGameDefinition const& GetGame(EGame game);
 

@@ -1,4 +1,5 @@
 #include "settings_json.hpp"
+#include "config/default_settings.hpp"
 #include "config/settings.hpp"
 #include "query/server_address.hpp"
 #include <gtest/gtest.h>
@@ -19,14 +20,14 @@ namespace
 constexpr Query::SServerAddress Favourite{ 0xCB007107, 31510 };
 constexpr Query::SServerAddress OtherFavourite{ 0xCB007108, 27910 };
 
-constexpr std::array<ESortColumn, Query::NumGames> SortColumns{ ESortColumn::Name, ESortColumn::Map, ESortColumn::Mod, ESortColumn::Mode, ESortColumn::Ping };
+constexpr std::array SortColumns{ ESortColumn::Name, ESortColumn::Map, ESortColumn::Mod, ESortColumn::Mode, ESortColumn::Ping };
 
 //////////////////////////////////////////////////////////////////////////
 // Values differ between games and between neighbouring fields, and each leaves its default somewhere, so a field
 // dropped or crossed shows.
 SSettings MakeVariedSettings()
 {
-	SSettings settings{};
+	SSettings settings{ MakeDefaultSettings() };
 
 	settings.window = SWindowSettings{ 1600, 1000, true, 360, "[Table][0x1A2B3C4D,8]\nColumn 0  Width=40\n" };
 	settings.selectedGame = Query::EGame::EnemyTerritory;
@@ -41,7 +42,7 @@ SSettings MakeVariedSettings()
 		game.isListed = !isEven;
 		game.filter = SServerFilter{ std::format("search {}", index), isEven, !isEven, 100 + offset, std::format("mod {}", index),
 			std::format("C{}", index) };
-		game.sort = SSortOrder{ SortColumns[index], isEven };
+		game.sort = SSortOrder{ SortColumns[index % SortColumns.size()], isEven };
 		game.installs = {
 			SGameInstall{ 1 + offset, std::format("Copy {}", index), EInstallKind::Command, std::format("run-game-{} +connect", index) },
 			SGameInstall{ 7 + offset, {}, EInstallKind::Folder, std::format("/games/{}", index) }
@@ -75,9 +76,9 @@ TEST(SettingsJson, EveryValueRoundTrips)
 //////////////////////////////////////////////////////////////////////////
 TEST(SettingsJson, DefaultsRoundTrip)
 {
-	SSettingsDocument const document{ ReadValid(WriteSettingsJson(SSettings{})) };
+	SSettingsDocument const document{ ReadValid(WriteSettingsJson(MakeDefaultSettings())) };
 
-	EXPECT_EQ(document.settings, SSettings{});
+	EXPECT_EQ(document.settings, MakeDefaultSettings());
 	EXPECT_EQ(document.numInvalid, 0u);
 }
 
@@ -86,7 +87,7 @@ TEST(SettingsJson, EmptyObjectGivesDefaults)
 {
 	SSettingsDocument const document{ ReadValid("{}") };
 
-	EXPECT_EQ(document.settings, SSettings{});
+	EXPECT_EQ(document.settings, MakeDefaultSettings());
 	EXPECT_EQ(document.version, SettingsVersion);
 	EXPECT_EQ(document.numInvalid, 0u);
 }
@@ -96,7 +97,7 @@ TEST(SettingsJson, UnknownKeysAreIgnored)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "colour": "amber", "games": { "doom": { "listed": 7 } } })") };
 
-	EXPECT_EQ(document.settings, SSettings{});
+	EXPECT_EQ(document.settings, MakeDefaultSettings());
 	EXPECT_EQ(document.numInvalid, 0u);
 }
 
@@ -165,7 +166,7 @@ TEST(SettingsJson, UnknownSelectedGameIsRejected)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "game": "doom" })") };
 
-	EXPECT_EQ(document.settings.selectedGame, SSettings{}.selectedGame);
+	EXPECT_EQ(document.settings.selectedGame, MakeDefaultSettings().selectedGame);
 	EXPECT_EQ(document.numInvalid, 1u);
 	EXPECT_EQ(document.firstInvalidPath, "game");
 }
@@ -173,7 +174,7 @@ TEST(SettingsJson, UnknownSelectedGameIsRejected)
 //////////////////////////////////////////////////////////////////////////
 TEST(SettingsJson, NoListedGameListsEveryGame)
 {
-	SSettings settings{};
+	SSettings settings{ MakeDefaultSettings() };
 
 	for (SGameSettings& game : settings.games)
 	{
@@ -182,7 +183,7 @@ TEST(SettingsJson, NoListedGameListsEveryGame)
 
 	SSettingsDocument const document{ ReadValid(WriteSettingsJson(settings)) };
 
-	EXPECT_EQ(document.settings, SSettings{});
+	EXPECT_EQ(document.settings, MakeDefaultSettings());
 	EXPECT_EQ(document.numInvalid, 1u);
 	EXPECT_EQ(document.firstInvalidPath, "games");
 }
@@ -190,7 +191,7 @@ TEST(SettingsJson, NoListedGameListsEveryGame)
 //////////////////////////////////////////////////////////////////////////
 TEST(SettingsJson, UnlistedSelectedGameGivesWayToTheFirstListed)
 {
-	SSettings settings{};
+	SSettings settings{ MakeDefaultSettings() };
 
 	settings.selectedGame = Query::EGame::Kingpin;
 	settings.games[static_cast<size_t>(Query::EGame::Kingpin)].isListed = false;
@@ -222,7 +223,7 @@ TEST(SettingsJson, EverySortColumnRoundTrips)
 	{
 		SCOPED_TRACE(index);
 
-		SSettings settings{};
+		SSettings settings{ MakeDefaultSettings() };
 
 		settings.games[0].sort.column = static_cast<ESortColumn>(index);
 
@@ -277,7 +278,7 @@ TEST(SettingsJson, AutoRefreshOutOfRangeKeepsTheDefault)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "autoRefreshSeconds": 86400 })") };
 
-	EXPECT_EQ(document.settings.autoRefreshSeconds, SSettings{}.autoRefreshSeconds);
+	EXPECT_EQ(document.settings.autoRefreshSeconds, MakeDefaultSettings().autoRefreshSeconds);
 	EXPECT_EQ(document.numInvalid, 1u);
 	EXPECT_EQ(document.firstInvalidPath, "autoRefreshSeconds");
 }
@@ -338,7 +339,7 @@ TEST(SettingsJson, RootThatIsNoObjectIsRejected)
 // Without exceptions a strict writer would abort here.
 TEST(SettingsJson, InvalidUtf8IsWrittenAsReplacement)
 {
-	SSettings settings{};
+	SSettings settings{ MakeDefaultSettings() };
 
 	settings.games[0].filter.search = "run\xFF";
 
@@ -383,7 +384,7 @@ TEST(SettingsJson, ObsoleteLauncherIsIgnored)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "games": { "kingpin": { "launcher": "install:7" } } })") };
 
-	EXPECT_EQ(document.settings, SSettings{});
+	EXPECT_EQ(document.settings, MakeDefaultSettings());
 	EXPECT_EQ(document.numInvalid, 0u);
 }
 

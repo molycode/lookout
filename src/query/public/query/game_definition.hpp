@@ -15,7 +15,7 @@ namespace Lkt::Query
 {
 struct SGameDefinition final
 {
-	EGame game{ EGame::Kingpin };
+	EGame game{ NoGame };
 	std::string_view key;
 	std::string_view name;
 	EProtocolFamily family{ EProtocolFamily::Quake2 };

@@ -9,10 +9,10 @@
 #include "query/game.hpp"
 #include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
-#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 struct SDL_Window;
 
@@ -58,14 +58,7 @@ private:
 	CAddServerPrompt m_addServerPrompt;
 	CAboutDialog m_aboutDialog;
 	CGameSettingsPopup m_gameSettings;
-	std::array<uint64_t, Query::NumGames> m_selectedKeys{ []()
-	{
-		std::array<uint64_t, Query::NumGames> keys{};
-
-		keys.fill(NoSelection);
-
-		return keys;
-	}() };
+	std::vector<uint64_t> m_selectedKeys;
 	std::string m_message;
 	float m_detailsEm{ 18.0f };
 	bool m_shouldScrollToSelection{ false };

@@ -1,6 +1,7 @@
 #include "config/settings_store.hpp"
 #include "loggers.hpp"
 #include "settings_json.hpp"
+#include "config/default_settings.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <expected>
@@ -234,7 +235,7 @@ void CSettingsStore::Initialize(std::string_view configDir)
 //////////////////////////////////////////////////////////////////////////
 SSettings CSettingsStore::Load()
 {
-	SSettings settings{};
+	SSettings settings{ MakeDefaultSettings() };
 
 	m_written.reset();
 	m_canSave = false;

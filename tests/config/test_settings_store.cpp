@@ -1,5 +1,6 @@
 #include "channels.hpp"
 #include "settings_json.hpp"
+#include "config/default_settings.hpp"
 #include "config/settings.hpp"
 #include "config/settings_store.hpp"
 #include "query/server_address.hpp"
@@ -26,7 +27,7 @@ using Tge::Testing::CExpectedLog;
 //////////////////////////////////////////////////////////////////////////
 SSettings MakeChangedSettings()
 {
-	SSettings settings{};
+	SSettings settings{ MakeDefaultSettings() };
 
 	settings.window.width = 1500;
 	settings.games[static_cast<size_t>(Query::EGame::Kingpin)].favourites = { Query::SServerAddress{ 0xCB007107, 31510 } };
@@ -96,7 +97,7 @@ TEST_F(CSettingsStoreTest, MissingFileGivesDefaultsSilently)
 
 	store.Initialize(m_dir.string());
 
-	EXPECT_EQ(store.Load(), SSettings{});
+	EXPECT_EQ(store.Load(), MakeDefaultSettings());
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -163,7 +164,7 @@ TEST_F(CSettingsStoreTest, InvalidJsonLogsOneWarning)
 	WriteText(m_file, "{ \"game\": ");
 	store.Initialize(m_dir.string());
 
-	EXPECT_EQ(store.Load(), SSettings{});
+	EXPECT_EQ(store.Load(), MakeDefaultSettings());
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -189,7 +190,7 @@ TEST_F(CSettingsStoreTest, InvalidValuesLogOneWarningBetweenThem)
 	WriteText(m_file, R"({ "window": { "width": "wide", "height": true }, "game": "doom" })");
 	store.Initialize(m_dir.string());
 
-	EXPECT_EQ(store.Load(), SSettings{});
+	EXPECT_EQ(store.Load(), MakeDefaultSettings());
 }
 
 //////////////////////////////////////////////////////////////////////////

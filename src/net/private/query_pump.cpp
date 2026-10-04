@@ -74,6 +74,7 @@ bool CQueryPump::Initialize(std::function<void()> onEventsReady)
 {
 	m_onEventsReady = std::move(onEventsReady);
 	m_buffer.resize(MaxDatagramSize);
+	m_refreshes.assign(Query::GetGameCatalog().size(), SRefreshState{});
 
 	for (size_t family{ 0 }; family < Query::NumProtocolFamilies; ++family)
 	{

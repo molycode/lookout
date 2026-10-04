@@ -81,7 +81,7 @@ private:
 	std::vector<std::unique_ptr<SDnsLookup>> m_lookups;
 	CRequestScheduler m_scheduler;
 	CMasterTracker m_masters;
-	std::array<SRefreshState, Query::NumGames> m_refreshes;
+	std::vector<SRefreshState> m_refreshes;
 	std::array<std::vector<std::byte>, Query::NumProtocolFamilies> m_statusRequests;
 
 	std::vector<std::byte> m_buffer;

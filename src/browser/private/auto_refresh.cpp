@@ -3,6 +3,12 @@
 namespace Lkt::Browser
 {
 //////////////////////////////////////////////////////////////////////////
+void CAutoRefresh::Initialize(size_t numGames)
+{
+	m_startedAt.assign(numGames, std::nullopt);
+}
+
+//////////////////////////////////////////////////////////////////////////
 void CAutoRefresh::OnRefreshStarted(Query::EGame game, Net::Clock::time_point now)
 {
 	m_startedAt[static_cast<size_t>(game)] = now;

@@ -73,6 +73,7 @@ void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutI
 	m_gameSettings.Initialize(pWindow);
 	m_aboutDialog.Initialize(pWindow, about);
 	m_detailsEm = static_cast<float>(detailsWidth) / BaseFontSize;
+	m_selectedKeys.assign(Query::GetGameCatalog().size(), NoSelection);
 }
 
 //////////////////////////////////////////////////////////////////////////

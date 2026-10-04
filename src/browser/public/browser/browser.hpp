@@ -22,7 +22,6 @@
 #include "query/parse_error.hpp"
 #include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
-#include <array>
 #include <cstdint>
 #include <expected>
 #include <functional>
@@ -95,9 +94,10 @@ private:
 	Launch::SLaunchEnvironment m_environment;
 	Launch::CGameLauncher m_launcher;
 	Net::CQueryEngine m_engine;
-	std::array<CServerList, Query::NumGames> m_lists;
-	std::array<SGameStatus, Query::NumGames> m_statuses;
-	std::array<SLaunchState, Query::NumGames> m_launchStates;
+	std::vector<CServerList> m_lists;
+	std::vector<SGameStatus> m_statuses;
+	std::vector<SLaunchState> m_launchStates;
+	std::vector<bool> m_hasChanged;
 	std::vector<Net::SQueryEvent> m_events;
 	std::vector<uint32_t> m_rows;
 	std::vector<std::string> m_mods;
