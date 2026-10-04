@@ -6,6 +6,7 @@
 #include "query/game_definition.hpp"
 #include "query/server_address.hpp"
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <expected>
@@ -37,6 +38,7 @@ SSettings MakeVariedSettings()
 	// Odd positions are listed below, and the first is the default.
 	settings.selectedGame = Query::GetGameCatalog()[1].game;
 	settings.autoRefreshSeconds = 45;
+	std::ranges::reverse(settings.gameOrder);
 
 	for (size_t index{ 0 }; index < settings.games.size(); ++index)
 	{
@@ -209,6 +211,85 @@ TEST(SettingsJson, UnlistedSelectedGameGivesWayToTheFirstListed)
 	EXPECT_EQ(document.settings.selectedGame, catalog[2].game);
 	EXPECT_EQ(document.numInvalid, 1u);
 	EXPECT_EQ(document.firstInvalidPath, "game");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, UnlistedSelectedGameGivesWayToTheFirstListedInTheOrder)
+{
+	SSettings settings{ MakeDefaultSettings() };
+
+	std::ranges::reverse(settings.gameOrder);
+	settings.selectedGame = settings.gameOrder[0];
+	settings.games[static_cast<size_t>(settings.gameOrder[0])].isListed = false;
+
+	SSettingsDocument const document{ ReadValid(WriteSettingsJson(settings)) };
+
+	EXPECT_EQ(document.settings.selectedGame, settings.gameOrder[1]);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, OrderByNameWithoutAGameStaysByName)
+{
+	SSettings settings{ MakeDefaultSettings() };
+
+	std::erase(settings.gameOrder, Fixtures::GetGameId("quake2"));
+
+	SSettingsDocument const document{ ReadValid(WriteSettingsJson(settings)) };
+
+	EXPECT_EQ(document.settings.gameOrder, MakeDefaultSettings().gameOrder);
+	EXPECT_EQ(document.numInvalid, 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Reversed, the order starts with the game whose name sorts last, after Quake II's.
+TEST(SettingsJson, GameMissingFromTheOrderGoesBeforeTheFirstThatSortsAfterIt)
+{
+	SSettings settings{ MakeDefaultSettings() };
+
+	std::ranges::reverse(settings.gameOrder);
+	std::erase(settings.gameOrder, Fixtures::GetGameId("quake2"));
+
+	SSettingsDocument const document{ ReadValid(WriteSettingsJson(settings)) };
+
+	ASSERT_FALSE(document.settings.gameOrder.empty());
+	EXPECT_EQ(document.settings.gameOrder.front(), Fixtures::GetGameId("quake2"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, UnknownGameInTheOrderIsSkipped)
+{
+	SSettingsDocument const document{ ReadValid(R"({ "gameOrder": [ "nosuchgame" ] })") };
+
+	EXPECT_EQ(document.settings.gameOrder, MakeDefaultSettings().gameOrder);
+	EXPECT_EQ(document.numInvalid, 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, GameListedTwiceInTheOrderIsRejected)
+{
+	SSettingsDocument const document{ ReadValid(R"({ "gameOrder": [ "quake2", "quake2" ] })") };
+
+	EXPECT_EQ(std::ranges::count(document.settings.gameOrder, Fixtures::GetGameId("quake2")), 1);
+	EXPECT_EQ(document.numInvalid, 1u);
+	EXPECT_EQ(document.firstInvalidPath, "gameOrder[1]");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, OrderEntryThatIsNotAKeyIsRejected)
+{
+	SSettingsDocument const document{ ReadValid(R"({ "gameOrder": [ 5 ] })") };
+
+	EXPECT_EQ(document.settings.gameOrder, MakeDefaultSettings().gameOrder);
+	EXPECT_EQ(document.firstInvalidPath, "gameOrder[0]");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, OrderThatIsNotAListIsRejected)
+{
+	SSettingsDocument const document{ ReadValid(R"({ "gameOrder": "kingpin" })") };
+
+	EXPECT_EQ(document.settings.gameOrder, MakeDefaultSettings().gameOrder);
+	EXPECT_EQ(document.firstInvalidPath, "gameOrder");
 }
 
 //////////////////////////////////////////////////////////////////////////

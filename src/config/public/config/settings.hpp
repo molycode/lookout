@@ -13,6 +13,7 @@ struct SSettings final
 	SWindowSettings window;
 	Query::EGame selectedGame{ Query::NoGame };
 	std::vector<SGameSettings> games;
+	std::vector<Query::EGame> gameOrder;
 	uint32_t autoRefreshSeconds{ 120 };
 
 	bool operator==(SSettings const&) const = default;

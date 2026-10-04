@@ -15,6 +15,13 @@ SSettings MakeDefaultSettings()
 	TGE_ASSERT(!catalog.empty(), "Settings need the game catalog to be initialized");
 
 	settings.games.assign(catalog.size(), SGameSettings{});
+	settings.gameOrder.reserve(catalog.size());
+
+	for (Query::SGameDefinition const& game : catalog)
+	{
+		settings.gameOrder.emplace_back(game.game);
+	}
+
 	settings.selectedGame = catalog.front().game;
 
 	return settings;

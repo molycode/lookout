@@ -33,6 +33,7 @@ constexpr bool EnsureAscii{ false };
 constexpr bool AllowExceptions{ false };
 constexpr bool IgnoreComments{ true };
 constexpr std::string_view FavouritesKey{ "favourites" };
+constexpr std::string_view GameOrderKey{ "gameOrder" };
 constexpr uint32_t MaxAutoRefreshSeconds{ 3600 };
 constexpr std::string_view InstallsKey{ "installs" };
 
@@ -390,6 +391,57 @@ void ReadGame(Json const& object, std::string_view path, SGameSettings& game, SS
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Missing games go where their names sort, so an order by name stays one when a game arrives.
+void ReadGameOrder(Json const& root, SSettingsDocument& document)
+{
+	std::vector<Query::EGame> order{};
+	bool isRead{ false };
+
+	ReadValue(root, {}, GameOrderKey, document, [&order, &isRead, &document](Json const& json)
+	{
+		isRead = json.is_array();
+
+		if (isRead)
+		{
+			size_t index{ 0 };
+
+			for (Json const& entry : json)
+			{
+				Query::SGameDefinition const* const pGame{ entry.is_string() ? Query::FindGame(entry.get_ref<std::string const&>()) : nullptr };
+
+				if (!entry.is_string() || (pGame != nullptr && std::ranges::contains(order, pGame->game)))
+				{
+					Reject(document, std::format("{}[{}]", GameOrderKey, index));
+				}
+				else if (pGame != nullptr)
+				{
+					order.emplace_back(pGame->game);
+				}
+
+				++index;
+			}
+		}
+
+		return isRead;
+	});
+
+	if (isRead)
+	{
+		for (Query::SGameDefinition const& game : Query::GetGameCatalog())
+		{
+			if (!std::ranges::contains(order, game.game))
+			{
+				auto const later{ std::ranges::find_if(order, [&game](Query::EGame listed) { return game.name < Query::GetGame(listed).name; }) };
+
+				order.insert(later, game.game);
+			}
+		}
+
+		document.settings.gameOrder = std::move(order);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 // The sidebar must offer at least one game, and the selected one among them.
 void CheckListedGames(SSettingsDocument& document)
 {
@@ -463,6 +515,7 @@ void ReadDocument(Json const& root, SSettingsDocument& document)
 		}
 	}
 
+	ReadGameOrder(root, document);
 	CheckListedGames(document);
 }
 
@@ -549,16 +602,23 @@ std::string WriteSettingsJson(SSettings const& settings)
 {
 	Json root = Json::object();
 	Json games = Json::object();
+	Json gameOrder = Json::array();
 
 	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
 	{
 		games[std::string{ game.key }] = WriteGame(settings.games[static_cast<size_t>(game.game)]);
 	}
 
+	for (Query::EGame const game : settings.gameOrder)
+	{
+		gameOrder.emplace_back(Query::GetGame(game).key);
+	}
+
 	root["version"] = SettingsVersion;
 	root["window"] = WriteWindow(settings.window);
 	root["game"] = Query::GetGame(settings.selectedGame).key;
 	root["games"] = std::move(games);
+	root[GameOrderKey] = std::move(gameOrder);
 	root["autoRefreshSeconds"] = settings.autoRefreshSeconds;
 
 	// Replacing invalid UTF-8 rather than failing, which without exceptions would be an abort.
