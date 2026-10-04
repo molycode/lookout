@@ -29,7 +29,7 @@ public:
 	~CServerList() = default;
 
 	void BeginRefresh(uint32_t refreshId);
-	void SetFavourite(Query::SServerAddress const& address, bool isFavourite);
+	void SetFavourite(Query::SGameDefinition const& game, Query::SServerAddress const& address, bool isFavourite);
 	bool Apply(Query::SGameDefinition const& game, Net::SQueryEvent&& event);
 
 	std::span<SServerEntry const> GetEntries() const;
@@ -39,7 +39,7 @@ public:
 
 private:
 
-	SServerEntry& AddListed(Query::SServerAddress const& address);
+	SServerEntry& AddListed(Query::SGameDefinition const& game, Query::SServerAddress const& address);
 	void ApplyAnswer(Query::SGameDefinition const& game, Net::SServerAnswered&& answer);
 	void ApplyFailure(Net::SServerFailed const& failure);
 	void FinishSweep(Query::SGameDefinition const& game);

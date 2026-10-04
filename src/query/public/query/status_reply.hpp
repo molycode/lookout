@@ -3,6 +3,7 @@
 #include "query/player.hpp"
 #include "query/rule.hpp"
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -13,6 +14,7 @@ struct SStatusReply final
 	std::vector<SRule> rules;
 	std::vector<SPlayer> players;
 	uint32_t numMalformedPlayerLines{ 0 };
+	std::optional<uint16_t> joinPort;
 };
 
 // An empty view when the server does not publish the rule.

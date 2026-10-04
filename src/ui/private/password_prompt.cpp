@@ -20,9 +20,9 @@ constexpr char const* PopupId{ "Server password###password" };
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CPasswordPrompt::Open(uint64_t key, std::string serverName, std::string launcherId)
+void CPasswordPrompt::Open(Query::SServerAddress const& joinAddress, std::string serverName, std::string launcherId)
 {
-	m_key = key;
+	m_joinAddress = joinAddress;
 	m_serverName = std::move(serverName);
 	m_launcherId = std::move(launcherId);
 	m_password.clear();
@@ -76,9 +76,8 @@ void CPasswordPrompt::Draw(Browser::CBrowser& browser, std::string& message)
 
 		if (isSubmitted && !m_password.empty())
 		{
-			Query::SServerAddress const address{ Query::FromKey(m_key) };
 			Query::EGame const game{ browser.GetSelectedGame() };
-			std::expected<void, Launch::ELaunchError> const joined{ browser.Join(address, m_password, m_launcherId) };
+			std::expected<void, Launch::ELaunchError> const joined{ browser.Join(m_joinAddress, m_password, m_launcherId) };
 
 			if (!joined.has_value() && joined.error() == Launch::ELaunchError::UnsupportedPassword)
 			{
@@ -87,7 +86,7 @@ void CPasswordPrompt::Draw(Browser::CBrowser& browser, std::string& message)
 			}
 			else
 			{
-				message = DescribeJoin(Query::GetGame(game).name, address, browser.ResolveLauncher(game, m_launcherId), joined);
+				message = DescribeJoin(Query::GetGame(game).name, m_joinAddress, browser.ResolveLauncher(game, m_launcherId), joined);
 				shouldClose = true;
 			}
 		}

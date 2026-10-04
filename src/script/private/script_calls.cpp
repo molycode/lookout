@@ -434,7 +434,9 @@ void ReadPlayers(lua_State* pState, int players, SParseCall& call)
 void ReadStatusReply(lua_State* pState, int reply, SParseCall& call)
 {
 	constexpr lua_Integer MaxCount{ std::numeric_limits<uint32_t>::max() };
+	constexpr lua_Integer MaxPort{ std::numeric_limits<uint16_t>::max() };
 	std::optional<lua_Integer> numMalformed{};
+	std::optional<lua_Integer> joinPort{};
 
 	if (PushField(pState, reply, "rules") == LUA_TTABLE)
 	{
@@ -465,6 +467,15 @@ void ReadStatusReply(lua_State* pState, int reply, SParseCall& call)
 	else
 	{
 		SetProblem(call.problem, std::format("malformedPlayerLines must be an integer from 0 to {}", MaxCount));
+	}
+
+	if (ReadOptionalInteger(pState, reply, "joinPort", 1, MaxPort, joinPort))
+	{
+		call.pReply->joinPort = joinPort.transform([](lua_Integer port) { return static_cast<uint16_t>(port); });
+	}
+	else
+	{
+		SetProblem(call.problem, std::format("joinPort must be an integer from 1 to {}", MaxPort));
 	}
 }
 } // namespace

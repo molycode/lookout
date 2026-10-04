@@ -63,7 +63,7 @@ void DrawSummary(Browser::SServerEntry const& entry, uint64_t key, SFrameIntents
 	std::array<char, Query::MaxFormattedAddress> address{};
 	std::array<char, 160> buffer{};
 	Query::SServerSummary const& summary{ entry.summary };
-	std::string_view const formattedAddress{ Query::FormatAddressTo(entry.address, address) };
+	std::string_view const formattedAddress{ Query::FormatAddressTo(entry.joinAddress, address) };
 
 	ImGui::PushTextWrapPos(0.0f);
 

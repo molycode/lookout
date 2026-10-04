@@ -2,7 +2,9 @@
 #include "fixtures.hpp"
 #include <gtest/gtest.h>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
+#include <format>
 #include <map>
 #include <string>
 #include <string_view>
@@ -236,6 +238,41 @@ TEST_F(CProtocolScriptTest, PlayerNeedsOnlyAName)
 	EXPECT_FALSE(reply->players.front().score.has_value());
 	EXPECT_FALSE(reply->players.front().ping.has_value());
 	EXPECT_EQ(reply->numMalformedPlayerLines, 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, ReplyNamesItsJoinPort)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.parseStatusReply = function() return { rules = {}, players = {}, joinPort = 7777 } end")), "");
+
+	std::expected<Query::SStatusReply, Query::EParseError> const reply{ m_script.ParseStatusReply(ToBytes("x")) };
+
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_EQ(reply->joinPort, uint16_t{ 7777 });
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, ReplyWithoutAJoinPortHasNone)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.parseStatusReply = function() return { rules = {}, players = {} } end")), "");
+
+	std::expected<Query::SStatusReply, Query::EParseError> const reply{ m_script.ParseStatusReply(ToBytes("x")) };
+
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_FALSE(reply->joinPort.has_value());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, JoinPortOutOfRangeFailsTheScript)
+{
+	for (std::string_view const port : { "0", "65536", "'7777'" })
+	{
+		ASSERT_EQ(LoadProblem(Load(std::format("protocol.parseStatusReply = function() return {{ rules = {{}}, players = {{}}, joinPort = {} }} end", port))), "");
+
+		EXPECT_EQ(m_script.ParseStatusReply(ToBytes("x")), std::unexpected{ Query::EParseError::ScriptFailed }) << port;
+		EXPECT_TRUE(m_script.GetLastFailure().contains("joinPort")) << m_script.GetLastFailure();
+		m_script.Terminate();
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////

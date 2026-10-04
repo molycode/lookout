@@ -63,7 +63,7 @@ void ReadShortcuts(SFrameIntents& intents)
 //////////////////////////////////////////////////////////////////////////
 std::string GetDisplayName(Browser::SServerEntry const& entry)
 {
-	return entry.summary.name.plain.empty() ? Query::FormatAddress(entry.address) : entry.summary.name.plain;
+	return entry.summary.name.plain.empty() ? Query::FormatAddress(entry.joinAddress) : entry.summary.name.plain;
 }
 } // namespace
 
@@ -97,11 +97,13 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 
 	std::optional<Query::SServerAddress> const added{ m_addServerPrompt.Draw(browser) };
 
-	if (added.has_value())
+	Browser::SServerEntry const* const pAdded{ added.has_value() ? browser.FindEntry(Query::ToKey(*added)) : nullptr };
+
+	if (pAdded != nullptr)
 	{
 		GetSelectedKey(browser.GetSelectedGame()) = Query::ToKey(*added);
 		m_shouldScrollToSelection = true;
-		m_message = std::format("Added {} to the favourites", Query::FormatAddress(*added));
+		m_message = std::format("Added {} to the favourites", Query::FormatAddress(pAdded->joinAddress));
 	}
 
 	m_passwordPrompt.Draw(browser, m_message);
@@ -296,7 +298,7 @@ void CMainWindow::Handle(Browser::CBrowser& browser, SServerAction const& action
 				browser.ToggleFavourite(address);
 				break;
 			case EServerAction::CopyAddress:
-				CopyAddress(address);
+				CopyAddress(pEntry->joinAddress);
 				break;
 			case EServerAction::None:
 				break;
@@ -313,11 +315,11 @@ void CMainWindow::Join(Browser::CBrowser& browser, Browser::SServerEntry const& 
 
 	if (launcher.has_value() && entry.summary.hasPassword)
 	{
-		m_passwordPrompt.Open(Query::ToKey(entry.address), GetDisplayName(entry), std::string{ launcherId });
+		m_passwordPrompt.Open(entry.joinAddress, GetDisplayName(entry), std::string{ launcherId });
 	}
 	else
 	{
-		m_message = DescribeJoin(Query::GetGame(game).name, entry.address, launcher, browser.Join(entry.address, {}, launcherId));
+		m_message = DescribeJoin(Query::GetGame(game).name, entry.joinAddress, launcher, browser.Join(entry.joinAddress, {}, launcherId));
 	}
 }
 

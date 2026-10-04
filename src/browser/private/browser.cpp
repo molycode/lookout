@@ -13,6 +13,7 @@
 #include "launch/launch_discovery.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
+#include "query/join_address.hpp"
 #include <tge/assert.hpp>
 #include <algorithm>
 #include <optional>
@@ -61,7 +62,7 @@ void CBrowser::Initialize(std::string_view configDir, std::string_view logsDir, 
 	{
 		for (Query::SServerAddress const& favourite : m_settings.games[ToIndex(game.game)].favourites)
 		{
-			m_lists[ToIndex(game.game)].SetFavourite(favourite, true);
+			m_lists[ToIndex(game.game)].SetFavourite(game, favourite, true);
 		}
 
 		SLaunchState& state{ m_launchStates[ToIndex(game.game)] };
@@ -200,7 +201,7 @@ void CBrowser::ToggleFavourite(Query::SServerAddress const& address)
 		favourites.erase(it);
 	}
 
-	m_lists[index].SetFavourite(address, isFavourite);
+	m_lists[index].SetFavourite(Query::GetGame(m_settings.selectedGame), address, isFavourite);
 	m_settingsStore.Save(m_settings);
 	Recount(m_settings.selectedGame);
 	RebuildRows();
@@ -210,8 +211,13 @@ void CBrowser::ToggleFavourite(Query::SServerAddress const& address)
 // No IsQueryable check: a server added by hand may well be on the LAN.
 std::expected<Query::SServerAddress, Query::EParseError> CBrowser::AddServer(std::string_view text)
 {
+	Query::SGameDefinition const& game{ Query::GetGame(m_settings.selectedGame) };
 	std::string_view const trimmed{ Trim(text) };
-	std::expected<Query::SServerAddress, Query::EParseError> const address{ Query::ParseAddress(trimmed) };
+	std::expected<Query::SServerAddress, Query::EParseError> const joinAddress{ Query::ParseAddress(trimmed) };
+	std::expected<Query::SServerAddress, Query::EParseError> const address{ joinAddress.and_then([&game](Query::SServerAddress const& typed)
+	{
+		return Query::ToQueryAddress(game, typed);
+	}) };
 
 	if (address.has_value())
 	{
@@ -221,13 +227,17 @@ std::expected<Query::SServerAddress, Query::EParseError> CBrowser::AddServer(std
 		if (!std::ranges::contains(favourites, *address))
 		{
 			favourites.emplace_back(*address);
-			m_lists[index].SetFavourite(*address, true);
+			m_lists[index].SetFavourite(game, *address, true);
 			m_settingsStore.Save(m_settings);
 		}
 
 		RefreshServer(*address);
 		Recount(m_settings.selectedGame);
 		RebuildRows();
+	}
+	else if (joinAddress.has_value())
+	{
+		gLog.Warning("'{}' cannot be a {} server: its query port, {}{:+}, is out of range", trimmed, game.name, joinAddress->port, game.queryPortOffset);
 	}
 	else
 	{
@@ -238,7 +248,7 @@ std::expected<Query::SServerAddress, Query::EParseError> CBrowser::AddServer(std
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<void, Launch::ELaunchError> CBrowser::Join(Query::SServerAddress const& address, std::string_view password, std::string_view launcherId)
+std::expected<void, Launch::ELaunchError> CBrowser::Join(Query::SServerAddress const& joinAddress, std::string_view password, std::string_view launcherId)
 {
 	Query::SGameDefinition const& game{ Query::GetGame(m_settings.selectedGame) };
 	std::expected<Launch::SLaunchOption, Launch::ELaunchError> const choice{ ResolveLauncher(m_settings.selectedGame, launcherId) };
@@ -246,11 +256,11 @@ std::expected<void, Launch::ELaunchError> CBrowser::Join(Query::SServerAddress c
 
 	if (choice.has_value())
 	{
-		result = m_launcher.Launch(game, *choice, Launch::SConnectRequest{ address, std::string{ password } });
+		result = m_launcher.Launch(game, *choice, Launch::SConnectRequest{ joinAddress, std::string{ password } });
 	}
 	else
 	{
-		gLog.Warning("Cannot join {} with {}: {}", Query::FormatAddress(address), game.name, Launch::ToString(choice.error()));
+		gLog.Warning("Cannot join {} with {}: {}", Query::FormatAddress(joinAddress), game.name, Launch::ToString(choice.error()));
 		result = std::unexpected{ choice.error() };
 	}
 

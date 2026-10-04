@@ -262,7 +262,7 @@ TEST(ServerList, FavouriteSurvivesTheSweep)
 	CServerList list{};
 
 	Prepare(list, 0);
-	list.SetFavourite(Second, true);
+	list.SetFavourite(Fixtures::GetGameByKey("quake3"), Second, true);
 	list.BeginRefresh(7);
 	list.Apply(Fixtures::GetGameByKey("quake3"), Net::SRefreshFinished{ Fixtures::GetGameId("quake3"), 7 });
 
@@ -275,7 +275,7 @@ TEST(ServerList, ForeignFavouriteStaysAsBadReply)
 {
 	CServerList list{};
 
-	list.SetFavourite(First, true);
+	list.SetFavourite(Fixtures::GetGameByKey("quake3"), First, true);
 	list.Apply(Fixtures::GetGameByKey("quake3"), MakeAnswer(Fixtures::GetGameId("quake3"), First, "q3urt43"));
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
@@ -287,7 +287,7 @@ TEST(ServerList, NewFavouriteWaitsForItsAnswer)
 {
 	CServerList list{};
 
-	list.SetFavourite(First, true);
+	list.SetFavourite(Fixtures::GetGameByKey("quake3"), First, true);
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_EQ(list.GetEntries()[0].state, EServerState::Pending);
@@ -344,6 +344,49 @@ TEST(ServerList, SearchTextHoldsTheCountryName)
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_TRUE(list.GetEntries()[0].searchText.contains("\nUnited States of America"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerList, ListedServerJoinsAtTheGameOffset)
+{
+	CServerList list{};
+	Query::SGameDefinition game{ Fixtures::GetGameByKey("quake3") };
+
+	game.queryPortOffset = 1;
+	list.Apply(game, Net::SServersListed{ game.game, { First } });
+
+	ASSERT_EQ(list.GetEntries().size(), 1u);
+	EXPECT_EQ(list.GetEntries()[0].address, First);
+	EXPECT_EQ(list.GetEntries()[0].joinAddress, (Query::SServerAddress{ First.ipv4, 27959 }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerList, ReplyJoinPortMovesOnlyTheJoinAddress)
+{
+	CServerList list{};
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
+	Net::SServerAnswered answer{ MakeAnswer(quake3.game, First, "baseq3") };
+
+	answer.reply.joinPort = 27000;
+	list.Apply(quake3, std::move(answer));
+
+	ASSERT_EQ(list.GetEntries().size(), 1u);
+	EXPECT_EQ(list.GetEntries()[0].address, First);
+	EXPECT_EQ(list.GetEntries()[0].joinAddress, (Query::SServerAddress{ First.ipv4, 27000 }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerList, SearchTextHoldsTheJoinAddress)
+{
+	CServerList list{};
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
+	Net::SServerAnswered answer{ MakeAnswer(quake3.game, First, "baseq3") };
+
+	answer.reply.joinPort = 27000;
+	list.Apply(quake3, std::move(answer));
+
+	ASSERT_EQ(list.GetEntries().size(), 1u);
+	EXPECT_TRUE(list.GetEntries()[0].searchText.contains("45.94.58.60:27000"));
 }
 } // namespace
 } // namespace Lkt::Browser

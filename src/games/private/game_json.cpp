@@ -22,9 +22,11 @@ constexpr bool AllowExceptions{ false };
 constexpr bool IgnoreComments{ true };
 constexpr uint64_t Format{ 1 };
 constexpr uint64_t MaxPort{ 65535 };
+// Any larger offset leaves no port that both the query and the join could use.
+constexpr int64_t MaxPortOffset{ 65534 };
 
-constexpr std::array<std::string_view, 11> GameFields{ "format", "name", "protocol", "text", "protocolOptions", "masters", "keys", "join",
-	"modes", "foreignServers", "launch" };
+constexpr std::array<std::string_view, 12> GameFields{ "format", "name", "protocol", "text", "protocolOptions", "queryPortOffset", "masters",
+	"keys", "join", "modes", "foreignServers", "launch" };
 constexpr std::array<std::string_view, 2> MasterFields{ "host", "port" };
 constexpr std::array<std::string_view, 6> KeyFields{ "hostname", "map", "numPlayers", "maxPlayers", "password", "mods" };
 constexpr std::array<std::string_view, 3> ModeFields{ "key", "value", "label" };
@@ -637,6 +639,27 @@ void ReadProtocolOptions(JsonValue const& root, Query::SProtocolDefinition const
 }
 
 //////////////////////////////////////////////////////////////////////////
+void ReadQueryPortOffset(JsonValue const& root, int32_t& offset, std::string& problem)
+{
+	JsonValue::const_iterator const it{ root.find("queryPortOffset") };
+
+	if (it != root.cend())
+	{
+		bool const isValid{ (it->is_number_unsigned() && it->get<uint64_t>() <= static_cast<uint64_t>(MaxPortOffset))
+			|| (it->is_number_integer() && !it->is_number_unsigned() && it->get<int64_t>() >= -MaxPortOffset) };
+
+		if (isValid)
+		{
+			offset = static_cast<int32_t>(it->get<int64_t>());
+		}
+		else
+		{
+			Fail(problem, "queryPortOffset", std::format("must be a whole number from {} to {}", -MaxPortOffset, MaxPortOffset));
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::SGameDefinition& game, std::string& problem)
 {
 	CheckFields(root, {}, GameFields, problem);
@@ -649,6 +672,7 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 		ReadProtocolOptions(root, *pProtocol, game.protocolOptions, problem);
 	}
 
+	ReadQueryPortOffset(root, game.queryPortOffset, problem);
 	ReadText(root, game.text, problem);
 	ReadJoin(root, game.join, problem);
 	ReadMasters(root, game, problem);

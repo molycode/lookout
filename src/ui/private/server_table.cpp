@@ -141,13 +141,13 @@ void DrawNameCell(Browser::SServerEntry const& entry)
 
 	if (entry.state != Browser::EServerState::Online)
 	{
-		std::string_view const text{ FormatTo(buffer, "{}  ({})", Query::FormatAddressTo(entry.address, address), DescribeState(entry.state)) };
+		std::string_view const text{ FormatTo(buffer, "{}  ({})", Query::FormatAddressTo(entry.joinAddress, address), DescribeState(entry.state)) };
 
 		DrawText(text, GetThemeColors().textDisabled);
 	}
 	else if (entry.summary.name.plain.empty())
 	{
-		std::string_view const text{ Query::FormatAddressTo(entry.address, address) };
+		std::string_view const text{ Query::FormatAddressTo(entry.joinAddress, address) };
 
 		ImGui::TextUnformatted(text.data(), text.data() + text.size());
 	}

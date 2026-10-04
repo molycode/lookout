@@ -50,8 +50,9 @@ public:
 	void Refresh();
 	void RefreshServer(Query::SServerAddress const& address);
 	void ToggleFavourite(Query::SServerAddress const& address);
+	// Takes the address a player joins and returns the one Lookout queries, which identifies the server.
 	std::expected<Query::SServerAddress, Query::EParseError> AddServer(std::string_view text);
-	std::expected<void, Launch::ELaunchError> Join(Query::SServerAddress const& address, std::string_view password, std::string_view launcherId);
+	std::expected<void, Launch::ELaunchError> Join(Query::SServerAddress const& joinAddress, std::string_view password, std::string_view launcherId);
 	void SetFilter(Config::SServerFilter const& filter);
 	void SetSort(Config::SSortOrder const& sort);
 	void SetWindowSettings(Config::SWindowSettings const& window);

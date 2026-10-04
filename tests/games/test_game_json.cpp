@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <expected>
 #include <string>
 #include <string_view>
@@ -58,6 +59,7 @@ TEST(GameJson, ReadsAMinimalGame)
 	ASSERT_EQ(game->masters.size(), 1u);
 	EXPECT_EQ(game->masters.front().host, "master.example");
 	EXPECT_EQ(game->masters.front().port, 27900);
+	EXPECT_EQ(game->queryPortOffset, 0);
 	EXPECT_EQ(game->keys.password, "needpass");
 	EXPECT_TRUE(game->modes.empty());
 	EXPECT_TRUE(game->launch.program.empty());
@@ -334,6 +336,35 @@ TEST(GameJson, PlayerCountKeyIsRead)
 
 	ASSERT_TRUE(read.has_value()) << read.error();
 	EXPECT_EQ(read->keys.numPlayers, "clients");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, QueryPortOffsetIsRead)
+{
+	for (int32_t const offset : { 1, -10 })
+	{
+		JsonValue game = MakeMinimalGame();
+
+		game["queryPortOffset"] = offset;
+
+		std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+		ASSERT_TRUE(read.has_value()) << read.error();
+		EXPECT_EQ(read->queryPortOffset, offset);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, QueryPortOffsetOutsideItsRangeIsRejected)
+{
+	for (JsonValue const& offset : JsonValue::parse(R"json([ 65535, -65535, 18446744073709551615, 1.5, "1" ])json"))
+	{
+		JsonValue game = MakeMinimalGame();
+
+		game["queryPortOffset"] = offset;
+
+		EXPECT_TRUE(ReadProblem(game).starts_with("queryPortOffset:")) << offset.dump();
+	}
 }
 } // namespace
 } // namespace Lkt::Games

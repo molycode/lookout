@@ -1,7 +1,7 @@
 #pragma once
 
+#include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
-#include <cstdint>
 #include <string>
 
 namespace Lkt
@@ -21,7 +21,7 @@ public:
 	CPasswordPrompt() = default;
 	~CPasswordPrompt() = default;
 
-	void Open(uint64_t key, std::string serverName, std::string launcherId);
+	void Open(Query::SServerAddress const& joinAddress, std::string serverName, std::string launcherId);
 	void Draw(Browser::CBrowser& browser, std::string& message);
 
 private:
@@ -30,7 +30,7 @@ private:
 	std::string m_launcherId;
 	std::string m_password;
 	std::string m_error;
-	uint64_t m_key{ 0 };
+	Query::SServerAddress m_joinAddress;
 	bool m_shouldOpen{ false };
 	bool m_shouldFocus{ false };
 };

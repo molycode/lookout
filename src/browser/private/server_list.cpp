@@ -1,8 +1,10 @@
 #include "browser/server_list.hpp"
 #include "geo/countries.hpp"
 #include "query/game_definition.hpp"
+#include "query/join_address.hpp"
 #include "query/styled_text.hpp"
 #include <algorithm>
+#include <optional>
 #include <type_traits>
 #include <variant>
 
@@ -16,6 +18,12 @@ constexpr char SearchFieldSeparator{ '\n' };
 std::string BuildSearchText(SServerEntry const& entry)
 {
 	std::string text{ Query::FormatAddress(entry.address) };
+
+	if (entry.joinAddress != entry.address)
+	{
+		text += SearchFieldSeparator;
+		text += Query::FormatAddress(entry.joinAddress);
+	}
 
 	for (std::string_view const field : { std::string_view{ entry.summary.name.plain }, std::string_view{ entry.summary.map },
 		std::string_view{ entry.summary.mod }, std::string_view{ entry.summary.mode } })
@@ -58,11 +66,11 @@ void CServerList::BeginRefresh(uint32_t refreshId)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CServerList::SetFavourite(Query::SServerAddress const& address, bool isFavourite)
+void CServerList::SetFavourite(Query::SGameDefinition const& game, Query::SServerAddress const& address, bool isFavourite)
 {
 	if (isFavourite)
 	{
-		AddListed(address).isFavourite = true;
+		AddListed(game, address).isFavourite = true;
 	}
 	else
 	{
@@ -90,7 +98,7 @@ bool CServerList::Apply(Query::SGameDefinition const& game, Net::SQueryEvent&& e
 			{
 				for (Query::SServerAddress const& address : typed.servers)
 				{
-					AddListed(address);
+					AddListed(game, address);
 				}
 			}
 			else if constexpr (std::is_same_v<TEvent, Net::SMasterFailed>)
@@ -150,7 +158,7 @@ uint32_t CServerList::GetNumMastersFailed() const
 }
 
 //////////////////////////////////////////////////////////////////////////
-SServerEntry& CServerList::AddListed(Query::SServerAddress const& address)
+SServerEntry& CServerList::AddListed(Query::SGameDefinition const& game, Query::SServerAddress const& address)
 {
 	auto const [it, isNew]{ m_indexByKey.try_emplace(Query::ToKey(address), m_entries.size()) };
 
@@ -159,6 +167,7 @@ SServerEntry& CServerList::AddListed(Query::SServerAddress const& address)
 		SServerEntry entry{};
 
 		entry.address = address;
+		entry.joinAddress = Query::ToJoinAddress(game, address, std::nullopt);
 		entry.country = Geo::FindCountry(address.ipv4);
 		m_entries.emplace_back(std::move(entry));
 	}
@@ -191,12 +200,13 @@ void CServerList::ApplyAnswer(Query::SGameDefinition const& game, Net::SServerAn
 	}
 	else
 	{
-		SServerEntry& entry{ AddListed(answer.address) };
+		SServerEntry& entry{ AddListed(game, answer.address) };
 
 		entry.state = EServerState::Online;
 		entry.pingMs = answer.pingMs;
 		entry.summary = std::move(summary);
 		entry.reply = std::move(answer.reply);
+		entry.joinAddress = Query::ToJoinAddress(game, entry.address, entry.reply.joinPort);
 		entry.playerNames.clear();
 		entry.playerFieldKeys.clear();
 

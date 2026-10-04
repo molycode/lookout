@@ -15,6 +15,7 @@ namespace Lkt::Browser
 struct SServerEntry final
 {
 	Query::SServerAddress address;
+	Query::SServerAddress joinAddress;
 	EServerState state{ EServerState::Pending };
 	uint32_t pingMs{ 0 };
 	uint8_t country{ Geo::NoCountry };

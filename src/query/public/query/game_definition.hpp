@@ -10,6 +10,7 @@
 #include "query/server_keys.hpp"
 #include "query/text_style.hpp"
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
@@ -25,6 +26,7 @@ struct SGameDefinition final
 	STextStyle text;
 	std::vector<SMasterEndpoint> masters;
 	std::map<std::string, std::string> protocolOptions;
+	int32_t queryPortOffset{ 0 };
 	SServerKeys keys;
 	std::vector<SModeRule> modes;
 	std::vector<SKeyMatch> foreignServers;

@@ -73,7 +73,7 @@ std::optional<Query::SServerAddress> CAddServerPrompt::Draw(Browser::CBrowser& b
 			}
 			else
 			{
-				m_error = "Not an address: use a.b.c.d:port";
+				m_error = "Not a server address: use a.b.c.d:port";
 				m_shouldFocus = true;
 			}
 		}
