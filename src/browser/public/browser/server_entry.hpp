@@ -21,6 +21,7 @@ struct SServerEntry final
 	Query::SServerSummary summary;
 	Query::SStatusReply reply;
 	std::vector<Query::SStyledText> playerNames;
+	std::vector<std::string> playerFieldKeys;
 	std::string searchText;
 	bool isFavourite{ false };
 	bool isStale{ false };

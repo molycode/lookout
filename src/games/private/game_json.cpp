@@ -26,7 +26,7 @@ constexpr uint64_t MaxPort{ 65535 };
 constexpr std::array<std::string_view, 11> GameFields{ "format", "name", "protocol", "text", "protocolOptions", "masters", "keys", "join",
 	"modes", "foreignServers", "launch" };
 constexpr std::array<std::string_view, 2> MasterFields{ "host", "port" };
-constexpr std::array<std::string_view, 5> KeyFields{ "hostname", "map", "maxPlayers", "password", "mods" };
+constexpr std::array<std::string_view, 6> KeyFields{ "hostname", "map", "numPlayers", "maxPlayers", "password", "mods" };
 constexpr std::array<std::string_view, 3> ModeFields{ "key", "value", "label" };
 constexpr std::array<std::string_view, 2> MatchFields{ "key", "value" };
 constexpr std::array<std::string_view, 4> LaunchFields{ "desktopFiles", "installDir", "program", "requiredFiles" };
@@ -306,7 +306,13 @@ void ReadKeys(JsonValue const& root, Query::SServerKeys& keys, std::string& prob
 		ReadRequiredString(*pKeys, "keys", "maxPlayers", keys.maxPlayers, problem);
 		ReadRequiredString(*pKeys, "keys", "password", keys.password, problem);
 
+		JsonValue::const_iterator const numPlayers{ pKeys->find("numPlayers") };
 		JsonValue::const_iterator const mods{ pKeys->find("mods") };
+
+		if (numPlayers != pKeys->cend())
+		{
+			ReadString(*numPlayers, "keys.numPlayers", keys.numPlayers, problem);
+		}
 
 		if (mods != pKeys->cend())
 		{

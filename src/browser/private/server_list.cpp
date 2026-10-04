@@ -198,10 +198,19 @@ void CServerList::ApplyAnswer(Query::SGameDefinition const& game, Net::SServerAn
 		entry.summary = std::move(summary);
 		entry.reply = std::move(answer.reply);
 		entry.playerNames.clear();
+		entry.playerFieldKeys.clear();
 
 		for (Query::SPlayer const& player : entry.reply.players)
 		{
 			entry.playerNames.emplace_back(Query::DecodeText(game.text, player.name));
+
+			for (Query::SRule const& field : player.fields)
+			{
+				if (!std::ranges::contains(entry.playerFieldKeys, field.key))
+				{
+					entry.playerFieldKeys.emplace_back(field.key);
+				}
+			}
 		}
 
 		entry.searchText = BuildSearchText(entry);

@@ -323,5 +323,17 @@ TEST(GameJson, PasswordLengthIsRequired)
 
 	EXPECT_TRUE(ReadProblem(game).starts_with("join.password.maxLength:"));
 }
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, PlayerCountKeyIsRead)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["keys"]["numPlayers"] = "clients";
+
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->keys.numPlayers, "clients");
+}
 } // namespace
 } // namespace Lkt::Games

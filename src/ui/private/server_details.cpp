@@ -11,13 +11,19 @@
 #include "browser/browser.hpp"
 #include "geo/countries.hpp"
 #include <imgui.h>
+#include <algorithm>
 #include <array>
+#include <cstddef>
+#include <span>
 #include <string_view>
 
 namespace Lkt::Ui
 {
 namespace
 {
+// A script decides how many fields players have; the table stays readable, and within ImGui's column limit.
+constexpr size_t MaxFieldColumns{ 8 };
+
 //////////////////////////////////////////////////////////////////////////
 void DrawDisabledText(std::string_view text)
 {
@@ -157,35 +163,69 @@ void DrawButtons(Browser::CBrowser const& browser, Browser::SServerEntry const& 
 }
 
 //////////////////////////////////////////////////////////////////////////
+void DrawTextCell(std::string_view text)
+{
+	ImGui::TableNextColumn();
+	ImGui::TextUnformatted(text.data(), text.data() + text.size());
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Score and ping get a column only when some player has one; each field a protocol reports gets its own.
 void DrawPlayers(Browser::SServerEntry const& entry)
 {
 	std::array<char, 16> buffer{};
 	float const em{ ImGui::GetFontSize() };
+	std::span<Query::SPlayer const> const players{ entry.reply.players };
+	bool const hasScore{ std::ranges::any_of(players, [](Query::SPlayer const& player) { return player.score.has_value(); }) };
+	bool const hasPing{ std::ranges::any_of(players, [](Query::SPlayer const& player) { return player.ping.has_value(); }) };
+	size_t const numFields{ std::min(entry.playerFieldKeys.size(), MaxFieldColumns) };
+	int const numColumns{ 1 + (hasScore ? 1 : 0) + (hasPing ? 1 : 0) + static_cast<int>(numFields) };
 
-	if (ImGui::BeginTable("##players", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoSavedSettings))
+	if (ImGui::BeginTable("##players", numColumns, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoSavedSettings))
 	{
 		ImGui::TableSetupColumn("Player", ImGuiTableColumnFlags_WidthStretch);
-		ImGui::TableSetupColumn("Score", ImGuiTableColumnFlags_WidthFixed, em * 3.0f);
-		ImGui::TableSetupColumn("Ping", ImGuiTableColumnFlags_WidthFixed, em * 3.0f);
+
+		if (hasScore)
+		{
+			ImGui::TableSetupColumn("Score", ImGuiTableColumnFlags_WidthFixed, em * 3.0f);
+		}
+
+		if (hasPing)
+		{
+			ImGui::TableSetupColumn("Ping", ImGuiTableColumnFlags_WidthFixed, em * 3.0f);
+		}
+
+		for (size_t index{ 0 }; index < numFields; ++index)
+		{
+			ImGui::TableSetupColumn(entry.playerFieldKeys[index].c_str(), ImGuiTableColumnFlags_WidthFixed, em * 4.0f);
+		}
+
 		ImGui::TableHeadersRow();
 
-		for (size_t index{ 0 }; index < entry.reply.players.size() && index < entry.playerNames.size(); ++index)
+		for (size_t index{ 0 }; index < players.size() && index < entry.playerNames.size(); ++index)
 		{
-			Query::SPlayer const& player{ entry.reply.players[index] };
+			Query::SPlayer const& player{ players[index] };
 
 			ImGui::TableNextRow();
 			ImGui::TableNextColumn();
 			DrawClippedStyledText(entry.playerNames[index]);
-			ImGui::TableNextColumn();
 
-			std::string_view const score{ FormatTo(buffer, "{}", player.score) };
+			if (hasScore)
+			{
+				DrawTextCell(player.score.has_value() ? FormatTo(buffer, "{}", *player.score) : std::string_view{});
+			}
 
-			ImGui::TextUnformatted(score.data(), score.data() + score.size());
-			ImGui::TableNextColumn();
+			if (hasPing)
+			{
+				DrawTextCell(player.ping.has_value() ? FormatTo(buffer, "{}", *player.ping) : std::string_view{});
+			}
 
-			std::string_view const ping{ FormatTo(buffer, "{}", player.ping) };
+			for (size_t field{ 0 }; field < numFields; ++field)
+			{
+				auto const it{ std::ranges::find(player.fields, entry.playerFieldKeys[field], &Query::SRule::key) };
 
-			ImGui::TextUnformatted(ping.data(), ping.data() + ping.size());
+				DrawTextCell((it != player.fields.end()) ? std::string_view{ it->value } : std::string_view{});
+			}
 		}
 
 		ImGui::EndTable();

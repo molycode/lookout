@@ -1,6 +1,7 @@
 #include "query/server_summary.hpp"
 #include <algorithm>
 #include <charconv>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -34,13 +35,19 @@ std::string_view FindMode(SStatusReply const& reply, std::span<SModeRule const> 
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Zero when the server does not say, which reads as "unknown" rather than as a full server.
-uint32_t ParseCount(std::string_view text)
+std::optional<uint32_t> TryParseCount(std::string_view text)
 {
 	uint32_t count{ 0 };
 	std::from_chars_result const result{ std::from_chars(text.data(), text.data() + text.size(), count) };
 
-	return (result.ec == std::errc{}) ? count : 0;
+	return (result.ec == std::errc{}) ? std::optional<uint32_t>{ count } : std::nullopt;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Zero when the server does not say, which reads as "unknown" rather than as a full server.
+uint32_t ParseCount(std::string_view text)
+{
+	return TryParseCount(text).value_or(0);
 }
 } // namespace
 
@@ -53,7 +60,8 @@ SServerSummary Summarize(SGameDefinition const& game, SStatusReply const& reply)
 	summary.map = DecodeText(game.text, FindRule(reply, game.keys.map)).plain;
 	summary.mod = DecodeText(game.text, FindFirstRule(reply, game.keys.mods)).plain;
 	summary.mode = FindMode(reply, game.modes);
-	summary.numPlayers = static_cast<uint32_t>(reply.players.size());
+	summary.numPlayers = (game.keys.numPlayers.empty() ? std::nullopt : TryParseCount(FindRule(reply, game.keys.numPlayers)))
+		.value_or(static_cast<uint32_t>(reply.players.size()));
 	summary.maxPlayers = ParseCount(FindRule(reply, game.keys.maxPlayers));
 	// Only the lowest bit means a player password: games use the others for things like spectator passwords.
 	summary.hasPassword = (ParseCount(FindRule(reply, game.keys.password)) & 1u) != 0;

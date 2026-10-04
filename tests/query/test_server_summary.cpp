@@ -124,5 +124,29 @@ TEST(ServerSummary, BaseQuake3IsNotForeign)
 {
 	EXPECT_FALSE(Summarize(Fixtures::GetGameByKey("quake3"), MakeReply({ { "gamename", "baseq3" } })).isForeign);
 }
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerSummary, PlayerCountRuleWinsOverTheList)
+{
+	SGameDefinition game{ Fixtures::GetGameByKey("quake3") };
+	SStatusReply reply{ MakeReply({ { "numplayers", "7" } }) };
+
+	game.keys.numPlayers = "numplayers";
+	reply.players.emplace_back().name = "only one listed";
+
+	EXPECT_EQ(Summarize(game, reply).numPlayers, 7u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerSummary, UnreadablePlayerCountFallsBackToTheList)
+{
+	SGameDefinition game{ Fixtures::GetGameByKey("quake3") };
+	SStatusReply reply{ MakeReply({ { "numplayers", "many" } }) };
+
+	game.keys.numPlayers = "numplayers";
+	reply.players.emplace_back().name = "only one listed";
+
+	EXPECT_EQ(Summarize(game, reply).numPlayers, 1u);
+}
+
 } // namespace
 } // namespace Lkt::Query

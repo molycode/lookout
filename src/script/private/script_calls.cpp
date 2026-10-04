@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <format>
 #include <limits>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -71,6 +72,25 @@ bool ReadInteger(lua_State* pState, int table, char const* pField, lua_Integer m
 	bool const isValid{ isInteger && number >= min && number <= max };
 
 	if (isValid)
+	{
+		value = number;
+	}
+
+	lua_pop(pState, 1);
+
+	return isValid;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// True when the field is absent, or holds an integer in range.
+bool ReadOptionalInteger(lua_State* pState, int table, char const* pField, lua_Integer min, lua_Integer max, std::optional<lua_Integer>& value)
+{
+	int const type{ PushField(pState, table, pField) };
+	bool const isInteger{ type == LUA_TNUMBER && lua_isinteger(pState, -1) != 0 };
+	lua_Integer const number{ isInteger ? lua_tointeger(pState, -1) : 0 };
+	bool const isValid{ type == LUA_TNIL || (isInteger && number >= min && number <= max) };
+
+	if (isInteger && isValid)
 	{
 		value = number;
 	}
@@ -348,6 +368,28 @@ void ReadRules(lua_State* pState, int rules, SParseCall& call)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// An ordered array, so fields keep the protocol's order rather than a hash table's.
+bool ReadFields(lua_State* pState, int player, std::vector<Query::SRule>& fields)
+{
+	int const type{ PushField(pState, player, "fields") };
+	int const table{ lua_gettop(pState) };
+	bool isValid{ type == LUA_TNIL || type == LUA_TTABLE };
+
+	for (lua_Integer index{ 1 }; isValid && type == LUA_TTABLE && lua_rawgeti(pState, table, index) != LUA_TNIL; ++index)
+	{
+		int const entry{ lua_gettop(pState) };
+		Query::SRule& field{ fields.emplace_back() };
+
+		isValid = lua_type(pState, entry) == LUA_TTABLE && ReadString(pState, entry, "key", field.key) && ReadString(pState, entry, "value", field.value);
+		lua_pop(pState, 1);
+	}
+
+	lua_settop(pState, table - 1);
+
+	return isValid;
+}
+
+//////////////////////////////////////////////////////////////////////////
 void ReadPlayers(lua_State* pState, int players, SParseCall& call)
 {
 	constexpr lua_Integer MinScore{ std::numeric_limits<int32_t>::min() };
@@ -363,18 +405,19 @@ void ReadPlayers(lua_State* pState, int players, SParseCall& call)
 		{
 			int const entry{ lua_gettop(pState) };
 			Query::SPlayer& player{ call.pReply->players.emplace_back() };
-			lua_Integer score{ 0 };
-			lua_Integer ping{ 0 };
+			std::optional<lua_Integer> score{};
+			std::optional<lua_Integer> ping{};
 
-			if (ReadString(pState, entry, "name", player.name) && ReadInteger(pState, entry, "score", MinScore, MaxScore, score)
-				&& ReadInteger(pState, entry, "ping", 0, MaxPing, ping))
+			if (ReadString(pState, entry, "name", player.name) && ReadOptionalInteger(pState, entry, "score", MinScore, MaxScore, score)
+				&& ReadOptionalInteger(pState, entry, "ping", 0, MaxPing, ping) && ReadFields(pState, entry, player.fields))
 			{
-				player.score = static_cast<int32_t>(score);
-				player.ping = static_cast<uint32_t>(ping);
+				player.score = score.has_value() ? std::optional<int32_t>{ static_cast<int32_t>(*score) } : std::nullopt;
+				player.ping = ping.has_value() ? std::optional<uint32_t>{ static_cast<uint32_t>(*ping) } : std::nullopt;
 			}
 			else
 			{
-				SetProblem(call.problem, std::format("players[{}] must hold a string name, an int32 score and a uint32 ping", index));
+				SetProblem(call.problem, std::format("players[{}] must hold a string name, and may hold an int32 score, a uint32 ping and "
+					"fields of string keys and values", index));
 			}
 		}
 		else if (type != LUA_TNIL)
@@ -391,7 +434,7 @@ void ReadPlayers(lua_State* pState, int players, SParseCall& call)
 void ReadStatusReply(lua_State* pState, int reply, SParseCall& call)
 {
 	constexpr lua_Integer MaxCount{ std::numeric_limits<uint32_t>::max() };
-	lua_Integer numMalformed{ 0 };
+	std::optional<lua_Integer> numMalformed{};
 
 	if (PushField(pState, reply, "rules") == LUA_TTABLE)
 	{
@@ -415,9 +458,9 @@ void ReadStatusReply(lua_State* pState, int reply, SParseCall& call)
 
 	lua_pop(pState, 1);
 
-	if (ReadInteger(pState, reply, "malformedPlayerLines", 0, MaxCount, numMalformed))
+	if (ReadOptionalInteger(pState, reply, "malformedPlayerLines", 0, MaxCount, numMalformed))
 	{
-		call.pReply->numMalformedPlayerLines = static_cast<uint32_t>(numMalformed);
+		call.pReply->numMalformedPlayerLines = static_cast<uint32_t>(numMalformed.value_or(0));
 	}
 	else
 	{

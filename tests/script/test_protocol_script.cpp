@@ -224,5 +224,43 @@ TEST_F(CProtocolScriptTest, ErrorThatIsNotAStringIsDescribed)
 	EXPECT_EQ(m_script.ParseStatusReply(ToBytes("x")), std::unexpected{ Query::EParseError::ScriptFailed });
 	EXPECT_EQ(m_script.GetLastFailure(), "parseStatusReply: the script raised a table as its error");
 }
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, PlayerNeedsOnlyAName)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.parseStatusReply = function() return { rules = {}, players = { { name = 'solo' } } } end")), "");
+
+	std::expected<Query::SStatusReply, Query::EParseError> const reply{ m_script.ParseStatusReply(ToBytes("x")) };
+
+	ASSERT_TRUE(reply.has_value());
+	ASSERT_EQ(reply->players.size(), 1u);
+	EXPECT_FALSE(reply->players.front().score.has_value());
+	EXPECT_FALSE(reply->players.front().ping.has_value());
+	EXPECT_EQ(reply->numMalformedPlayerLines, 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, PlayerFieldsKeepTheirOrder)
+{
+	ASSERT_EQ(LoadProblem(Load(R"lua(protocol.parseStatusReply = function()
+		return { rules = {}, players = { { name = "a", fields = { { key = "team", value = "Blue" }, { key = "time", value = "12" } } } } }
+	end)lua")), "");
+
+	std::expected<Query::SStatusReply, Query::EParseError> const reply{ m_script.ParseStatusReply(ToBytes("x")) };
+
+	ASSERT_TRUE(reply.has_value());
+	ASSERT_EQ(reply->players.front().fields.size(), 2u);
+	EXPECT_EQ(reply->players.front().fields[0].key, "team");
+	EXPECT_EQ(reply->players.front().fields[0].value, "Blue");
+	EXPECT_EQ(reply->players.front().fields[1].key, "time");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, FieldThatIsNotAPairFailsTheScript)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.parseStatusReply = function() return { rules = {}, players = { { name = 'a', fields = { 'team' } } } } end")), "");
+
+	EXPECT_EQ(m_script.ParseStatusReply(ToBytes("x")), std::unexpected{ Query::EParseError::ScriptFailed });
+}
+
 } // namespace
 } // namespace Lkt::Fixtures
