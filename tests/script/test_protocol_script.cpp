@@ -75,9 +75,44 @@ TEST_F(CProtocolScriptTest, UnknownServerFieldIsRefused)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CProtocolScriptTest, MasterTransportMustBeUdp)
+TEST_F(CProtocolScriptTest, MasterTransportMustBeKnown)
 {
-	EXPECT_EQ(LoadProblem(Load("protocol.master.transport = 'tcp'")), "master.transport must be \"udp\"");
+	EXPECT_EQ(LoadProblem(Load("protocol.master.transport = 'sctp'")), "master.transport must be \"udp\" or \"tcp\"");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, MasterTransportIsRead)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.master.transport = 'tcp' protocol.master.start = function() end")), "");
+
+	EXPECT_EQ(m_script.GetMasterTransport(), Script::EMasterTransport::Tcp);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, TcpMasterSpeaksFirst)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.master.transport = 'tcp'")), "");
+
+	EXPECT_EQ(Failure(Start(EConversationKind::Master)), "master.start: a TCP master speaks first, so start may not send");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, TcpStartMaySendNothing)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.master.transport = 'tcp' protocol.master.start = function() end")), "");
+
+	std::expected<Script::SScriptAction, std::string> const started{ Start(EConversationKind::Master) };
+
+	ASSERT_TRUE(started.has_value()) << started.error();
+	EXPECT_TRUE(started->send.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, TcpServerStillStartsBySending)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.master.transport = 'tcp' protocol.server.start = function() end")), "");
+
+	EXPECT_EQ(Failure(Start(EConversationKind::Server)), "server.start: a UDP conversation must start by sending");
 }
 
 //////////////////////////////////////////////////////////////////////////

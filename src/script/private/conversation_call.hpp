@@ -15,6 +15,7 @@ struct SConversationCall final
 {
 	EConversationKind kind{ EConversationKind::Master };
 	ECallback callback{ ECallback::Start };
+	bool isStream{ false };
 	uint64_t id{ 0 };
 	int states{ 0 };
 	int function{ 0 };

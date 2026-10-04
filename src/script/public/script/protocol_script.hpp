@@ -1,6 +1,7 @@
 #pragma once
 
 #include "script/conversation.hpp"
+#include "script/master_transport.hpp"
 #include "script/script_action.hpp"
 #include "query/protocol_option.hpp"
 #include <tge/non_copyable.hpp>
@@ -34,9 +35,11 @@ public:
 	void Terminate();
 
 	std::span<Query::SProtocolOption const> GetOptions() const;
+	EMasterTransport GetMasterTransport() const;
 
 	// The conversation names its kind and has no id yet; a successful Start gives it one.
 	std::expected<SScriptAction, std::string> Start(SConversation& conversation, std::map<std::string, std::string> const& options);
+	// Over TCP, empty data means the master closed the connection.
 	std::expected<SScriptAction, std::string> Receive(SConversation const& conversation, std::span<std::byte const> data);
 	// An empty action when the script has no server.finish.
 	std::expected<SScriptAction, std::string> Finish(SConversation const& conversation);
@@ -62,6 +65,7 @@ private:
 	int m_serverStart{ 0 };
 	int m_serverReceive{ 0 };
 	int m_serverFinish{ 0 };
+	EMasterTransport m_masterTransport{ EMasterTransport::Udp };
 	bool m_hasRunOutOfTime{ false };
 };
 } // namespace Lkt::Script

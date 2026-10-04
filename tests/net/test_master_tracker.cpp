@@ -33,7 +33,7 @@ protected:
 
 	void BeginResolved()
 	{
-		m_tracker.Begin(Game, 1, m_masters, Start);
+		m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Udp, Start);
 		m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
 	}
 
@@ -100,7 +100,7 @@ TEST_F(CMasterTrackerTest, ReportsAMasterThatNeverAnswers)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, ReportsAMasterThatCannotBeResolved)
 {
-	m_tracker.Begin(Game, 1, m_masters, Start);
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Udp, Start);
 	m_tracker.OnResolved(Game, 1, 0, std::unexpected{ std::string{ "Name or service not known" } }, Start);
 	Update(Start);
 
@@ -112,7 +112,7 @@ TEST_F(CMasterTrackerTest, ReportsAMasterThatCannotBeResolved)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, LookupThatNeverReturnsTimesOut)
 {
-	m_tracker.Begin(Game, 1, m_masters, Start);
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Udp, Start);
 	Update(Start + 5s);
 
 	ASSERT_EQ(m_outcomes.size(), 1u);
@@ -122,8 +122,8 @@ TEST_F(CMasterTrackerTest, LookupThatNeverReturnsTimesOut)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, IgnoresAnAnswerForAReplacedRefresh)
 {
-	m_tracker.Begin(Game, 1, m_masters, Start);
-	m_tracker.Begin(Game, 2, m_masters, Start);
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Udp, Start);
+	m_tracker.Begin(Game, 2, m_masters, Script::EMasterTransport::Udp, Start);
 	m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
 	Update(Start);
 
@@ -134,7 +134,7 @@ TEST_F(CMasterTrackerTest, IgnoresAnAnswerForAReplacedRefresh)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, ResolvesEachMasterByItsIndex)
 {
-	m_tracker.Begin(Game, 1, m_twoMasters, Start);
+	m_tracker.Begin(Game, 1, m_twoMasters, Script::EMasterTransport::Udp, Start);
 	m_tracker.OnResolved(Game, 1, 1, SecondMasterIp, Start);
 	Update(Start);
 
@@ -251,7 +251,7 @@ TEST_F(CMasterTrackerTest, CapsTheServersOneMasterMayList)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, MastersAtOneAddressAreApart)
 {
-	m_tracker.Begin(Game, 1, m_twoMasters, Start);
+	m_tracker.Begin(Game, 1, m_twoMasters, Script::EMasterTransport::Udp, Start);
 	m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
 	m_tracker.OnResolved(Game, 1, 1, MasterIp, Start);
 	Update(Start);
@@ -292,11 +292,36 @@ TEST_F(CMasterTrackerTest, EndedMasterIsNotReportedTwice)
 TEST_F(CMasterTrackerTest, CancelOnlyForgetsThatGame)
 {
 	BeginResolved();
-	m_tracker.Begin(OtherGame, 1, m_masters, Start);
+	m_tracker.Begin(OtherGame, 1, m_masters, Script::EMasterTransport::Udp, Start);
 	m_tracker.Cancel(Game);
 
 	EXPECT_FALSE(m_tracker.HasWork(Game));
 	EXPECT_TRUE(m_tracker.HasWork(OtherGame));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterTrackerTest, StreamStepIsNeverResent)
+{
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Tcp, Start);
+	m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
+	Update(Start);
+	Update(Start + 2s);
+	Update(Start + 3999ms);
+
+	EXPECT_EQ(m_queries.size(), 1u);
+	EXPECT_TRUE(m_outcomes.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterTrackerTest, SilentStreamMasterFailsAfterItsStep)
+{
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Tcp, Start);
+	m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
+	Update(Start);
+	Update(Start + 4s);
+
+	ASSERT_EQ(m_outcomes.size(), 1u);
+	EXPECT_EQ(m_outcomes[0].failure, "did not answer");
 }
 
 //////////////////////////////////////////////////////////////////////////

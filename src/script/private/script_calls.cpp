@@ -287,14 +287,17 @@ void ReadMaster(lua_State* pState, int module, SLoadCall& call)
 	if (PushField(pState, module, "master") == LUA_TTABLE)
 	{
 		int const master{ lua_gettop(pState) };
-		bool const isUdp{ PushField(pState, master, "transport") == LUA_TSTRING && ToStringView(pState, -1) == "udp" };
+		bool const isString{ PushField(pState, master, "transport") == LUA_TSTRING };
+		bool const isUdp{ isString && ToStringView(pState, -1) == "udp" };
+		bool const isTcp{ isString && ToStringView(pState, -1) == "tcp" };
 
 		lua_pop(pState, 1);
 		CheckModuleFields(pState, master, MasterFields, "master", call);
+		call.masterTransport = isTcp ? EMasterTransport::Tcp : EMasterTransport::Udp;
 
-		if (!isUdp)
+		if (!isUdp && !isTcp)
 		{
-			SetProblem(call.problem, "master.transport must be \"udp\"");
+			SetProblem(call.problem, "master.transport must be \"udp\" or \"tcp\"");
 		}
 
 		ReadFunction(pState, master, "start", "master.start", call.masterStart, call.problem);
@@ -715,7 +718,7 @@ void CheckActionCombination(SConversationCall& call)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Nil means nothing to do yet. Every master is UDP so far, so every start must send.
+// Nil means nothing to do yet. A datagram conversation starts by sending; over a stream the master speaks first.
 void ReadAction(lua_State* pState, int action, SConversationCall& call)
 {
 	if (lua_type(pState, action) == LUA_TTABLE)
@@ -742,9 +745,13 @@ void ReadAction(lua_State* pState, int action, SConversationCall& call)
 		SetProblem(call.problem, "the result must be an action table or nil");
 	}
 
-	if (call.callback == ECallback::Start && call.action.send.empty())
+	if (call.callback == ECallback::Start && !call.isStream && call.action.send.empty())
 	{
 		SetProblem(call.problem, "a UDP conversation must start by sending");
+	}
+	else if (call.callback == ECallback::Start && call.isStream && !call.action.send.empty())
+	{
+		SetProblem(call.problem, "a TCP master speaks first, so start may not send");
 	}
 }
 } // namespace

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "query/protocol_option.hpp"
+#include "script/master_transport.hpp"
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,6 +19,7 @@ struct SLoadCall final
 	int serverReceive{ 0 };
 	int serverFinish{ 0 };
 	int states{ 0 };
+	EMasterTransport masterTransport{ EMasterTransport::Udp };
 	std::vector<Query::SProtocolOption> options;
 	std::string unknownField;
 	std::string problem;

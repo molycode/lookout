@@ -7,9 +7,11 @@ namespace Lkt::Net
 {
 namespace
 {
-constexpr uint32_t MaxAttempts{ 2 };
 constexpr Clock::duration ResolveTimeout{ std::chrono::seconds{ 5 } };
-constexpr Clock::duration StepTimeout{ std::chrono::seconds{ 2 } };
+constexpr uint32_t MaxDatagramAttempts{ 2 };
+constexpr Clock::duration DatagramStepTimeout{ std::chrono::seconds{ 2 } };
+// TCP delivers or fails on its own, so a stream step is never resent; it gets the time a datagram step's two sends do.
+constexpr Clock::duration StreamStepTimeout{ DatagramStepTimeout * MaxDatagramAttempts };
 constexpr Clock::duration Deadline{ std::chrono::seconds{ 30 } };
 
 // The busiest master measured lists about 1,000 servers; anything far beyond that is broken or hostile.
@@ -24,7 +26,7 @@ bool IsAsked(SMasterRecord const& record)
 //////////////////////////////////////////////////////////////////////////
 bool IsStepExhausted(SMasterRecord const& record, Clock::time_point now)
 {
-	return !record.isStepAnswered && record.numAttempts >= MaxAttempts && now - record.stepSentAt >= StepTimeout;
+	return !record.isStepAnswered && record.numAttempts >= record.maxAttempts && now - record.stepSentAt >= record.stepTimeout;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -74,7 +76,7 @@ std::optional<Clock::time_point> GetDeadline(SMasterRecord const& record)
 
 		if (!record.isStepAnswered)
 		{
-			deadline = std::min(*deadline, record.stepSentAt + StepTimeout);
+			deadline = std::min(*deadline, record.stepSentAt + record.stepTimeout);
 		}
 	}
 
@@ -83,7 +85,8 @@ std::optional<Clock::time_point> GetDeadline(SMasterRecord const& record)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CMasterTracker::Begin(Query::EGame game, uint32_t generation, std::span<Query::SMasterEndpoint const> masters, Clock::time_point now)
+void CMasterTracker::Begin(Query::EGame game, uint32_t generation, std::span<Query::SMasterEndpoint const> masters, Script::EMasterTransport transport,
+	Clock::time_point now)
 {
 	Cancel(game);
 
@@ -98,6 +101,8 @@ void CMasterTracker::Begin(Query::EGame game, uint32_t generation, std::span<Que
 		record.host = master.host;
 		record.port = master.port;
 		record.resolveDeadline = now + ResolveTimeout;
+		record.maxAttempts = (transport == Script::EMasterTransport::Tcp) ? 1 : MaxDatagramAttempts;
+		record.stepTimeout = (transport == Script::EMasterTransport::Tcp) ? StreamStepTimeout : DatagramStepTimeout;
 		m_records.emplace_back(std::move(record));
 	}
 }
@@ -146,7 +151,7 @@ void CMasterTracker::Update(Clock::time_point now, std::vector<SMasterQuery>& qu
 		{
 			End(record, std::move(*ending), outcomes);
 		}
-		else if (IsAsked(record) && !record.isStepAnswered && record.numAttempts < MaxAttempts && now - record.stepSentAt >= StepTimeout)
+		else if (IsAsked(record) && !record.isStepAnswered && record.numAttempts < record.maxAttempts && now - record.stepSentAt >= record.stepTimeout)
 		{
 			++record.numAttempts;
 			record.stepSentAt = now;

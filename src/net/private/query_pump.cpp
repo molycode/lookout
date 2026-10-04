@@ -26,6 +26,10 @@ namespace
 {
 constexpr size_t MaxDatagramSize{ 65536 };
 constexpr size_t MaxDatagramsPerWake{ 256 };
+constexpr size_t MaxStreamReadsPerWake{ 16 };
+constexpr size_t StreamReadSize{ 16u << 10 };
+// The busiest master's list is a few tens of KiB; a stream far beyond that is broken or hostile.
+constexpr size_t MaxStreamBytes{ 4u << 20 };
 constexpr std::chrono::milliseconds LookupPollInterval{ 20 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -154,7 +158,8 @@ void CQueryPump::Terminate()
 
 	for (auto& [key, conversation] : m_masterConversations)
 	{
-		conversation.socket.Terminate();
+		conversation.datagramSocket.Terminate();
+		conversation.streamSocket.Terminate();
 	}
 
 	m_masterConversations.clear();
@@ -262,7 +267,7 @@ void CQueryPump::StartRefresh(Query::EGame game, std::span<Query::SServerAddress
 	refresh.generation = generation;
 	refresh.startedAt = now;
 
-	m_masters.Begin(game, generation, Query::GetGame(game).masters, now);
+	m_masters.Begin(game, generation, Query::GetGame(game).masters, GetScript(game).GetMasterTransport(), now);
 	ResolveMasters(game, generation, now);
 	ListServers(game, favourites);
 }
@@ -434,20 +439,28 @@ std::expected<void, std::string> CQueryPump::OpenMaster(SMasterQuery const& quer
 	conversation.record.game = query.master.game;
 	conversation.record.conversation.kind = Script::EConversationKind::Master;
 	conversation.address = query.address;
+	conversation.isStream = GetScript(query.master.game).GetMasterTransport() == Script::EMasterTransport::Tcp;
 
-	if (!conversation.socket.Initialize())
+	bool const isOpen{ conversation.isStream ? conversation.streamSocket.Initialize() : conversation.datagramSocket.Initialize() };
+	std::expected<void, int> const connected{ !isOpen ? std::expected<void, int>{}
+		: conversation.isStream ? conversation.streamSocket.Connect(query.address) : conversation.datagramSocket.Connect(query.address) };
+
+	if (!isOpen)
 	{
 		result = std::unexpected{ std::string{ "cannot be asked: no socket can be created for it" } };
 	}
-	else if (std::expected<void, int> const connected{ conversation.socket.Connect(query.address) }; !connected.has_value())
+	else if (!connected.has_value())
 	{
-		result = std::unexpected{ std::format("cannot be asked: {}", std::strerror(connected.error())) };
+		result = std::unexpected{ (connected.error() == ECONNREFUSED) ? std::string{ "refused the query" }
+			: std::format("cannot be asked: {}", std::strerror(connected.error())) };
 	}
 	else
 	{
-		conversation.watch = m_loop.Watch(conversation.socket.GetDescriptor(), [this, master = query.master]()
+		int const descriptor{ conversation.isStream ? conversation.streamSocket.GetDescriptor() : conversation.datagramSocket.GetDescriptor() };
+
+		conversation.watch = m_loop.Watch(descriptor, [this, master = query.master]()
 		{
-			ReceiveMasterDatagrams(master);
+			ReceiveFromMaster(master);
 			Update(Clock::now());
 		});
 
@@ -469,9 +482,10 @@ std::expected<void, std::string> CQueryPump::SendToMaster(SMasterConversation co
 {
 	std::expected<void, std::string> result{};
 
-	for (std::vector<std::byte> const& datagram : conversation.record.send)
+	for (std::vector<std::byte> const& bytes : conversation.record.send)
 	{
-		std::expected<void, int> const sent{ conversation.socket.Send(conversation.address, datagram) };
+		std::expected<void, int> const sent{ conversation.isStream ? conversation.streamSocket.Send(bytes)
+			: conversation.datagramSocket.Send(conversation.address, bytes) };
 
 		if (result.has_value() && !sent.has_value())
 		{
@@ -483,32 +497,32 @@ std::expected<void, std::string> CQueryPump::SendToMaster(SMasterConversation co
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Stops at a master that ended meanwhile; its outcome, handled by the update after this, closes the socket.
-void CQueryPump::ReceiveMasterDatagrams(SMasterId const& master)
+// Stops at a master that ended meanwhile; its outcome, handled by the update after this, closes the socket. A stream's
+// end is handed to the script as empty data, and a list it does not then call done was cut short.
+void CQueryPump::ReceiveFromMaster(SMasterId const& master)
 {
 	uint64_t const key{ ToConversationKey(master) };
-	bool isDraining{ true };
-	size_t numReceived{ 0 };
+	bool isReading{ true };
+	size_t numReads{ 0 };
 
-	while (isDraining && numReceived < MaxDatagramsPerWake)
+	while (isReading)
 	{
 		auto const it{ m_masterConversations.find(key) };
 
-		isDraining = it != m_masterConversations.end() && m_masters.IsAsking(master);
+		isReading = it != m_masterConversations.end() && m_masters.IsAsking(master);
 
-		if (isDraining)
+		if (isReading)
 		{
+			SMasterConversation& conversation{ it->second };
 			Query::SServerAddress source{};
-			std::expected<size_t, int> const received{ it->second.socket.Receive(m_buffer, source) };
+			std::expected<size_t, int> const received{ conversation.isStream
+				? conversation.streamSocket.Receive(std::span<std::byte>{ m_buffer }.first(StreamReadSize))
+				: conversation.datagramSocket.Receive(m_buffer, source) };
+			Clock::time_point const now{ Clock::now() };
 
-			if (received.has_value())
+			if (!received.has_value())
 			{
-				ReadMasterDatagram(master, it->second, std::span<std::byte const>{ m_buffer.data(), *received }, Clock::now());
-				++numReceived;
-			}
-			else
-			{
-				isDraining = false;
+				isReading = false;
 
 				if (received.error() != EAGAIN && received.error() != EWOULDBLOCK)
 				{
@@ -516,19 +530,41 @@ void CQueryPump::ReceiveMasterDatagrams(SMasterId const& master)
 						: std::format("cannot be read: {}", std::strerror(received.error())), m_masterOutcomes);
 				}
 			}
+			else if (conversation.isStream && *received == 0)
+			{
+				isReading = false;
+				ReadMasterData(master, conversation, {}, now);
+
+				if (m_masters.IsAsking(master))
+				{
+					m_masters.Fail(master, "closed the connection before its list was complete", m_masterOutcomes);
+				}
+			}
+			else if (conversation.isStream && conversation.numStreamBytes + *received > MaxStreamBytes)
+			{
+				isReading = false;
+				m_masters.Fail(master, "sent more than one master may", m_masterOutcomes);
+			}
+			else
+			{
+				conversation.numStreamBytes += conversation.isStream ? *received : 0;
+				ReadMasterData(master, conversation, std::span<std::byte const>{ m_buffer.data(), *received }, now);
+				++numReads;
+				isReading = numReads < (conversation.isStream ? MaxStreamReadsPerWake : MaxDatagramsPerWake);
+			}
 		}
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
 // A failing script ends the master: what it would make of the rest cannot be trusted.
-void CQueryPump::ReadMasterDatagram(SMasterId const& master, SMasterConversation& conversation, std::span<std::byte const> datagram, Clock::time_point now)
+void CQueryPump::ReadMasterData(SMasterId const& master, SMasterConversation& conversation, std::span<std::byte const> data, Clock::time_point now)
 {
 	SRefreshStats& stats{ GetRefresh(master.game).stats };
 
 	m_masters.OnDatagram(master, now);
 
-	std::expected<Script::SScriptAction, std::string> action{ GetScript(master.game).Receive(conversation.record.conversation, datagram) };
+	std::expected<Script::SScriptAction, std::string> action{ GetScript(master.game).Receive(conversation.record.conversation, data) };
 
 	if (!action.has_value())
 	{
@@ -603,7 +639,8 @@ void CQueryPump::CloseMaster(uint64_t key)
 			m_loop.Unwatch(*it->second.watch);
 		}
 
-		it->second.socket.Terminate();
+		it->second.datagramSocket.Terminate();
+		it->second.streamSocket.Terminate();
 		GetScript(it->second.record.game).End(it->second.record.conversation);
 		m_masterConversations.erase(it);
 	}

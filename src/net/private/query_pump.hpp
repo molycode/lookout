@@ -67,8 +67,8 @@ private:
 	void UpdateMasters(Clock::time_point now);
 	std::expected<void, std::string> OpenMaster(SMasterQuery const& query);
 	std::expected<void, std::string> SendToMaster(SMasterConversation const& conversation) const;
-	void ReceiveMasterDatagrams(SMasterId const& master);
-	void ReadMasterDatagram(SMasterId const& master, SMasterConversation& conversation, std::span<std::byte const> datagram, Clock::time_point now);
+	void ReceiveFromMaster(SMasterId const& master);
+	void ReadMasterData(SMasterId const& master, SMasterConversation& conversation, std::span<std::byte const> data, Clock::time_point now);
 	void CloseMaster(uint64_t key);
 	void SendDueRequests(Clock::time_point now);
 	void SendToServer(SServerRequest const& request, SConversationRecord const& record);

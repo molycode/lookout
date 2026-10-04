@@ -28,6 +28,8 @@ struct SMasterRecord final
 	Clock::time_point lastDatagramAt{};
 	std::optional<Clock::duration> quiet;
 	uint32_t numAttempts{ 0 };
+	uint32_t maxAttempts{ 0 };
+	Clock::duration stepTimeout{};
 	size_t numEntries{ 0 };
 	bool isStepAnswered{ false };
 	bool hasAnswered{ false };

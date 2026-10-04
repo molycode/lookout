@@ -67,6 +67,7 @@ std::expected<void, std::string> CProtocolScript::Initialize(std::string_view na
 			m_serverReceive = call.serverReceive;
 			m_serverFinish = call.serverFinish;
 			m_states = call.states;
+			m_masterTransport = call.masterTransport;
 			m_options = std::move(call.options);
 		}
 		else
@@ -98,6 +99,12 @@ void CProtocolScript::Terminate()
 std::span<Query::SProtocolOption const> CProtocolScript::GetOptions() const
 {
 	return m_options;
+}
+
+//////////////////////////////////////////////////////////////////////////
+EMasterTransport CProtocolScript::GetMasterTransport() const
+{
+	return m_masterTransport;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -259,6 +266,7 @@ std::expected<SScriptAction, std::string> CProtocolScript::Call(SConversation co
 
 	call.kind = conversation.kind;
 	call.callback = callback;
+	call.isStream = conversation.kind == EConversationKind::Master && m_masterTransport == EMasterTransport::Tcp;
 	call.id = conversation.id;
 	call.states = m_states;
 	call.function = (conversation.kind == EConversationKind::Master) ? masterFunctions[callbackIndex] : serverFunctions[callbackIndex];
