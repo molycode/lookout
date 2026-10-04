@@ -51,8 +51,8 @@ private:
 
 	SDL_Window* m_pWindow{ nullptr };
 	std::vector<SInstallEdit> m_edits;
-	Query::EGame m_game{ Query::EGame::Kingpin };
-	Query::EGame m_dialogGame{ Query::EGame::Kingpin };
+	Query::EGame m_game{ Query::NoGame };
+	Query::EGame m_dialogGame{ Query::NoGame };
 	uint32_t m_dialogInstallId{ 0 };
 	EFileDialogPurpose m_dialogPurpose{ EFileDialogPurpose::AddFolder };
 	bool m_shouldOpen{ false };

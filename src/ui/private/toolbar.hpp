@@ -34,7 +34,7 @@ private:
 	void DrawClearButton(Config::SServerFilter const& filter, SFrameIntents& intents);
 
 	std::string m_search;
-	Query::EGame m_game{ Query::EGame::Kingpin };
+	Query::EGame m_game{ Query::NoGame };
 	bool m_hasGame{ false };
 	bool m_shouldFocusSearch{ false };
 };

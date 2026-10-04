@@ -12,7 +12,7 @@ namespace Lkt::Net
 {
 struct SMasterRecord final
 {
-	Query::EGame game{ Query::EGame::Kingpin };
+	Query::EGame game{ Query::NoGame };
 	uint32_t generation{ 0 };
 	std::string_view host;
 	uint16_t port{ 0 };

@@ -1,6 +1,6 @@
+#include "fixtures.hpp"
 #include "browser/server_list.hpp"
 #include "geo/countries.hpp"
-#include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <gtest/gtest.h>
 #include <string>
@@ -32,7 +32,7 @@ TEST(ServerList, ListedServersArePending)
 {
 	CServerList list{};
 
-	list.Apply(Query::GetGame(Query::EGame::Quake3), Net::SServersListed{ Query::EGame::Quake3, { First } });
+	list.Apply(Fixtures::GetGameByKey("quake3"), Net::SServersListed{ Fixtures::GetGameId("quake3"), { First } });
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_EQ(list.GetEntries()[0].state, EServerState::Pending);
@@ -42,10 +42,10 @@ TEST(ServerList, ListedServersArePending)
 TEST(ServerList, ListingTwiceKeepsOneEntry)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
-	list.Apply(quake3, Net::SServersListed{ Query::EGame::Quake3, { First } });
-	list.Apply(quake3, Net::SServersListed{ Query::EGame::Quake3, { First } });
+	list.Apply(quake3, Net::SServersListed{ quake3.game, { First } });
+	list.Apply(quake3, Net::SServersListed{ quake3.game, { First } });
 
 	EXPECT_EQ(list.GetEntries().size(), 1u);
 }
@@ -54,10 +54,10 @@ TEST(ServerList, ListingTwiceKeepsOneEntry)
 TEST(ServerList, AnswerBringsTheServerOnline)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
-	list.Apply(quake3, Net::SServersListed{ Query::EGame::Quake3, { First } });
-	list.Apply(quake3, MakeAnswer(Query::EGame::Quake3, First, "baseq3"));
+	list.Apply(quake3, Net::SServersListed{ quake3.game, { First } });
+	list.Apply(quake3, MakeAnswer(quake3.game, First, "baseq3"));
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_EQ(list.GetEntries()[0].state, EServerState::Online);
@@ -70,11 +70,11 @@ TEST(ServerList, AnswerBringsTheServerOnline)
 TEST(ServerList, ForeignServerIsDropped)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
-	list.Apply(quake3, Net::SServersListed{ Query::EGame::Quake3, { First, Second } });
-	list.Apply(quake3, MakeAnswer(Query::EGame::Quake3, First, "q3urt43"));
-	list.Apply(quake3, MakeAnswer(Query::EGame::Quake3, Second, "baseq3"));
+	list.Apply(quake3, Net::SServersListed{ quake3.game, { First, Second } });
+	list.Apply(quake3, MakeAnswer(quake3.game, First, "q3urt43"));
+	list.Apply(quake3, MakeAnswer(quake3.game, Second, "baseq3"));
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_EQ(list.GetEntries()[0].address, Second);
@@ -85,10 +85,10 @@ TEST(ServerList, ForeignServerIsDropped)
 TEST(ServerList, SilentServerIsMarked)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
-	list.Apply(quake3, Net::SServersListed{ Query::EGame::Quake3, { First } });
-	list.Apply(quake3, Net::SServerFailed{ Query::EGame::Quake3, First, Net::EServerFailure::NoAnswer });
+	list.Apply(quake3, Net::SServersListed{ quake3.game, { First } });
+	list.Apply(quake3, Net::SServerFailed{ quake3.game, First, Net::EServerFailure::NoAnswer });
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_EQ(list.GetEntries()[0].state, EServerState::NoAnswer);
@@ -99,7 +99,7 @@ TEST(ServerList, IgnoresOtherGames)
 {
 	CServerList list{};
 
-	list.Apply(Query::GetGame(Query::EGame::Quake3), Net::SServersListed{ Query::EGame::Kingpin, { First } });
+	list.Apply(Fixtures::GetGameByKey("quake3"), Net::SServersListed{ Fixtures::GetGameId("kingpin"), { First } });
 
 	EXPECT_TRUE(list.GetEntries().empty());
 }
@@ -108,21 +108,21 @@ TEST(ServerList, IgnoresOtherGames)
 TEST(ServerList, FinishedRefreshIsReportedForItsGameOnly)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
-	EXPECT_TRUE(list.Apply(quake3, Net::SRefreshFinished{ Query::EGame::Quake3 }));
-	EXPECT_FALSE(list.Apply(quake3, Net::SRefreshFinished{ Query::EGame::Kingpin }));
+	EXPECT_TRUE(list.Apply(quake3, Net::SRefreshFinished{ quake3.game }));
+	EXPECT_FALSE(list.Apply(quake3, Net::SRefreshFinished{ Fixtures::GetGameId("kingpin") }));
 }
 
 //////////////////////////////////////////////////////////////////////////
 // A list with First and Second online, refreshed with the given id.
 void Prepare(CServerList& list, uint32_t refreshId)
 {
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
-	list.Apply(quake3, Net::SServersListed{ Query::EGame::Quake3, { First, Second } });
-	list.Apply(quake3, MakeAnswer(Query::EGame::Quake3, First, "baseq3"));
-	list.Apply(quake3, MakeAnswer(Query::EGame::Quake3, Second, "baseq3"));
+	list.Apply(quake3, Net::SServersListed{ quake3.game, { First, Second } });
+	list.Apply(quake3, MakeAnswer(quake3.game, First, "baseq3"));
+	list.Apply(quake3, MakeAnswer(quake3.game, Second, "baseq3"));
 	list.BeginRefresh(refreshId);
 }
 
@@ -146,7 +146,7 @@ bool IsFresh(CServerList const& list, Query::SServerAddress const& address)
 //////////////////////////////////////////////////////////////////////////
 Net::SServersListed MakeListed(Query::SServerAddress const& address, uint32_t refreshId)
 {
-	return Net::SServersListed{ Query::EGame::Quake3, { address }, refreshId };
+	return Net::SServersListed{ Fixtures::GetGameId("quake3"), { address }, refreshId };
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -155,7 +155,7 @@ TEST(ServerList, RefreshMarksEntriesStaleUntilListedAgain)
 	CServerList list{};
 
 	Prepare(list, 7);
-	list.Apply(Query::GetGame(Query::EGame::Quake3), MakeListed(First, 7));
+	list.Apply(Fixtures::GetGameByKey("quake3"), MakeListed(First, 7));
 
 	EXPECT_TRUE(IsFresh(list, First));
 	EXPECT_TRUE(IsStale(list, Second));
@@ -165,12 +165,12 @@ TEST(ServerList, RefreshMarksEntriesStaleUntilListedAgain)
 TEST(ServerList, FinishDropsServersNotListedAgain)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
 	Prepare(list, 7);
 	list.Apply(quake3, MakeListed(First, 7));
 
-	EXPECT_TRUE(list.Apply(quake3, Net::SRefreshFinished{ Query::EGame::Quake3, 7 }));
+	EXPECT_TRUE(list.Apply(quake3, Net::SRefreshFinished{ quake3.game, 7 }));
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_EQ(list.GetEntries()[0].address, First);
 	EXPECT_FALSE(list.GetEntries()[0].isStale);
@@ -181,16 +181,16 @@ TEST(ServerList, FinishDropsServersNotListedAgain)
 TEST(ServerList, FinishKeepsEverythingWhenEveryMasterFailed)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
 	Prepare(list, 7);
 
 	for (Query::SMasterEndpoint const& master : quake3.masters)
 	{
-		list.Apply(quake3, Net::SMasterFailed{ Query::EGame::Quake3, std::string{ master.host }, "no route", 7 });
+		list.Apply(quake3, Net::SMasterFailed{ quake3.game, std::string{ master.host }, "no route", 7 });
 	}
 
-	list.Apply(quake3, Net::SRefreshFinished{ Query::EGame::Quake3, 7 });
+	list.Apply(quake3, Net::SRefreshFinished{ quake3.game, 7 });
 
 	EXPECT_EQ(list.GetNumMastersFailed(), quake3.masters.size());
 	EXPECT_TRUE(IsFresh(list, First));
@@ -201,17 +201,17 @@ TEST(ServerList, FinishKeepsEverythingWhenEveryMasterFailed)
 TEST(ServerList, FinishStillSweepsWhenOnlySomeMastersFailed)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
 	Prepare(list, 7);
 	list.Apply(quake3, MakeListed(First, 7));
 
 	for (size_t index{ 1 }; index < quake3.masters.size(); ++index)
 	{
-		list.Apply(quake3, Net::SMasterFailed{ Query::EGame::Quake3, std::string{ quake3.masters[index].host }, "no route", 7 });
+		list.Apply(quake3, Net::SMasterFailed{ quake3.game, std::string{ quake3.masters[index].host }, "no route", 7 });
 	}
 
-	list.Apply(quake3, Net::SRefreshFinished{ Query::EGame::Quake3, 7 });
+	list.Apply(quake3, Net::SRefreshFinished{ quake3.game, 7 });
 
 	EXPECT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_TRUE(IsFresh(list, First));
@@ -225,7 +225,7 @@ TEST(ServerList, ReplacedRefreshFinishNeitherSweepsNorCounts)
 	Prepare(list, 7);
 	list.BeginRefresh(8);
 
-	EXPECT_FALSE(list.Apply(Query::GetGame(Query::EGame::Quake3), Net::SRefreshFinished{ Query::EGame::Quake3, 7 }));
+	EXPECT_FALSE(list.Apply(Fixtures::GetGameByKey("quake3"), Net::SRefreshFinished{ Fixtures::GetGameId("quake3"), 7 }));
 	EXPECT_EQ(list.GetEntries().size(), 2u);
 }
 
@@ -233,7 +233,7 @@ TEST(ServerList, ReplacedRefreshFinishNeitherSweepsNorCounts)
 TEST(ServerList, EventsOfAReplacedRefreshAreIgnored)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 	Query::SServerAddress const third{ 0x2D5E3A3E, 27960 };
 
 	Prepare(list, 8);
@@ -252,7 +252,7 @@ TEST(ServerList, StandaloneRefreshFinishDoesNotSweep)
 
 	Prepare(list, 7);
 
-	EXPECT_TRUE(list.Apply(Query::GetGame(Query::EGame::Quake3), Net::SRefreshFinished{ Query::EGame::Quake3, 9 }));
+	EXPECT_TRUE(list.Apply(Fixtures::GetGameByKey("quake3"), Net::SRefreshFinished{ Fixtures::GetGameId("quake3"), 9 }));
 	EXPECT_EQ(list.GetEntries().size(), 2u);
 }
 
@@ -264,7 +264,7 @@ TEST(ServerList, FavouriteSurvivesTheSweep)
 	Prepare(list, 0);
 	list.SetFavourite(Second, true);
 	list.BeginRefresh(7);
-	list.Apply(Query::GetGame(Query::EGame::Quake3), Net::SRefreshFinished{ Query::EGame::Quake3, 7 });
+	list.Apply(Fixtures::GetGameByKey("quake3"), Net::SRefreshFinished{ Fixtures::GetGameId("quake3"), 7 });
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_EQ(list.GetEntries()[0].address, Second);
@@ -276,7 +276,7 @@ TEST(ServerList, ForeignFavouriteStaysAsBadReply)
 	CServerList list{};
 
 	list.SetFavourite(First, true);
-	list.Apply(Query::GetGame(Query::EGame::Quake3), MakeAnswer(Query::EGame::Quake3, First, "q3urt43"));
+	list.Apply(Fixtures::GetGameByKey("quake3"), MakeAnswer(Fixtures::GetGameId("quake3"), First, "q3urt43"));
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_EQ(list.GetEntries()[0].state, EServerState::BadReply);
@@ -298,11 +298,11 @@ TEST(ServerList, NewFavouriteWaitsForItsAnswer)
 TEST(ServerList, PlayerNamesAreDecodedBesideThePlayers)
 {
 	CServerList list{};
-	Net::SServerAnswered answer{ MakeAnswer(Query::EGame::Quake3, First, "baseq3") };
+	Net::SServerAnswered answer{ MakeAnswer(Fixtures::GetGameId("quake3"), First, "baseq3") };
 
 	answer.reply.players.emplace_back("^1Big^7Joe", 12, 50);
 	answer.reply.players.emplace_back("Ann", 3, 40);
-	list.Apply(Query::GetGame(Query::EGame::Quake3), std::move(answer));
+	list.Apply(Fixtures::GetGameByKey("quake3"), std::move(answer));
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	ASSERT_EQ(list.GetEntries()[0].playerNames.size(), 2u);
@@ -314,10 +314,10 @@ TEST(ServerList, PlayerNamesAreDecodedBesideThePlayers)
 TEST(ServerList, SearchTextHoldsDecodedPlayerNames)
 {
 	CServerList list{};
-	Net::SServerAnswered answer{ MakeAnswer(Query::EGame::Quake3, First, "baseq3") };
+	Net::SServerAnswered answer{ MakeAnswer(Fixtures::GetGameId("quake3"), First, "baseq3") };
 
 	answer.reply.players.emplace_back("^1Big^7Joe", 12, 50);
-	list.Apply(Query::GetGame(Query::EGame::Quake3), std::move(answer));
+	list.Apply(Fixtures::GetGameByKey("quake3"), std::move(answer));
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_TRUE(list.GetEntries()[0].searchText.contains("\nBigJoe"));
@@ -327,7 +327,7 @@ TEST(ServerList, ListedServerGetsItsCountry)
 {
 	CServerList list{};
 
-	list.Apply(Query::GetGame(Query::EGame::Quake3), Net::SServersListed{ Query::EGame::Quake3, { Resolver } });
+	list.Apply(Fixtures::GetGameByKey("quake3"), Net::SServersListed{ Fixtures::GetGameId("quake3"), { Resolver } });
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_EQ(list.GetEntries()[0].country, Geo::FindCountryByCode("US"));
@@ -337,10 +337,10 @@ TEST(ServerList, ListedServerGetsItsCountry)
 TEST(ServerList, SearchTextHoldsTheCountryName)
 {
 	CServerList list{};
-	Query::SGameDefinition const& quake3{ Query::GetGame(Query::EGame::Quake3) };
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
 
-	list.Apply(quake3, Net::SServersListed{ Query::EGame::Quake3, { Resolver } });
-	list.Apply(quake3, MakeAnswer(Query::EGame::Quake3, Resolver, "baseq3"));
+	list.Apply(quake3, Net::SServersListed{ quake3.game, { Resolver } });
+	list.Apply(quake3, MakeAnswer(quake3.game, Resolver, "baseq3"));
 
 	ASSERT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_TRUE(list.GetEntries()[0].searchText.contains("\nUnited States of America"));

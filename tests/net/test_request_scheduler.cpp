@@ -8,9 +8,11 @@ namespace
 using namespace std::chrono_literals;
 
 Clock::time_point const Start{ Clock::time_point{} + 1h };
+constexpr Query::EGame Game{ 0 };
+constexpr Query::EGame OtherGame{ 1 };
 
 //////////////////////////////////////////////////////////////////////////
-SServerRequest MakeRequest(uint32_t index, Query::EGame game = Query::EGame::Kingpin)
+SServerRequest MakeRequest(uint32_t index, Query::EGame game = Game)
 {
 	return SServerRequest{ game, Query::SServerAddress{ 0x2D000000 + index, 27960 } };
 }
@@ -76,7 +78,7 @@ TEST(RequestScheduler, AnswerReportsTheRoundTrip)
 
 	ASSERT_TRUE(answered.has_value());
 	EXPECT_EQ(answered->roundTrip, 80ms);
-	EXPECT_FALSE(scheduler.HasWork(Query::EGame::Kingpin));
+	EXPECT_FALSE(scheduler.HasWork(Game));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -123,7 +125,7 @@ TEST(RequestScheduler, GivesUpAfterTheSecondTimeout)
 	scheduler.TakeExpired(Start + 2s, expired);
 
 	ASSERT_EQ(expired.size(), 1u);
-	EXPECT_FALSE(scheduler.HasWork(Query::EGame::Kingpin));
+	EXPECT_FALSE(scheduler.HasWork(Game));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -131,9 +133,9 @@ TEST(RequestScheduler, QueuedIsPerGame)
 {
 	CRequestScheduler scheduler{};
 
-	scheduler.Add(MakeRequest(1, Query::EGame::Quake2));
+	scheduler.Add(MakeRequest(1, OtherGame));
 
-	EXPECT_FALSE(scheduler.IsQueued(Query::EGame::Kingpin, MakeRequest(1).address));
+	EXPECT_FALSE(scheduler.IsQueued(Game, MakeRequest(1).address));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -223,9 +225,9 @@ TEST(RequestScheduler, CancelDropsRequestsInFlight)
 
 	scheduler.Add(MakeRequest(1));
 	scheduler.TakeDue(Start, due);
-	scheduler.Cancel(Query::EGame::Kingpin);
+	scheduler.Cancel(Game);
 
-	EXPECT_FALSE(scheduler.HasWork(Query::EGame::Kingpin));
+	EXPECT_FALSE(scheduler.HasWork(Game));
 	EXPECT_FALSE(scheduler.Answer(MakeRequest(1).address, Start + 10ms).has_value());
 }
 
@@ -234,12 +236,12 @@ TEST(RequestScheduler, CancelOnlyDropsThatGame)
 {
 	CRequestScheduler scheduler{};
 
-	scheduler.Add(MakeRequest(1, Query::EGame::Kingpin));
-	scheduler.Add(MakeRequest(2, Query::EGame::Quake2));
-	scheduler.Cancel(Query::EGame::Kingpin);
+	scheduler.Add(MakeRequest(1, Game));
+	scheduler.Add(MakeRequest(2, OtherGame));
+	scheduler.Cancel(Game);
 
-	EXPECT_FALSE(scheduler.HasWork(Query::EGame::Kingpin));
-	EXPECT_TRUE(scheduler.HasWork(Query::EGame::Quake2));
+	EXPECT_FALSE(scheduler.HasWork(Game));
+	EXPECT_TRUE(scheduler.HasWork(OtherGame));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -271,8 +273,8 @@ TEST(RequestScheduler, KnowsWhatIsQueued)
 	scheduler.TakeDue(Start, due);
 	scheduler.Answer(MakeRequest(2).address, Start + 10ms);
 
-	EXPECT_TRUE(scheduler.IsQueued(Query::EGame::Kingpin, MakeRequest(1).address));
-	EXPECT_FALSE(scheduler.IsQueued(Query::EGame::Kingpin, MakeRequest(2).address));
+	EXPECT_TRUE(scheduler.IsQueued(Game, MakeRequest(1).address));
+	EXPECT_FALSE(scheduler.IsQueued(Game, MakeRequest(2).address));
 }
 } // namespace
 } // namespace Lkt::Net

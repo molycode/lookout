@@ -1,5 +1,5 @@
 #include "fixtures.hpp"
-#include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
 #include "query/protocol.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
@@ -31,7 +31,7 @@ std::expected<void, EParseError> ParseMaster(std::string_view entries, std::vect
 //////////////////////////////////////////////////////////////////////////
 TEST(Quake3Protocol, AsksMastersWithTheGamesProtocolNumber)
 {
-	EXPECT_EQ(Quake3().MasterRequest(GetGame(EGame::EnemyTerritory)), ToBytes("\xFF\xFF\xFF\xFFgetservers 84 empty full"));
+	EXPECT_EQ(Quake3().MasterRequest(Fixtures::GetGameByKey("et")), ToBytes("\xFF\xFF\xFF\xFFgetservers 84 empty full"));
 }
 
 //////////////////////////////////////////////////////////////////////////

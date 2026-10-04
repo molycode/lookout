@@ -15,7 +15,6 @@ namespace
 {
 using namespace std::chrono_literals;
 
-constexpr Query::EGame Game{ Query::EGame::Kingpin };
 constexpr std::chrono::milliseconds Patience{ 5s };
 
 //////////////////////////////////////////////////////////////////////////
@@ -40,6 +39,7 @@ bool AllCarry(std::span<SQueryEvent const> events, uint32_t refreshId)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, AnswersAServerItWasAskedAbout)
 {
+	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -47,9 +47,9 @@ TEST(QueryEngine, AnswersAServerItWasAskedAbout)
 	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
 
-	engine.RefreshServer(Game, server.GetAddress());
+	engine.RefreshServer(game, server.GetAddress());
 
-	bool const isFinished{ collector.WaitForFinish(engine, Game, Patience) };
+	bool const isFinished{ collector.WaitForFinish(engine, game, Patience) };
 
 	engine.Terminate();
 	server.Stop();
@@ -65,6 +65,7 @@ TEST(QueryEngine, AnswersAServerItWasAskedAbout)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, SilentServerIsAskedTwiceThenFails)
 {
+	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -72,9 +73,9 @@ TEST(QueryEngine, SilentServerIsAskedTwiceThenFails)
 	ASSERT_TRUE(server.Start({}));
 	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
 
-	engine.RefreshServer(Game, server.GetAddress());
+	engine.RefreshServer(game, server.GetAddress());
 
-	bool const isFinished{ collector.WaitForFinish(engine, Game, Patience) };
+	bool const isFinished{ collector.WaitForFinish(engine, game, Patience) };
 
 	engine.Terminate();
 	server.Stop();
@@ -87,6 +88,7 @@ TEST(QueryEngine, SilentServerIsAskedTwiceThenFails)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, RunsAgainAfterARefreshFinished)
 {
+	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -94,13 +96,13 @@ TEST(QueryEngine, RunsAgainAfterARefreshFinished)
 	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
 
-	engine.RefreshServer(Game, server.GetAddress());
+	engine.RefreshServer(game, server.GetAddress());
 
-	bool const isFirstFinished{ collector.WaitForFinish(engine, Game, Patience) };
+	bool const isFirstFinished{ collector.WaitForFinish(engine, game, Patience) };
 
-	engine.RefreshServer(Game, server.GetAddress());
+	engine.RefreshServer(game, server.GetAddress());
 
-	bool const isSecondFinished{ collector.WaitForFinish(engine, Game, Patience) };
+	bool const isSecondFinished{ collector.WaitForFinish(engine, game, Patience) };
 
 	engine.Terminate();
 	server.Stop();
@@ -113,6 +115,7 @@ TEST(QueryEngine, RunsAgainAfterARefreshFinished)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, TerminateDuringARefreshReturnsPromptly)
 {
+	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -120,7 +123,7 @@ TEST(QueryEngine, TerminateDuringARefreshReturnsPromptly)
 	ASSERT_TRUE(server.Start({}));
 	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
 
-	engine.RefreshServer(Game, server.GetAddress());
+	engine.RefreshServer(game, server.GetAddress());
 
 	auto const started{ std::chrono::steady_clock::now() };
 
@@ -136,6 +139,7 @@ TEST(QueryEngine, TerminateDuringARefreshReturnsPromptly)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, EachRefreshCarriesALargerIdThanTheOneBefore)
 {
+	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -143,14 +147,14 @@ TEST(QueryEngine, EachRefreshCarriesALargerIdThanTheOneBefore)
 	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
 
-	engine.RefreshServer(Game, server.GetAddress());
+	engine.RefreshServer(game, server.GetAddress());
 
-	bool const isFirstFinished{ collector.WaitForFinish(engine, Game, Patience) };
+	bool const isFirstFinished{ collector.WaitForFinish(engine, game, Patience) };
 	size_t const numFirstEvents{ collector.GetEvents().size() };
 
-	engine.RefreshServer(Game, server.GetAddress());
+	engine.RefreshServer(game, server.GetAddress());
 
-	bool const isSecondFinished{ collector.WaitForFinish(engine, Game, Patience) };
+	bool const isSecondFinished{ collector.WaitForFinish(engine, game, Patience) };
 
 	engine.Terminate();
 	server.Stop();
@@ -171,6 +175,7 @@ TEST(QueryEngine, EachRefreshCarriesALargerIdThanTheOneBefore)
 // The silent server keeps the first refresh running, so the second request joins it.
 TEST(QueryEngine, ServerAskedDuringARefreshCarriesThatRefreshsId)
 {
+	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
 	Fixtures::CLoopbackServer silent{};
 	Fixtures::CLoopbackServer answering{};
 	Fixtures::CEventCollector collector{};
@@ -180,10 +185,10 @@ TEST(QueryEngine, ServerAskedDuringARefreshCarriesThatRefreshsId)
 	ASSERT_TRUE(answering.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
 
-	engine.RefreshServer(Game, silent.GetAddress());
-	engine.RefreshServer(Game, answering.GetAddress());
+	engine.RefreshServer(game, silent.GetAddress());
+	engine.RefreshServer(game, answering.GetAddress());
 
-	bool const isFinished{ collector.WaitForFinish(engine, Game, Patience) };
+	bool const isFinished{ collector.WaitForFinish(engine, game, Patience) };
 
 	engine.Terminate();
 	silent.Stop();
@@ -197,6 +202,7 @@ TEST(QueryEngine, ServerAskedDuringARefreshCarriesThatRefreshsId)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, RefreshAfterACancelCarriesTheNewId)
 {
+	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
 	Fixtures::CLoopbackServer silent{};
 	Fixtures::CLoopbackServer answering{};
 	Fixtures::CEventCollector collector{};
@@ -206,16 +212,16 @@ TEST(QueryEngine, RefreshAfterACancelCarriesTheNewId)
 	ASSERT_TRUE(answering.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
 
-	engine.RefreshServer(Game, silent.GetAddress());
-	engine.Cancel(Game);
-	engine.RefreshServer(Game, answering.GetAddress());
+	engine.RefreshServer(game, silent.GetAddress());
+	engine.Cancel(game);
+	engine.RefreshServer(game, answering.GetAddress());
 
 	bool isWaiting{ true };
 	bool hasAnswer{ false };
 
 	while (isWaiting && !hasAnswer)
 	{
-		isWaiting = collector.WaitForFinish(engine, Game, Patience);
+		isWaiting = collector.WaitForFinish(engine, game, Patience);
 		hasAnswer = CountEvents<SServerAnswered>(collector.GetEvents()) > 0;
 	}
 

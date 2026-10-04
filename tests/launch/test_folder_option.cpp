@@ -1,6 +1,6 @@
 #include "channels.hpp"
+#include "fixtures.hpp"
 #include "launch/folder_option.hpp"
-#include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
@@ -64,7 +64,7 @@ protected:
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CFolderOptionTest, CompleteFolderStartsItsProgram)
 {
-	std::expected<SLaunchOption, ELaunchError> const option{ MakeFolderOption(Query::GetGame(Query::EGame::Kingpin), m_folder.string()) };
+	std::expected<SLaunchOption, ELaunchError> const option{ MakeFolderOption(Fixtures::GetGameByKey("kingpin"), m_folder.string()) };
 
 	ASSERT_TRUE(option.has_value());
 	EXPECT_EQ(option->argv, (std::vector<std::string>{ (m_folder / "run-game.sh").string() }));
@@ -78,7 +78,7 @@ TEST_F(CFolderOptionTest, FolderMissingAFileIsBroken)
 
 	std::filesystem::remove(m_folder / "main" / "pak0.pak");
 
-	EXPECT_EQ(MakeFolderOption(Query::GetGame(Query::EGame::Kingpin), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::BrokenInstallFolder);
+	EXPECT_EQ(MakeFolderOption(Fixtures::GetGameByKey("kingpin"), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::BrokenInstallFolder);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -88,13 +88,13 @@ TEST_F(CFolderOptionTest, ProgramThatIsNotExecutableIsBroken)
 
 	std::filesystem::permissions(m_folder / "run-game.sh", std::filesystem::perms::owner_read);
 
-	EXPECT_EQ(MakeFolderOption(Query::GetGame(Query::EGame::Kingpin), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::BrokenInstallFolder);
+	EXPECT_EQ(MakeFolderOption(Fixtures::GetGameByKey("kingpin"), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::BrokenInstallFolder);
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CFolderOptionTest, GameWithoutHintsCannotStartFromAFolder)
 {
-	EXPECT_EQ(MakeFolderOption(Query::GetGame(Query::EGame::Quake2), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::FolderInstallUnsupported);
+	EXPECT_EQ(MakeFolderOption(Fixtures::GetGameByKey("quake2"), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::FolderInstallUnsupported);
 }
 } // namespace
 } // namespace Lkt::Launch

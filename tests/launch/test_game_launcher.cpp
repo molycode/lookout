@@ -1,6 +1,6 @@
 #include "channels.hpp"
+#include "fixtures.hpp"
 #include "launch/game_launcher.hpp"
-#include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
@@ -132,7 +132,7 @@ protected:
 
 	std::expected<void, ELaunchError> Launch(std::string password = {})
 	{
-		return m_launcher.Launch(Query::GetGame(Query::EGame::Kingpin), MakeOption(), SConnectRequest{ Server, std::move(password) });
+		return m_launcher.Launch(Fixtures::GetGameByKey("kingpin"), MakeOption(), SConnectRequest{ Server, std::move(password) });
 	}
 
 	std::filesystem::path m_root;
@@ -339,7 +339,7 @@ TEST_F(CGameLauncherTest, MissingProgramIsAnError)
 	CExpectedLog const expected{ LaunchChannel, 0, 1 };
 	SLaunchOption const option{ "test", "Fake game", {}, { (m_root / "no-such-game").string() }, {} };
 
-	EXPECT_EQ(m_launcher.Launch(Query::GetGame(Query::EGame::Kingpin), option, SConnectRequest{ Server, {} }).error_or(ELaunchError::NoLauncher),
+	EXPECT_EQ(m_launcher.Launch(Fixtures::GetGameByKey("kingpin"), option, SConnectRequest{ Server, {} }).error_or(ELaunchError::NoLauncher),
 		ELaunchError::SpawnFailed);
 }
 

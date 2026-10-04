@@ -8,7 +8,7 @@ namespace Lkt::Net
 {
 struct SMasterFailed final
 {
-	Query::EGame game{ Query::EGame::Kingpin };
+	Query::EGame game{ Query::NoGame };
 	std::string host;
 	std::string reason;
 	uint32_t refreshId{ 0 };

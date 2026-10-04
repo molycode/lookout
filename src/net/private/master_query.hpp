@@ -7,7 +7,7 @@ namespace Lkt::Net
 {
 struct SMasterQuery final
 {
-	Query::EGame game{ Query::EGame::Kingpin };
+	Query::EGame game{ Query::NoGame };
 	Query::SServerAddress address;
 };
 } // namespace Lkt::Net

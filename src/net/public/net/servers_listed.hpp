@@ -10,7 +10,7 @@ namespace Lkt::Net
 // Servers a refresh has learned of and is about to ask; each address arrives once per refresh.
 struct SServersListed final
 {
-	Query::EGame game{ Query::EGame::Kingpin };
+	Query::EGame game{ Query::NoGame };
 	std::vector<Query::SServerAddress> servers;
 	uint32_t refreshId{ 0 };
 };

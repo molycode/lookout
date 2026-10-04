@@ -1,4 +1,5 @@
 #include "channels.hpp"
+#include "fixtures.hpp"
 #include "settings_json.hpp"
 #include "config/default_settings.hpp"
 #include "config/settings.hpp"
@@ -30,7 +31,7 @@ SSettings MakeChangedSettings()
 	SSettings settings{ MakeDefaultSettings() };
 
 	settings.window.width = 1500;
-	settings.games[static_cast<size_t>(Query::EGame::Kingpin)].favourites = { Query::SServerAddress{ 0xCB007107, 31510 } };
+	settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].favourites = { Query::SServerAddress{ 0xCB007107, 31510 } };
 
 	return settings;
 }

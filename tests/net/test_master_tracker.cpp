@@ -9,7 +9,8 @@ namespace
 using namespace std::chrono_literals;
 
 Clock::time_point const Start{ Clock::time_point{} + 1h };
-constexpr Query::EGame Game{ Query::EGame::Kingpin };
+constexpr Query::EGame Game{ 0 };
+constexpr Query::EGame OtherGame{ 1 };
 constexpr std::array<Query::SMasterEndpoint, 1> Masters{ Query::SMasterEndpoint{ "master.example", 27900 } };
 constexpr std::array<Query::SMasterEndpoint, 2> TwoMasters{ Query::SMasterEndpoint{ "one.example", 27900 }, Query::SMasterEndpoint{ "two.example", 27900 } };
 constexpr uint32_t MasterIp{ 0x2D5E3A3C };
@@ -155,11 +156,11 @@ TEST(MasterTracker, CancelOnlyForgetsThatGame)
 	CMasterTracker tracker{};
 
 	BeginResolved(tracker);
-	tracker.Begin(Query::EGame::Quake2, 1, Masters, Start);
+	tracker.Begin(OtherGame, 1, Masters, Start);
 	tracker.Cancel(Game);
 
 	EXPECT_FALSE(tracker.HasWork(Game));
-	EXPECT_TRUE(tracker.HasWork(Query::EGame::Quake2));
+	EXPECT_TRUE(tracker.HasWork(OtherGame));
 }
 
 //////////////////////////////////////////////////////////////////////////

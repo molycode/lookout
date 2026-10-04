@@ -1,4 +1,6 @@
 #include "fixtures.hpp"
+#include "query/game_catalog.hpp"
+#include <tge/assert.hpp>
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <fstream>
@@ -77,5 +79,25 @@ std::vector<std::byte> ToBytes(std::string_view text)
 	}
 
 	return bytes;
+}
+
+//////////////////////////////////////////////////////////////////////////
+Query::SGameDefinition const& GetGameByKey(std::string_view key)
+{
+	Query::SGameDefinition const* const pGame{ Query::FindGame(key) };
+
+	if (pGame == nullptr)
+	{
+		ADD_FAILURE() << "no game has the key " << key;
+		TGE_FATAL("A test asked for a game the catalog does not have");
+	}
+
+	return *pGame;
+}
+
+//////////////////////////////////////////////////////////////////////////
+Query::EGame GetGameId(std::string_view key)
+{
+	return GetGameByKey(key).game;
 }
 } // namespace Lkt::Fixtures

@@ -9,7 +9,7 @@ namespace Lkt::Net
 // An empty failure means the master answered.
 struct SMasterOutcome final
 {
-	Query::EGame game{ Query::EGame::Kingpin };
+	Query::EGame game{ Query::NoGame };
 	std::string_view host;
 	std::string failure;
 };

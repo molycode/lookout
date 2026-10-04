@@ -1,5 +1,5 @@
 #include "fixtures.hpp"
-#include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
 #include "query/protocol.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
@@ -28,7 +28,7 @@ std::expected<SStatusReply, EParseError> ParseStatus(std::string_view datagram)
 //////////////////////////////////////////////////////////////////////////
 TEST(Quake2Protocol, AsksMastersWithPlainQuery)
 {
-	EXPECT_EQ(Quake2().MasterRequest(GetGame(EGame::Kingpin)), ToBytes("query"));
+	EXPECT_EQ(Quake2().MasterRequest(Fixtures::GetGameByKey("kingpin")), ToBytes("query"));
 }
 
 //////////////////////////////////////////////////////////////////////////

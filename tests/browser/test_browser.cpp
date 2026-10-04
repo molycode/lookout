@@ -176,7 +176,7 @@ TEST_F(CBrowserTest, AddedServerComesOnline)
 
 		return pRow != nullptr && pRow->state == EServerState::Online;
 	}, Patience));
-	EXPECT_EQ(m_browser.GetStatus(Query::EGame::Kingpin).numAnswered, 1u);
+	EXPECT_EQ(m_browser.GetStatus(Fixtures::GetGameId("kingpin")).numAnswered, 1u);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -247,7 +247,7 @@ TEST_F(CBrowserTest, LaunchOptionsHoldTheGamesDesktopEntry)
 	WriteDesktopEntry("kingpin-native.desktop", std::format("[Desktop Entry]\nType=Application\nName=Kingpin\nExec=\"{}\"\n", m_game.string()));
 	Initialize();
 
-	std::span<Launch::SLaunchOption const> const options{ m_browser.GetLaunchOptions(Query::EGame::Kingpin) };
+	std::span<Launch::SLaunchOption const> const options{ m_browser.GetLaunchOptions(Fixtures::GetGameId("kingpin")) };
 
 	ASSERT_EQ(options.size(), 1u);
 	EXPECT_EQ(options.front().id, "kingpin-native.desktop");
@@ -260,8 +260,8 @@ TEST_F(CBrowserTest, UnselectedGameHasItsLaunchOptions)
 	WriteDesktopEntry("id-linux-rtcw-mp.desktop", std::format("[Desktop Entry]\nType=Application\nName=RTCW\nExec=\"{}\"\n", m_game.string()));
 	Initialize();
 
-	ASSERT_EQ(m_browser.GetSelectedGame(), Query::EGame::Kingpin);
-	EXPECT_EQ(m_browser.GetLaunchOptions(Query::EGame::RtcwMultiplayer).size(), 1u);
+	ASSERT_EQ(m_browser.GetSelectedGame(), Fixtures::GetGameId("kingpin"));
+	EXPECT_EQ(m_browser.GetLaunchOptions(Fixtures::GetGameId("rtcw")).size(), 1u);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -272,7 +272,7 @@ TEST_F(CBrowserTest, ChangingTheInstallsDoesNotScanAgain)
 
 	WriteDesktopEntry("kingpin-native.desktop", "[Desktop Entry]\nType=Link\n");
 	Initialize();
-	m_browser.AddInstall(Query::EGame::Kingpin, Config::EInstallKind::Command, "steam -applaunch 38430");
+	m_browser.AddInstall(Fixtures::GetGameId("kingpin"), Config::EInstallKind::Command, "steam -applaunch 38430");
 	m_browser.Terminate();
 }
 
@@ -280,17 +280,17 @@ TEST_F(CBrowserTest, ChangingTheInstallsDoesNotScanAgain)
 TEST_F(CBrowserTest, EditedCommandIsUsedAtOnce)
 {
 	Initialize();
-	m_browser.SetInstallCommand(Query::EGame::Kingpin, 1, "steam -applaunch 38430");
+	m_browser.SetInstallCommand(Fixtures::GetGameId("kingpin"), 1, "steam -applaunch 38430");
 
-	ASSERT_TRUE(m_browser.GetJoinLauncher(Query::EGame::Kingpin).has_value());
-	EXPECT_EQ(m_browser.GetJoinLauncher(Query::EGame::Kingpin)->argv, (std::vector<std::string>{ "steam", "-applaunch", "38430" }));
+	ASSERT_TRUE(m_browser.GetJoinLauncher(Fixtures::GetGameId("kingpin")).has_value());
+	EXPECT_EQ(m_browser.GetJoinLauncher(Fixtures::GetGameId("kingpin"))->argv, (std::vector<std::string>{ "steam", "-applaunch", "38430" }));
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserTest, EditedCommandIsSavedOnTerminate)
 {
 	Initialize();
-	m_browser.SetInstallCommand(Query::EGame::Kingpin, 1, "steam -applaunch 38430");
+	m_browser.SetInstallCommand(Fixtures::GetGameId("kingpin"), 1, "steam -applaunch 38430");
 	m_browser.Terminate();
 
 	EXPECT_TRUE(ReadText(m_configDir / "config.json").contains("steam -applaunch 38430"));
@@ -300,7 +300,7 @@ TEST_F(CBrowserTest, EditedCommandIsSavedOnTerminate)
 TEST_F(CBrowserTest, AddedInstallIsSavedAtOnce)
 {
 	Initialize();
-	m_browser.AddInstall(Query::EGame::Kingpin, Config::EInstallKind::Command, "steam -applaunch 38430");
+	m_browser.AddInstall(Fixtures::GetGameId("kingpin"), Config::EInstallKind::Command, "steam -applaunch 38430");
 
 	EXPECT_TRUE(ReadText(m_configDir / "config.json").contains("steam -applaunch 38430"));
 }
@@ -309,29 +309,29 @@ TEST_F(CBrowserTest, AddedInstallIsSavedAtOnce)
 TEST_F(CBrowserTest, RemovingTheFirstInstallKeepsTheOthersInStep)
 {
 	Initialize();
-	m_browser.AddInstall(Query::EGame::Kingpin, Config::EInstallKind::Command, "steam -applaunch 38430");
-	m_browser.RemoveInstall(Query::EGame::Kingpin, 1);
+	m_browser.AddInstall(Fixtures::GetGameId("kingpin"), Config::EInstallKind::Command, "steam -applaunch 38430");
+	m_browser.RemoveInstall(Fixtures::GetGameId("kingpin"), 1);
 
-	ASSERT_EQ(m_browser.GetInstallLaunchers(Query::EGame::Kingpin).size(), 1u);
-	EXPECT_EQ(m_browser.GetInstallLaunchers(Query::EGame::Kingpin).front().id, "install:2");
-	EXPECT_EQ(m_browser.GetSettings().games[static_cast<size_t>(Query::EGame::Kingpin)].installs.front().id, 2u);
+	ASSERT_EQ(m_browser.GetInstallLaunchers(Fixtures::GetGameId("kingpin")).size(), 1u);
+	EXPECT_EQ(m_browser.GetInstallLaunchers(Fixtures::GetGameId("kingpin")).front().id, "install:2");
+	EXPECT_EQ(m_browser.GetSettings().games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].installs.front().id, 2u);
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserTest, RenamedInstallRenamesTheJoinLauncher)
 {
 	Initialize();
-	m_browser.SetInstallName(Query::EGame::Kingpin, 1, "Native");
+	m_browser.SetInstallName(Fixtures::GetGameId("kingpin"), 1, "Native");
 
-	ASSERT_TRUE(m_browser.GetJoinLauncher(Query::EGame::Kingpin).has_value());
-	EXPECT_EQ(m_browser.GetJoinLauncher(Query::EGame::Kingpin)->name, "Native");
+	ASSERT_TRUE(m_browser.GetJoinLauncher(Fixtures::GetGameId("kingpin")).has_value());
+	EXPECT_EQ(m_browser.GetJoinLauncher(Fixtures::GetGameId("kingpin"))->name, "Native");
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserTest, RemovedInstallIsSavedAtOnce)
 {
 	Initialize();
-	m_browser.RemoveInstall(Query::EGame::Kingpin, 1);
+	m_browser.RemoveInstall(Fixtures::GetGameId("kingpin"), 1);
 
 	EXPECT_FALSE(ReadText(m_configDir / "config.json").contains("fake-game.sh"));
 }
@@ -342,9 +342,9 @@ TEST_F(CBrowserTest, BrokenFolderInstallReportsItsError)
 	CExpectedLog const expected{ LaunchChannel, 1, 0 };
 
 	Initialize();
-	m_browser.AddInstall(Query::EGame::Kingpin, Config::EInstallKind::Folder, (m_root / "no-such-folder").string());
+	m_browser.AddInstall(Fixtures::GetGameId("kingpin"), Config::EInstallKind::Folder, (m_root / "no-such-folder").string());
 
-	EXPECT_EQ(m_browser.ResolveLauncher(Query::EGame::Kingpin, "install:2").error_or(Launch::ELaunchError::SpawnFailed), Launch::ELaunchError::BrokenInstallFolder);
+	EXPECT_EQ(m_browser.ResolveLauncher(Fixtures::GetGameId("kingpin"), "install:2").error_or(Launch::ELaunchError::SpawnFailed), Launch::ELaunchError::BrokenInstallFolder);
 	m_browser.Terminate();
 }
 
@@ -355,7 +355,7 @@ TEST_F(CBrowserTest, JoinStartsTheInstallItIsGiven)
 	siginfo_t info{};
 
 	ASSERT_TRUE(StartWithServer());
-	m_browser.AddInstall(Query::EGame::Kingpin, Config::EInstallKind::Command, std::format("\"{}\" second", m_game.string()));
+	m_browser.AddInstall(Fixtures::GetGameId("kingpin"), Config::EInstallKind::Command, std::format("\"{}\" second", m_game.string()));
 	ASSERT_TRUE(m_browser.Join(address, {}, "install:2").has_value());
 	ASSERT_EQ(::waitid(P_ALL, 0, &info, WEXITED | WNOWAIT), 0);
 	m_browser.Update();
@@ -367,9 +367,9 @@ TEST_F(CBrowserTest, JoinStartsTheInstallItIsGiven)
 TEST_F(CBrowserTest, HiddenGameIsSavedAtOnce)
 {
 	Initialize();
-	m_browser.SetGameListed(Query::EGame::Quake2, false);
+	m_browser.SetGameListed(Fixtures::GetGameId("quake2"), false);
 
-	EXPECT_FALSE(m_browser.GetSettings().games[static_cast<size_t>(Query::EGame::Quake2)].isListed);
+	EXPECT_FALSE(m_browser.GetSettings().games[static_cast<size_t>(Fixtures::GetGameId("quake2"))].isListed);
 	EXPECT_TRUE(ReadText(m_configDir / "config.json").contains(R"("listed": false)"));
 }
 
@@ -380,9 +380,9 @@ TEST_F(CBrowserTest, LastListedGameStaysListed)
 
 	WriteConfig(R"({ "game": "kingpin", "games": { "quake2": { "listed": false }, "rtcw": { "listed": false }, "et": { "listed": false }, "quake3": { "listed": false } } })");
 	Initialize();
-	m_browser.SetGameListed(Query::EGame::Kingpin, false);
+	m_browser.SetGameListed(Fixtures::GetGameId("kingpin"), false);
 
-	EXPECT_TRUE(m_browser.GetSettings().games[static_cast<size_t>(Query::EGame::Kingpin)].isListed);
+	EXPECT_TRUE(m_browser.GetSettings().games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].isListed);
 	m_browser.Terminate();
 }
 } // namespace

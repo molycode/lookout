@@ -1,3 +1,4 @@
+#include "fixtures.hpp"
 #include "settings_json.hpp"
 #include "config/default_settings.hpp"
 #include "config/settings.hpp"
@@ -30,7 +31,7 @@ SSettings MakeVariedSettings()
 	SSettings settings{ MakeDefaultSettings() };
 
 	settings.window = SWindowSettings{ 1600, 1000, true, 360, "[Table][0x1A2B3C4D,8]\nColumn 0  Width=40\n" };
-	settings.selectedGame = Query::EGame::EnemyTerritory;
+	settings.selectedGame = Fixtures::GetGameId("et");
 	settings.autoRefreshSeconds = 45;
 
 	for (size_t index{ 0 }; index < settings.games.size(); ++index)
@@ -193,13 +194,13 @@ TEST(SettingsJson, UnlistedSelectedGameGivesWayToTheFirstListed)
 {
 	SSettings settings{ MakeDefaultSettings() };
 
-	settings.selectedGame = Query::EGame::Kingpin;
-	settings.games[static_cast<size_t>(Query::EGame::Kingpin)].isListed = false;
-	settings.games[static_cast<size_t>(Query::EGame::Quake2)].isListed = false;
+	settings.selectedGame = Fixtures::GetGameId("kingpin");
+	settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].isListed = false;
+	settings.games[static_cast<size_t>(Fixtures::GetGameId("quake2"))].isListed = false;
 
 	SSettingsDocument const document{ ReadValid(WriteSettingsJson(settings)) };
 
-	EXPECT_EQ(document.settings.selectedGame, Query::EGame::RtcwMultiplayer);
+	EXPECT_EQ(document.settings.selectedGame, Fixtures::GetGameId("rtcw"));
 	EXPECT_EQ(document.numInvalid, 1u);
 	EXPECT_EQ(document.firstInvalidPath, "game");
 }
@@ -208,7 +209,7 @@ TEST(SettingsJson, UnlistedSelectedGameGivesWayToTheFirstListed)
 TEST(SettingsJson, UnknownSortColumnIsRejected)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "games": { "quake3": { "sort": { "column": "frags", "ascending": true } } } })") };
-	SSortOrder const& sort{ document.settings.games[static_cast<size_t>(Query::EGame::Quake3)].sort };
+	SSortOrder const& sort{ document.settings.games[static_cast<size_t>(Fixtures::GetGameId("quake3"))].sort };
 
 	EXPECT_EQ(sort.column, SSortOrder{}.column);
 	EXPECT_TRUE(sort.isAscending);
@@ -259,7 +260,7 @@ TEST(SettingsJson, StringWithNulIsRejected)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "games": { "kingpin": { "filter": { "search": "run\u0000rm" } } } })") };
 
-	EXPECT_TRUE(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].filter.search.empty());
+	EXPECT_TRUE(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].filter.search.empty());
 	EXPECT_EQ(document.numInvalid, 1u);
 	EXPECT_EQ(document.firstInvalidPath, "games.kingpin.filter.search");
 }
@@ -269,7 +270,7 @@ TEST(SettingsJson, MaxPingNullMeansNoLimit)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "games": { "kingpin": { "filter": { "maxPing": null } } } })") };
 
-	EXPECT_EQ(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].filter.maxPingMs, NoPingLimit);
+	EXPECT_EQ(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].filter.maxPingMs, NoPingLimit);
 	EXPECT_EQ(document.numInvalid, 0u);
 }
 
@@ -299,7 +300,7 @@ TEST(SettingsJson, BadFavouriteCostsOnlyItself)
 		R"({ "games": { "kingpin": { "favourites": [ "203.0.113.7:31510", "nonsense", "203.0.113.8:27910" ] } } })") };
 	std::vector<Query::SServerAddress> const expected{ Favourite, OtherFavourite };
 
-	EXPECT_EQ(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].favourites, expected);
+	EXPECT_EQ(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].favourites, expected);
 	EXPECT_EQ(document.numInvalid, 1u);
 	EXPECT_EQ(document.firstInvalidPath, "games.kingpin.favourites[1]");
 }
@@ -310,7 +311,7 @@ TEST(SettingsJson, DuplicateFavouriteIsDropped)
 	SSettingsDocument const document{ ReadValid(R"({ "games": { "kingpin": { "favourites": [ "203.0.113.7:31510", "203.0.113.7:31510" ] } } })") };
 	std::vector<Query::SServerAddress> const expected{ Favourite };
 
-	EXPECT_EQ(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].favourites, expected);
+	EXPECT_EQ(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].favourites, expected);
 	EXPECT_EQ(document.numInvalid, 1u);
 	EXPECT_EQ(document.firstInvalidPath, "games.kingpin.favourites[1]");
 }
@@ -320,7 +321,7 @@ TEST(SettingsJson, CommentsAreAccepted)
 {
 	SSettingsDocument const document{ ReadValid("// edited by hand\n{ /* the one I play */ \"game\": \"quake2\" }") };
 
-	EXPECT_EQ(document.settings.selectedGame, Query::EGame::Quake2);
+	EXPECT_EQ(document.settings.selectedGame, Fixtures::GetGameId("quake2"));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -362,7 +363,7 @@ TEST(SettingsJson, BadInstallCostsOnlyItself)
 		{ "id": 5, "name": "Native", "folder": "/opt/kingpin" }
 	] } } })") };
 
-	EXPECT_EQ(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].installs, (std::vector<SGameInstall>{
+	EXPECT_EQ(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].installs, (std::vector<SGameInstall>{
 		SGameInstall{ 1, {}, EInstallKind::Command, "steam -applaunch 38430" },
 		SGameInstall{ 5, "Native", EInstallKind::Folder, "/opt/kingpin" } }));
 	EXPECT_EQ(document.numInvalid, 6u);
@@ -374,7 +375,7 @@ TEST(SettingsJson, CustomCommandOfFormatOneBecomesAnInstall)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "version": 1, "games": { "kingpin": { "launcher": "custom", "customCommand": "steam -applaunch 38430" } } })") };
 
-	EXPECT_EQ(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].installs,
+	EXPECT_EQ(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].installs,
 		(std::vector<SGameInstall>{ SGameInstall{ 1, {}, EInstallKind::Command, "steam -applaunch 38430" } }));
 	EXPECT_EQ(document.numInvalid, 0u);
 }
@@ -396,7 +397,7 @@ TEST(SettingsJson, InstallWithANulIsRejected)
 		{ "id": 2, "command": "run\u0000rm" }
 	] } } })") };
 
-	EXPECT_TRUE(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].installs.empty());
+	EXPECT_TRUE(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].installs.empty());
 	EXPECT_EQ(document.numInvalid, 2u);
 }
 
@@ -405,7 +406,7 @@ TEST(SettingsJson, EmptyCommandIsKept)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "games": { "kingpin": { "installs": [ { "id": 1, "command": "" } ] } } })") };
 
-	EXPECT_EQ(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].installs.size(), 1u);
+	EXPECT_EQ(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].installs.size(), 1u);
 	EXPECT_EQ(document.numInvalid, 0u);
 }
 
@@ -414,7 +415,7 @@ TEST(SettingsJson, RelativeFolderIsRejected)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "games": { "kingpin": { "installs": [ { "id": 1, "folder": "Games/Kingpin" } ] } } })") };
 
-	EXPECT_TRUE(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].installs.empty());
+	EXPECT_TRUE(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].installs.empty());
 	EXPECT_EQ(document.firstInvalidPath, "games.kingpin.installs[0]");
 }
 
@@ -423,7 +424,7 @@ TEST(SettingsJson, EmptyCustomCommandOfFormatOneAddsNoInstall)
 {
 	SSettingsDocument const document{ ReadValid(R"({ "version": 1, "games": { "kingpin": { "launcher": "custom", "customCommand": "" } } })") };
 
-	EXPECT_TRUE(document.settings.games[static_cast<size_t>(Query::EGame::Kingpin)].installs.empty());
+	EXPECT_TRUE(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].installs.empty());
 }
 } // namespace
 } // namespace Lkt::Config

@@ -8,7 +8,7 @@ namespace Lkt::Net
 {
 struct SServerRequest final
 {
-	Query::EGame game{ Query::EGame::Kingpin };
+	Query::EGame game{ Query::NoGame };
 	Query::SServerAddress address;
 	uint32_t numAttempts{ 0 };
 };

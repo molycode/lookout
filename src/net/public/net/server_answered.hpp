@@ -9,7 +9,7 @@ namespace Lkt::Net
 {
 struct SServerAnswered final
 {
-	Query::EGame game{ Query::EGame::Kingpin };
+	Query::EGame game{ Query::NoGame };
 	Query::SServerAddress address;
 	uint32_t pingMs{ 0 };
 	Query::SStatusReply reply;
