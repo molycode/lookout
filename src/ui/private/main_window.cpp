@@ -17,7 +17,10 @@
 #include <cmath>
 #include <format>
 #include <optional>
+#include <span>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace Lkt::Ui
 {
@@ -74,6 +77,26 @@ void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutI
 	m_aboutDialog.Initialize(pWindow, about);
 	m_detailsEm = static_cast<float>(detailsWidth) / BaseFontSize;
 	m_selectedKeys.assign(Query::GetGameCatalog().size(), NoSelection);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The catalog numbers its games anew, so what is kept per game follows its key.
+void CMainWindow::OnCatalogChanged(std::span<std::string const> oldKeys)
+{
+	std::vector<uint64_t> selectedKeys(Query::GetGameCatalog().size(), NoSelection);
+
+	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
+	{
+		auto const old{ std::ranges::find(oldKeys, game.key) };
+
+		if (old != oldKeys.end())
+		{
+			selectedKeys[static_cast<size_t>(game.game)] = m_selectedKeys[static_cast<size_t>(old - oldKeys.begin())];
+		}
+	}
+
+	m_selectedKeys = std::move(selectedKeys);
+	m_toolbar.OnCatalogChanged();
 }
 
 //////////////////////////////////////////////////////////////////////////

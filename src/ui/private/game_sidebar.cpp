@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstring>
 #include <span>
+#include <string>
 #include <string_view>
 
 namespace Lkt::Ui
@@ -177,6 +178,33 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 }
 
 //////////////////////////////////////////////////////////////////////////
+void DrawProblems(std::span<std::string const> problems)
+{
+	if (!problems.empty())
+	{
+		std::array<char, 48> buffer{};
+		std::string_view const label{ (problems.size() == 1) ? FormatTo(buffer, LKT_ICON_WARNING " 1 problem###problems")
+			: FormatTo(buffer, LKT_ICON_WARNING " {} problems###problems", problems.size()) };
+
+		ImGui::Spacing();
+
+		if (ImGui::TreeNodeEx(label.data(), ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth))
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColors().amber);
+			ImGui::PushTextWrapPos(0.0f);
+
+			for (std::string const& problem : problems)
+			{
+				ImGui::TextUnformatted(problem.data(), problem.data() + problem.size());
+			}
+
+			ImGui::PopTextWrapPos();
+			ImGui::PopStyleColor();
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Flat and not selectable, since the selected game is always a listed one; inset to line up with the cards' text.
 void DrawHiddenGame(Query::SGameDefinition const& game, SFrameIntents& intents)
 {
@@ -243,5 +271,7 @@ void DrawGameSidebar(Browser::CBrowser const& browser, SFrameIntents& intents)
 			}
 		}
 	}
+
+	DrawProblems(browser.GetGameProblems());
 }
 } // namespace Lkt::Ui

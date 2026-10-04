@@ -10,6 +10,7 @@
 #include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -40,6 +41,7 @@ public:
 
 	void Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutInfo const& about);
 	void Draw(Browser::CBrowser& browser);
+	void OnCatalogChanged(std::span<std::string const> oldKeys);
 	uint32_t GetDetailsWidth() const;
 
 private:

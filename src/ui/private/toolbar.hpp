@@ -28,6 +28,7 @@ public:
 	~CToolbar() = default;
 
 	void Draw(Browser::CBrowser const& browser, SFrameIntents& intents);
+	void OnCatalogChanged();
 
 private:
 

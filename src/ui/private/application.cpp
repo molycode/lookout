@@ -8,6 +8,8 @@
 #include "theme.hpp"
 #include "browser/browser.hpp"
 #include "config/window_limits.hpp"
+#include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
 #include <tge/assert.hpp>
 #include <tge/module/runtime.hpp>
 #include <imgui.h>
@@ -19,6 +21,7 @@
 #include <cmath>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace Lkt::Ui
 {
@@ -181,7 +184,18 @@ std::function<void()> CApplication::MakeWakeCallback() const
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CApplication::Run(Browser::CBrowser& browser)
+// From any thread; the reload itself waits for the end of a frame.
+std::function<void()> CApplication::MakeReloadCallback()
+{
+	return [this, wake = MakeWakeCallback()]()
+	{
+		m_isReloadRequested.store(true);
+		wake();
+	};
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CApplication::Run(Browser::CBrowser& browser, std::function<void()> const& reloadGames)
 {
 	CMainWindow mainWindow{};
 	auto lastUpdate{ std::chrono::steady_clock::now() };
@@ -232,6 +246,11 @@ void CApplication::Run(Browser::CBrowser& browser)
 			if (wasDialogPending && !IsFileDialogPending())
 			{
 				m_activeUntil = std::chrono::steady_clock::now() + ActiveDuration;
+			}
+
+			if (CanReload() && m_isReloadRequested.exchange(false))
+			{
+				ReloadGames(mainWindow, reloadGames);
 			}
 		}
 	}
@@ -571,5 +590,29 @@ void CApplication::DrawMainWindow(Browser::CBrowser& browser, CMainWindow& mainW
 	}
 
 	ImGui::End();
+}
+//////////////////////////////////////////////////////////////////////////
+// A popup, a file dialog's answer or a dragged card holds a game by its number, which a reload changes.
+bool CApplication::CanReload() const
+{
+	return !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel) && !IsFileDialogPending()
+		&& ImGui::GetDragDropPayload() == nullptr;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CApplication::ReloadGames(CMainWindow& mainWindow, std::function<void()> const& reloadGames)
+{
+	std::vector<std::string> oldKeys{};
+
+	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
+	{
+		oldKeys.emplace_back(game.key);
+	}
+
+	gGameIcons.Terminate();
+	reloadGames();
+	gGameIcons.Initialize(m_pRenderer);
+	mainWindow.OnCatalogChanged(oldKeys);
+	m_activeUntil = std::chrono::steady_clock::now() + ActiveDuration;
 }
 } // namespace Lkt::Ui

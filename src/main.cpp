@@ -44,7 +44,8 @@ void PrintUsage(std::string_view executable)
 int main(int argc, char* argv[])
 {
 	std::expected<std::filesystem::path, Lkt::Config::EXdgError> const dataHome{ Lkt::Config::GetDataHome() };
-	Lkt::Games::SGameContent content{ Lkt::Games::LoadGames(dataHome.has_value() ? *dataHome / Lkt::AppDirName : std::filesystem::path{}) };
+	std::filesystem::path const userDir{ dataHome.has_value() ? *dataHome / Lkt::AppDirName : std::filesystem::path{} };
+	Lkt::Games::SGameContent content{ Lkt::Games::LoadGames(userDir) };
 
 	if (!dataHome.has_value())
 	{
@@ -121,7 +122,7 @@ int main(int argc, char* argv[])
 	{
 		Lkt::CLookout lookout;
 
-		result = lookout.Run(pListGame, content.problems) ? EXIT_SUCCESS : EXIT_FAILURE;
+		result = lookout.Run(pListGame, userDir, content.problems) ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
 	Lkt::Query::TerminateGameCatalog();

@@ -346,4 +346,10 @@ void CToolbar::DrawClearButton(Config::SServerFilter const& filter, SFrameIntent
 		ImGui::GetColorU32(ImGui::IsItemHovered() ? colors.text : colors.textDisabled), LKT_ICON_XMARK);
 	ImGui::SetItemTooltip("Clear the search");
 }
+//////////////////////////////////////////////////////////////////////////
+// The selected game may keep its number and yet be another, so its search is read again.
+void CToolbar::OnCatalogChanged()
+{
+	m_hasGame = false;
+}
 } // namespace Lkt::Ui

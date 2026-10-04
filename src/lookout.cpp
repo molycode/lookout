@@ -4,6 +4,7 @@
 #include "run_context.hpp"
 #include "browser/server_list.hpp"
 #include "config/xdg_paths.hpp"
+#include "games/load_games.hpp"
 #include "launch/launch_environment.hpp"
 #include "query/game_definition.hpp"
 #include <tge/logging/log_system.hpp>
@@ -16,6 +17,7 @@
 #include <mutex>
 #include <print>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace Lkt
@@ -23,6 +25,7 @@ namespace Lkt
 namespace
 {
 constexpr size_t MaxLogFiles{ 10 };
+constexpr std::chrono::milliseconds SettleTime{ 500 };
 
 // tge's runtime names every log file "tge_<date>_<time>.log", so the name orders them by age.
 constexpr std::string_view LogFilePrefix{ "tge_" };
@@ -59,10 +62,11 @@ void PrintServers(Browser::CServerList const& servers)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-bool CLookout::Run(Query::SGameDefinition const* pListGame, std::span<std::string const> loadProblems)
+bool CLookout::Run(Query::SGameDefinition const* pListGame, std::filesystem::path const& userDir, std::span<std::string const> gameProblems)
 {
 	PrepareDirectories();
-	m_startupProblems.insert(m_startupProblems.end(), loadProblems.begin(), loadProblems.end());
+	m_userDir = userDir;
+	m_gameProblems.assign(gameProblems.begin(), gameProblems.end());
 
 	bool const isListing{ pListGame != nullptr };
 
@@ -75,6 +79,7 @@ bool CLookout::Run(Query::SGameDefinition const* pListGame, std::span<std::strin
 	bool const isRuntimeReady{ Tge::gRuntime->Initialize(MakeRunContext(m_logsDir, m_configDir)) };
 
 	ReportStartupProblems();
+	ReportGameProblems(m_gameProblems);
 
 	if (isRuntimeReady)
 	{
@@ -104,14 +109,21 @@ bool CLookout::Run(Query::SGameDefinition const* pListGame, std::span<std::strin
 bool CLookout::RunWindow()
 {
 	m_browser.Initialize(m_configDir, m_logsDir, Launch::ReadLaunchEnvironment());
+	m_browser.SetGameProblems(m_gameProblems);
 
 	Ui::SAboutInfo const about{ LKT_VERSION, m_configDir, m_logsDir };
 	bool const isReady{ m_application.Initialize(about, m_browser.GetSettings().window) && m_browser.Start(m_application.MakeWakeCallback()) };
 
 	if (isReady)
 	{
+		if (!m_userDir.empty())
+		{
+			m_watcher.Initialize(m_userDir, SettleTime, m_application.MakeReloadCallback());
+		}
+
 		m_browser.Refresh();
-		m_application.Run(m_browser);
+		m_application.Run(m_browser, [this]() { ReloadGames(); });
+		m_watcher.Terminate();
 		m_browser.SetWindowSettings(m_application.GetWindowSettings());
 	}
 
@@ -120,6 +132,17 @@ bool CLookout::RunWindow()
 	m_application.Terminate();
 
 	return isReady;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CLookout::ReloadGames()
+{
+	Games::SGameContent content{ Games::LoadGames(m_userDir) };
+
+	ReportGameProblems(content.problems);
+	gLog.Info("Reloaded the game descriptions: {} games", content.games.size());
+	m_browser.ReplaceCatalog(std::move(content.protocols), std::move(content.games));
+	m_browser.SetGameProblems(std::move(content.problems));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -271,6 +294,15 @@ void CLookout::ReportStartupProblems() const
 	for (std::string const& problem : m_startupProblems)
 	{
 		gLog.Error("{}", problem);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CLookout::ReportGameProblems(std::span<std::string const> problems) const
+{
+	for (std::string const& problem : problems)
+	{
+		gLog.Warning("{}", problem);
 	}
 }
 

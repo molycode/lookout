@@ -10,9 +10,11 @@ target_include_directories(LktGames
 target_link_libraries(LktGames
 	PUBLIC
 		Lkt::Query
+		Tge::Threading
 	PRIVATE
 		Lkt::Json
 		Lkt::Script
+		Tge::Logging
 )
 
 LktEmbedTree(LktGames Protocols ${PROJECT_SOURCE_DIR}/assets/protocols "*.lua")
