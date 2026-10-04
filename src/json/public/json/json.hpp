@@ -3,12 +3,12 @@
 // The only include of nlohmann/json. Without exceptions it aborts on any unchecked read; this logs why first.
 // Never brace-initialise a json from a single value: nlohmann makes that a one-element array.
 
-namespace Lkt::Config
+namespace Lkt::Json
 {
 [[noreturn]] void AbortOnJsonError(char const* pWhat);
-} // namespace Lkt::Config
+} // namespace Lkt::Json
 
 #define JSON_USE_IMPLICIT_CONVERSIONS 0
-#define JSON_THROW_USER(exception) ::Lkt::Config::AbortOnJsonError((exception).what())
+#define JSON_THROW_USER(exception) ::Lkt::Json::AbortOnJsonError((exception).what())
 
 #include <nlohmann/json.hpp>

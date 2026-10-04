@@ -7,13 +7,11 @@ target_include_directories(LktConfig
 	PRIVATE private
 )
 
-# SYSTEM, so -Werror never applies to nlohmann's own code.
-target_include_directories(LktConfig SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/external/json/single_include)
-
 target_link_libraries(LktConfig
 	PUBLIC
 		Lkt::Query
 		Tge::Base
 	PRIVATE
+		Lkt::Json
 		Tge::Logging
 )
