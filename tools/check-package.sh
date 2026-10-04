@@ -4,7 +4,7 @@
 #
 #   tools/check-package.sh [dist/lookout-<version>-x86_64.tar.xz]
 #
-# Needs the network: the images, their package mirrors and a live Kingpin master.
+# Needs the network: the images, their package mirrors, and live Kingpin and UT2004 masters.
 
 set -u
 
@@ -55,9 +55,13 @@ fail() { echo "FAIL $1"; [ -f /tmp/out ] && tail -n 5 /tmp/out; exit 1; }
 cp -R /pkg /tmp/pkg || fail "copying the package"
 sh /tmp/pkg/install.sh > /tmp/out 2>&1 || fail "install.sh"
 sh /tmp/pkg/install.sh > /tmp/out 2>&1 || fail "install.sh over an existing install"
-"$HOME/.local/bin/lookout" --list kingpin > /tmp/list 2> /tmp/out || fail "lookout --list kingpin"
-[ -s /tmp/list ] || fail "lookout --list kingpin printed nothing"
-numServers=$(wc -l < /tmp/list)
+# One game on a UDP master and one on a TCP master, each through its own protocol script.
+listed=""
+for game in kingpin ut2004; do
+	"$HOME/.local/bin/lookout" --list "$game" > /tmp/list 2> /tmp/out || fail "lookout --list $game"
+	[ -s /tmp/list ] || fail "lookout --list $game printed nothing"
+	listed="$listed${listed:+ and }$(wc -l < /tmp/list) $game"
+done
 for uninstaller in "$HOME/.local/share/lookout/uninstall.sh" /tmp/pkg/uninstall.sh; do
 	[ -f "$HOME/.local/bin/lookout" ] || sh /tmp/pkg/install.sh > /tmp/out 2>&1 || fail "install.sh, again"
 	sh "$uninstaller" > /tmp/out 2>&1 || fail "$uninstaller"
@@ -67,7 +71,7 @@ for uninstaller in "$HOME/.local/share/lookout/uninstall.sh" /tmp/pkg/uninstall.
 		[ ! -e "$leftover" ] || fail "$uninstaller left $leftover"
 	done
 done
-echo "PASS installs, lists $numServers Kingpin servers, uninstalls cleanly with either uninstaller"
+echo "PASS installs, lists $listed servers, uninstalls cleanly with either uninstaller"
 EOF
 
 cat > "$WORK/checks/gui.sh" <<'EOF'
