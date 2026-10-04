@@ -9,7 +9,8 @@ enum class EParseError : uint8_t
 {
 	WrongHeader,
 	Truncated,
-	Malformed
+	Malformed,
+	ScriptFailed
 };
 
 constexpr std::string_view ToString(EParseError error)
@@ -28,6 +29,10 @@ constexpr std::string_view ToString(EParseError error)
 
 		case EParseError::Malformed:
 			text = "malformed";
+			break;
+
+		case EParseError::ScriptFailed:
+			text = "the protocol script failed";
 			break;
 	}
 

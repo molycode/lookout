@@ -35,6 +35,7 @@ if(PROJECT_IS_TOP_LEVEL
 		AND ((IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/external/tge-core
 				AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/tge-core/CMakeLists.txt)
 			OR NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/json/single_include/nlohmann/json.hpp
+			OR NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/lua/lua.h
 			OR (LKT_BUILD_TESTS AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/googletest/CMakeLists.txt)))
 	if(NOT LKT_AUTO_INIT_SUBMODULES)
 		message(FATAL_ERROR

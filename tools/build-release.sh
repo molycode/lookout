@@ -42,8 +42,8 @@ command -v objdump >/dev/null 2>&1 || die "objdump is required to check the resu
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || die "cannot locate the repository"
 cd "$ROOT" || die "cannot enter $ROOT"
 
-for submodule in external/tge-core external/sdl external/imgui external/json external/googletest; do
-	[ -f "$submodule/CMakeLists.txt" ] || [ -f "$submodule/imgui.h" ] \
+for submodule in external/tge-core external/sdl external/imgui external/json external/lua external/googletest; do
+	[ -f "$submodule/CMakeLists.txt" ] || [ -f "$submodule/imgui.h" ] || [ -f "$submodule/lua.h" ] \
 		|| die "$submodule is not populated - run scripts/init_submodules.sh"
 done
 

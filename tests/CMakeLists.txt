@@ -31,6 +31,7 @@ target_link_libraries(LookoutTests
 		Lkt::Launch
 		Lkt::Net
 		Lkt::Query
+		Lkt::Script
 )
 
 add_test(NAME LookoutTests COMMAND LookoutTests)

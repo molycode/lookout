@@ -1,4 +1,5 @@
 add_subdirectory(query)
+add_subdirectory(script)
 add_subdirectory(geo)
 add_subdirectory(json)
 add_subdirectory(games)
