@@ -6,11 +6,14 @@
 #include "theme.hpp"
 #include "theme_colors.hpp"
 #include "widgets.hpp"
+#include "browser/text_compare.hpp"
 #include "download/lookout_games.hpp"
 #include <imgui.h>
+#include <imgui_stdlib.h>
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
+#include <cfloat>
 #include <cstddef>
 #include <utility>
 
@@ -19,7 +22,7 @@ namespace Lkt::Ui
 namespace
 {
 constexpr float WidthEm{ 32.0f };
-constexpr float HeightEm{ 28.0f };
+constexpr float HeightEm{ 30.0f };
 constexpr float PromptWidthEm{ 22.0f };
 constexpr char const* RemoveAllPopupId{ "Remove all games###removeAll" };
 constexpr std::array<Download::EOfferState, 2> Downloadable{ Download::EOfferState::NotInstalled, Download::EOfferState::UpdateAvailable };
@@ -112,6 +115,7 @@ void CDownloadWindow::Open()
 	{
 		m_isOpen = true;
 		m_shouldFocus = true;
+		m_search.clear();
 		m_downloads.ReadIndex();
 	}
 }
@@ -141,6 +145,7 @@ void CDownloadWindow::Draw()
 		if (ImGui::Begin("Download games###downloads", &m_isOpen, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings))
 		{
 			DrawStatus();
+			DrawSearch();
 			DrawGames();
 			DrawButtons();
 		}
@@ -186,17 +191,48 @@ void CDownloadWindow::DrawStatus() const
 }
 
 //////////////////////////////////////////////////////////////////////////
+void CDownloadWindow::DrawSearch()
+{
+	bool const hasSearch{ !m_search.empty() };
+
+	if (ImGui::IsWindowAppearing() || m_shouldFocusSearch)
+	{
+		ImGui::SetKeyboardFocusHere();
+		m_shouldFocusSearch = false;
+	}
+
+	ImGui::SetNextItemWidth(hasSearch ? -ImGui::GetFrameHeight() : -FLT_MIN);
+	ImGui::InputTextWithHint("##search", LKT_ICON_SEARCH "  Game names", &m_search, ImGuiInputTextFlags_EscapeClearsAll);
+
+	if (hasSearch && ClearSearchButton())
+	{
+		m_search.clear();
+		m_shouldFocusSearch = true;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 // A click is acted on after the list is drawn: a removal rebuilds the offers being drawn.
 void CDownloadWindow::DrawGames()
 {
 	std::vector<std::string> toDownload{};
 	std::vector<std::string> toRemove{};
+	bool isAnyShown{ false };
 
 	if (ImGui::BeginChild("##games", ImVec2{ 0.0f, -ImGui::GetFrameHeightWithSpacing() }))
 	{
 		for (Download::SGameOffer const& offer : m_downloads.GetOffers())
 		{
-			DrawGame(offer, toDownload, toRemove);
+			if (Browser::ContainsIgnoringCase(offer.name, m_search) || Browser::ContainsIgnoringCase(offer.key, m_search))
+			{
+				DrawGame(offer, toDownload, toRemove);
+				isAnyShown = true;
+			}
+		}
+
+		if (!isAnyShown && !m_downloads.GetOffers().empty())
+		{
+			ImGui::TextDisabled("No game matches \"%s\".", m_search.c_str());
 		}
 	}
 

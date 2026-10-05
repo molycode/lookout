@@ -37,6 +37,7 @@ public:
 private:
 
 	void DrawStatus() const;
+	void DrawSearch();
 	void DrawGames();
 	void DrawGame(Download::SGameOffer const& offer, std::vector<std::string>& toDownload, std::vector<std::string>& toRemove);
 	void DrawButtons();
@@ -48,9 +49,11 @@ private:
 
 	Download::CGameDownloads m_downloads;
 	std::map<std::string, std::vector<SIconLevel>, std::less<>> m_icons;
+	std::string m_search;
 	SDL_Renderer* m_pRenderer{ nullptr };
 	bool m_isReady{ false };
 	bool m_isOpen{ false };
 	bool m_shouldFocus{ false };
+	bool m_shouldFocusSearch{ false };
 };
 } // namespace Lkt::Ui
