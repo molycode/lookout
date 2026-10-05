@@ -40,6 +40,7 @@ private:
 	void DrawGames();
 	void DrawGame(Download::SGameOffer const& offer, std::vector<std::string>& toDownload, std::vector<std::string>& toRemove);
 	void DrawButtons();
+	void DrawInstalledCount() const;
 	void DrawRemoveAllPrompt();
 	std::span<SIconLevel const> FindIcon(Download::SGameOffer const& offer);
 	bool CanDownload() const;

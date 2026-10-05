@@ -304,7 +304,33 @@ void CDownloadWindow::DrawButtons()
 		ImGui::OpenPopup(RemoveAllPopupId);
 	}
 
+	DrawInstalledCount();
 	DrawRemoveAllPrompt();
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Out of what lookout-games offers, so a game it no longer offers is not counted; before the list is read, only the
+// installed are known.
+void CDownloadWindow::DrawInstalledCount() const
+{
+	std::span<Download::SGameOffer const> const offers{ m_downloads.GetOffers() };
+	size_t const numInstalled{ static_cast<size_t>(std::ranges::count_if(offers, [](Download::SGameOffer const& offer)
+	{
+		return offer.state == Download::EOfferState::Installed || offer.state == Download::EOfferState::UpdateAvailable;
+	})) };
+	size_t const numOffered{ static_cast<size_t>(std::ranges::count_if(offers, [](Download::SGameOffer const& offer)
+	{
+		return offer.state != Download::EOfferState::Withdrawn;
+	})) };
+	std::array<char, 64> buffer{};
+	std::string_view const text{ m_downloads.HasIndex() ? FormatTo(buffer, "{} of {} games installed", numInstalled, numOffered)
+		: FormatTo(buffer, "{} {} installed", numInstalled, (numInstalled == 1) ? "game" : "games") };
+	float const width{ ImGui::CalcTextSize(text.data(), text.data() + text.size()).x };
+
+	ImGui::SameLine();
+	ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - width));
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextDisabled("%.*s", static_cast<int>(text.size()), text.data());
 }
 
 //////////////////////////////////////////////////////////////////////////
