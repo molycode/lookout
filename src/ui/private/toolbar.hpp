@@ -27,11 +27,10 @@ public:
 	CToolbar() = default;
 	~CToolbar() = default;
 
-	void Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameIntents& intents);
+	void Draw(Browser::CBrowser const& browser, bool canEditGames, bool canDownload, float serverPaneX, SFrameIntents& intents);
 	void OnCatalogChanged();
 
 private:
-
 
 	std::string m_search;
 	Query::EGame m_game{ Query::NoGame };

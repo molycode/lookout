@@ -39,7 +39,6 @@ void DrawMenuBar(SFrameIntents& intents)
 	{
 		if (ImGui::BeginMenu("Lookout"))
 		{
-			intents.openDownloads = ImGui::MenuItem("Download games…") || intents.openDownloads;
 			intents.openAbout = ImGui::MenuItem("About Lookout") || intents.openAbout;
 			ImGui::Separator();
 			intents.quit = ImGui::MenuItem("Quit", "Ctrl+Q") || intents.quit;
@@ -141,7 +140,7 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 
 	DrawMenuBar(intents);
 	ReadShortcuts(browser.GetSelectedGame() != Query::NoGame, intents);
-	m_toolbar.Draw(browser, !m_userDir.empty(), intents);
+	m_toolbar.Draw(browser, !m_userDir.empty(), m_downloadWindow.CanOpen(), m_serverPaneX, intents);
 	DrawBody(browser, intents);
 	DrawStatusBar(browser, m_message);
 
@@ -194,6 +193,7 @@ void CMainWindow::DrawBody(Browser::CBrowser const& browser, SFrameIntents& inte
 		DrawGameSidebar(browser, m_userDir, intents);
 		ImGui::EndChild();
 		ImGui::SameLine();
+		m_serverPaneX = ImGui::GetCursorScreenPos().x;
 
 		if (browser.GetSelectedGame() != Query::NoGame)
 		{

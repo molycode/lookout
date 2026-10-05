@@ -8,13 +8,14 @@ who is playing, and joins with a double-click through the game's own launcher.
 ## Games
 
 Lookout knows no game by itself and ships none: each is a description, `games/<key>/game.json`, and each protocol a
-Lua script, `protocols/<name>.lua`. The published ones are in [lookout-games](https://github.com/molycode/lookout-games),
-which Lookout downloads, updates and removes from Lookout > Download games… (or `lookout --download`), into
-`~/.local/share/lookout/downloaded/` (or `$XDG_DATA_HOME/lookout/downloaded/`), checking each file against the
-repository's index. Yours go in `~/.local/share/lookout/`, where a description under a downloaded game's key changes
-only what it names, so it survives the game's updates. In the app, right-click a game to edit its description, or
-click the gamepad beside the "+" to add one; Lookout checks it as you type and reloads the games whenever that folder
-changes. `lookout --check <folder>` checks a lookout-games folder before a pull request.
+Lua script, `protocols/<name>.lua`. The published ones are in
+[lookout-games](https://github.com/molycode/lookout-games), which Lookout downloads, updates and removes from the
+download button above the game list (or `lookout --download`), into `~/.local/share/lookout/downloaded/` (or
+`$XDG_DATA_HOME/lookout/downloaded/`), checking each file against the repository's index. Yours go in
+`~/.local/share/lookout/`, where a description under a downloaded game's key changes only what it names, so it survives
+the game's updates. In the app, right-click a game to edit its description, or click the gamepad above the game list to
+add one; Lookout checks it as you type and reloads the games whenever that folder changes. `lookout --check <folder>`
+checks a lookout-games folder before a pull request.
 
 ## Building
 

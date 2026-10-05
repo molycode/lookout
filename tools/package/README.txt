@@ -20,8 +20,8 @@ menu. It needs no root. To upgrade, unpack a newer package and run its install.s
 Games
 -----
 Lookout comes without games. On its first start it offers to download them from
-github.com/molycode/lookout-games; later, Lookout > Download games... installs, updates and
-removes them. From a terminal, the same is
+github.com/molycode/lookout-games; later, the download button above the game list installs,
+updates and removes them. From a terminal, the same is
 
     lookout --download [game...]
 
@@ -35,8 +35,8 @@ way to: open the gear beside the game in the sidebar and add your install.
 
 Adding and changing games
 -------------------------
-Right-click a game in the sidebar to edit its description, or click the gamepad beside the
-"+" above the server list to add a game. Lookout checks a description as you type and
+Right-click a game in the sidebar to edit its description, or click the gamepad above the
+game list to add a game. Lookout checks a description as you type and
 keeps it in
 
     ~/.local/share/lookout/games/<name>/game.json

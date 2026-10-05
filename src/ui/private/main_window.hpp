@@ -80,6 +80,7 @@ private:
 	std::vector<uint64_t> m_selectedKeys;
 	std::string m_message;
 	float m_detailsEm{ 18.0f };
+	float m_serverPaneX{ 0.0f };
 	bool m_shouldScrollToSelection{ false };
 	bool m_isNarrow{ false };
 	bool m_isDetailsShown{ false };

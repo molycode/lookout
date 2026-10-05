@@ -11,6 +11,7 @@
 #include "geo/countries.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <algorithm>
 #include <array>
 #include <cstdint>
 
@@ -21,6 +22,7 @@ namespace
 constexpr std::array<uint32_t, 5> PingLimits{ Config::NoPingLimit, 50, 100, 150, 250 };
 constexpr std::array<uint32_t, 5> AutoRefreshChoices{ 0, 30, 60, 120, 300 };
 constexpr char const* AutoRefreshPopupId{ "##auto-refresh-menu" };
+constexpr float MinSearchEm{ 12.0f };
 
 //////////////////////////////////////////////////////////////////////////
 std::string_view DescribeAutoRefresh(uint32_t seconds, std::array<char, 32>& buffer)
@@ -234,11 +236,38 @@ void DrawCountryFilter(Browser::CBrowser const& browser, Config::SServerFilter c
 		ImGui::EndComboPreview();
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////
+void DrawGameButtons(bool canEditGames, bool canDownload, SFrameIntents& intents)
+{
+	ImVec2 const size{ ImGui::GetFrameHeight(), ImGui::GetFrameHeight() };
+
+	ImGui::BeginDisabled(!canEditGames);
+
+	if (ImGui::Button(LKT_ICON_GAMEPAD "##add-game", size))
+	{
+		intents.openAddGame = true;
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip(canEditGames ? "Add a game" : "Add a game: Lookout cannot locate its data folder");
+	ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+	ImGui::BeginDisabled(!canDownload);
+
+	if (ImGui::Button(LKT_ICON_DOWNLOAD "##download-games", size))
+	{
+		intents.openDownloads = true;
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip(canDownload ? "Download games"
+		: (canEditGames ? "Download games: the download could not be set up" : "Download games: Lookout cannot locate its data folder"));
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-// With no game installed, only adding one does anything.
-void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameIntents& intents)
+// With no game installed, only the game buttons do anything.
+void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, bool canDownload, float serverPaneX, SFrameIntents& intents)
 {
 	Config::SServerFilter const noFilter{};
 	Query::EGame const game{ browser.GetSelectedGame() };
@@ -252,6 +281,12 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 		m_hasGame = true;
 	}
 
+	DrawGameButtons(canEditGames, canDownload, intents);
+	ImGui::SameLine();
+	ImGui::SetCursorScreenPos(ImVec2{ std::max(ImGui::GetCursorScreenPos().x, serverPaneX), ImGui::GetCursorScreenPos().y });
+
+	ImVec2 const controls{ ImGui::GetCursorScreenPos() };
+
 	ImGui::BeginDisabled(!hasGame);
 	DrawRefreshButtons(browser, intents);
 	ImGui::SameLine();
@@ -263,16 +298,6 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 
 	ImGui::SetItemTooltip("Add a server by its address (Ctrl+N)");
 	ImGui::EndDisabled();
-	ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-	ImGui::BeginDisabled(!canEditGames);
-
-	if (ImGui::Button(LKT_ICON_GAMEPAD "##add-game", ImVec2{ ImGui::GetFrameHeight(), ImGui::GetFrameHeight() }))
-	{
-		intents.openAddGame = true;
-	}
-
-	ImGui::EndDisabled();
-	ImGui::SetItemTooltip(canEditGames ? "Add a game" : "Add a game: Lookout cannot locate its data folder");
 
 	bool showEmpty{ filter.showEmpty };
 	bool showFull{ filter.showFull };
@@ -306,6 +331,14 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 	DrawCountryFilter(browser, filter, intents);
 	ImGui::SameLine();
 
+	// Placed by hand: the country filter's combo preview leaves the line a text line high, so NewLine alone overlaps it.
+	if (ImGui::GetContentRegionAvail().x < MinSearchEm * ImGui::GetFontSize())
+	{
+		ImGui::NewLine();
+		ImGui::SetCursorScreenPos(ImVec2{ controls.x, controls.y + ImGui::GetFrameHeightWithSpacing() });
+	}
+
+
 	bool const wantsSearch{ ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_F, ImGuiInputFlags_RouteGlobal) };
 
 	// Focusing skips the modal check, so under a prompt the typing would land behind it.
@@ -314,7 +347,7 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 		m_shouldFocusSearch = true;
 	}
 
-	if (SearchField("##search", LKT_ICON_SEARCH "  Names, maps, mods, countries, players", m_search, m_shouldFocusSearch))
+	if (SearchField("##search", LKT_ICON_SEARCH "  Search servers", m_search, m_shouldFocusSearch))
 	{
 		Config::SServerFilter changed{ filter };
 
