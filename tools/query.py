@@ -46,6 +46,7 @@ GAMES = {
 	"bf1942": ("gamespy1", [("master.openspy.net", 28900)], "bfield1942"),
 	"rune": ("gamespy1", [("master.333networks.com", 28900), ("master.openspy.net", 28900)], "rune"),
 	"deusex": ("gamespy1", [("master.333networks.com", 28900)], "deusex"),
+	"quakeworld": ("quakeworld", [("master.quakeservers.net", 27000), ("qwmaster.fodquake.net", 27000), ("master.quakeworld.nu", 27000)], ""),
 }
 # Elite Force's masters write each address as twelve hex digits.
 HEX_ENTRIES = {"eliteforce"}
@@ -75,6 +76,9 @@ def master_requests(family, args):
 	if family == "quake2":
 		return [b"query"]
 
+	if family == "quakeworld":
+		return [b"c\n"]
+
 	words = args.split(" ")
 	index = next((i for i, word in enumerate(words) if "," in word), None)
 	queries = [args] if index is None else [" ".join(words[:index] + [number] + words[index + 1:]) for number in words[index].split(",")]
@@ -84,7 +88,11 @@ def master_requests(family, args):
 def parse_master(family, packet, is_hex=False):
 	servers = []
 
-	if family == "quake2":
+	if family == "quakeworld":
+		if packet.startswith(HEADER + b"d\n"):
+			body = packet[len(HEADER) + 2:]
+			servers = [(socket.inet_ntoa(body[i:i + 4]), struct.unpack(">H", body[i + 4:i + 6])[0]) for i in range(0, len(body) - 5, 6)]
+	elif family == "quake2":
 		if packet.startswith(HEADER + b"servers") and packet[len(HEADER) + 7:len(HEADER) + 8] in (b" ", b"\n"):
 			body = packet[len(HEADER + b"servers") + 1:]
 			servers = [(socket.inet_ntoa(body[i:i + 4]), struct.unpack(">H", body[i + 4:i + 6])[0]) for i in range(0, len(body) - 5, 6)]
@@ -136,7 +144,7 @@ def query_masters(family, masters, args):
 
 
 def query_status(family, servers):
-	request = HEADER + (b"status\n" if family == "quake2" else b"getstatus")
+	request = HEADER + {"quake2": b"status\n", "quakeworld": b"status 23\n"}.get(family, b"getstatus")
 	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	pending = list(servers)
 	sent = {}
@@ -173,7 +181,11 @@ def query_status(family, servers):
 
 
 def describe(packet):
+	# QuakeWorld's reply has its info on the header's line: "\xff\xff\xff\xffn\\hostname\\...".
 	lines = packet.decode("latin-1").split("\n")
+
+	if packet.startswith(HEADER + b"n\\"):
+		lines.insert(1, lines[0][len(HEADER) + 1:])
 
 	if len(lines) < 2:
 		return "0/? ? (malformed reply)"
@@ -184,7 +196,7 @@ def describe(packet):
 	name = next((info[key] for key in NAME_KEYS if key in info), "")
 	maximum = next((info[key] for key in MAX_KEYS if key in info), "?")
 	plain = re.sub(r"\^[^\^]", "", "".join(ch for ch in name if ord(ch) >= 32))
-	return f"{len(players)}/{maximum} {info.get('mapname', '?')} {plain}"
+	return f"{len(players)}/{maximum} {info.get('mapname', info.get('map', '?'))} {plain}"
 
 
 def unreal2_string(text):
