@@ -105,7 +105,7 @@ protected:
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CGameFilesTest, UnchangedDownloadWritesNoFile)
 {
-	EXPECT_TRUE(SaveGame(m_dir, "quake3", ReadDownloadedText("quake3")).has_value());
+	EXPECT_TRUE(SaveGame(m_dir, "quake3", ReadDownloadedText("quake3"), ReadDownloadedText("quake3")).has_value());
 	EXPECT_FALSE(std::filesystem::exists(m_dir / "games"));
 }
 
@@ -114,7 +114,7 @@ TEST_F(CGameFilesTest, EditedDownloadWritesOnlyTheChanges)
 {
 	std::string const text{ EditDownloaded("quake3", [](JsonValue& game) { game["masters"][0]["port"] = 27951; }) };
 
-	ASSERT_TRUE(SaveGame(m_dir, "quake3", text).has_value());
+	ASSERT_TRUE(SaveGame(m_dir, "quake3", text, ReadDownloadedText("quake3")).has_value());
 
 	JsonValue const patch = JsonValue::parse(ReadFile("games/quake3/game.json"));
 
@@ -135,7 +135,7 @@ TEST_F(CGameFilesTest, EditedDownloadLoadsAsEdited)
 		game["text"]["colourCodes"]["escape"] = "~";
 	}) };
 
-	ASSERT_TRUE(SaveGame(m_dir, "quake3", text).has_value());
+	ASSERT_TRUE(SaveGame(m_dir, "quake3", text, ReadDownloadedText("quake3")).has_value());
 
 	SGameContent const content{ LoadGames(GetDownloadedDir(m_dir), m_dir) };
 	auto const game{ std::ranges::find(content.games, "quake3", &Query::SGameDefinition::key) };
@@ -154,14 +154,40 @@ TEST_F(CGameFilesTest, UnchangedSaveRemovesEarlierChanges)
 {
 	WriteFile("games/quake3/game.json", R"json({ "name": "Quake III, mine" })json");
 
-	ASSERT_TRUE(SaveGame(m_dir, "quake3", ReadDownloadedText("quake3")).has_value());
+	ASSERT_TRUE(SaveGame(m_dir, "quake3", ReadDownloadedText("quake3"), ReadDownloadedText("quake3")).has_value());
 	EXPECT_FALSE(std::filesystem::exists(m_dir / "games/quake3"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+// What the editor opened had another name; the download it is saved over keeps its own.
+TEST_F(CGameFilesTest, SaveKeepsWhatTheDownloadChangedSinceOpening)
+{
+	std::string const opened{ EditDownloaded("quake3", [](JsonValue& game) { game["name"] = "Quake III, an older download"; }) };
+	std::string const edited{ EditDownloaded("quake3", [](JsonValue& game)
+	{
+		game["name"] = "Quake III, an older download";
+		game["masters"][0]["port"] = 27951;
+	}) };
+
+	ASSERT_TRUE(SaveGame(m_dir, "quake3", edited, opened).has_value());
+
+	JsonValue const merged = JsonValue::parse(ReadGameText(m_dir, "quake3").text);
+
+	EXPECT_EQ(merged["name"], JsonValue::parse(ReadDownloadedText("quake3"))["name"]);
+	EXPECT_EQ(merged["masters"][0]["port"], 27951);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameFilesTest, GameNoLongerDownloadedIsSavedWhole)
+{
+	ASSERT_TRUE(SaveGame(m_dir, "mygame", UserGame, UserGame).has_value());
+	EXPECT_EQ(ReadFile("games/mygame/game.json"), UserGame);
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CGameFilesTest, UserGameIsSavedAsWritten)
 {
-	ASSERT_TRUE(SaveGame(m_dir, "mygame", UserGame).has_value());
+	ASSERT_TRUE(SaveGame(m_dir, "mygame", UserGame, {}).has_value());
 	EXPECT_EQ(ReadFile("games/mygame/game.json"), UserGame);
 }
 
@@ -197,6 +223,25 @@ TEST_F(CGameFilesTest, PatchedDownloadOpensMerged)
 	EXPECT_TRUE(game.problem.empty()) << game.problem;
 	EXPECT_EQ(merged.value("name", ""), "Quake III, mine");
 	EXPECT_TRUE(merged.contains("//foreignServers"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameFilesTest, DownloadedGameOpensWithItsDownload)
+{
+	WriteFile("games/quake3/game.json", R"json({ "name": "Quake III, mine" })json");
+
+	EXPECT_EQ(ReadGameText(m_dir, "quake3").downloaded, ReadDownloadedText("quake3"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameFilesTest, FolderWithoutADescriptionOpensEmpty)
+{
+	WriteFile("games/mygame/icon.png", "not looked at");
+
+	SEditableGame const game{ ReadGameText(m_dir, "mygame") };
+
+	EXPECT_TRUE(game.text.empty());
+	EXPECT_TRUE(game.problem.empty()) << game.problem;
 }
 
 //////////////////////////////////////////////////////////////////////////

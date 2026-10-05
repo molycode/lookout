@@ -8,6 +8,7 @@ namespace Lkt::Games
 struct SEditableGame final
 {
 	std::string text;
+	std::string downloaded;
 	std::string problem;
 };
 } // namespace Lkt::Games

@@ -19,7 +19,7 @@ EGameSource FindGameSource(std::filesystem::path const& userDir, std::string_vie
 // A user game as written, a downloaded one as downloaded, or merged with the user's changes to it.
 SEditableGame ReadGameText(std::filesystem::path const& userDir, std::string_view key);
 // A downloaded game's text is saved as only what differs from the download, and as no file when nothing does.
-std::expected<void, std::string> SaveGame(std::filesystem::path const& userDir, std::string_view key, std::string_view text);
+std::expected<void, std::string> SaveGame(std::filesystem::path const& userDir, std::string_view key, std::string_view text, std::string_view downloaded);
 // Removes the changes to a downloaded game; an icon of the user's stays.
 std::expected<void, std::string> RevertGame(std::filesystem::path const& userDir, std::string_view key);
 // Removes a game of the user's own with everything in its folder.

@@ -33,6 +33,7 @@ private:
 	std::string m_name;
 	std::string m_text;
 	std::string m_openedText;
+	std::string m_downloaded;
 	std::string m_note;
 	std::string m_problem;
 	std::string m_saveError;

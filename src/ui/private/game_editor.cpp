@@ -40,6 +40,7 @@ void CGameEditor::Open(std::string_view key, std::filesystem::path const& userDi
 	m_isDownloaded = source == Games::EGameSource::Downloaded || source == Games::EGameSource::Patched;
 	m_text = opened.text.empty() ? std::string{ Games::GetNewGameText() } : std::move(opened.text);
 	m_openedText = m_text;
+	m_downloaded = std::move(opened.downloaded);
 	m_note = (m_isDownloaded && !opened.problem.empty()) ? std::format("Your changes cannot be opened, so this is as downloaded: {}", opened.problem) : opened.problem;
 	m_isNew = false;
 	Opened(userDir);
@@ -52,6 +53,7 @@ void CGameEditor::OpenNew(SNewGame game, std::filesystem::path const& userDir)
 	m_name = m_key;
 	m_text = std::move(game.text);
 	m_openedText = m_text;
+	m_downloaded.clear();
 	m_note.clear();
 	m_isDownloaded = false;
 	m_isNew = true;
@@ -178,7 +180,7 @@ void CGameEditor::DrawStatus(float width) const
 //////////////////////////////////////////////////////////////////////////
 bool CGameEditor::Save(std::filesystem::path const& userDir, std::string& message)
 {
-	std::expected<void, std::string> const saved{ Games::SaveGame(userDir, m_key, m_text) };
+	std::expected<void, std::string> const saved{ Games::SaveGame(userDir, m_key, m_text, m_downloaded) };
 
 	if (saved.has_value())
 	{

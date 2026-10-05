@@ -143,6 +143,11 @@ SEditableGame ReadGameText(std::filesystem::path const& userDir, std::string_vie
 		: std::expected<std::string, std::error_code>{ std::unexpected{ std::make_error_code(std::errc::no_such_file_or_directory) } } };
 	SEditableGame game{};
 
+	if (downloaded.has_value())
+	{
+		game.downloaded = *downloaded;
+	}
+
 	if (downloaded.has_value() && userText.has_value())
 	{
 		std::expected<std::string, std::string> merged{ ApplyPatch(*downloaded, *userText) };
@@ -170,7 +175,7 @@ SEditableGame ReadGameText(std::filesystem::path const& userDir, std::string_vie
 	{
 		game.text = *userText;
 	}
-	else
+	else if (userText.error() != std::errc::no_such_file_or_directory)
 	{
 		game.problem = std::format("games/{}/{}: {}", key, GameFileName, userText.error().message());
 	}
@@ -179,13 +184,15 @@ SEditableGame ReadGameText(std::filesystem::path const& userDir, std::string_vie
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<void, std::string> SaveGame(std::filesystem::path const& userDir, std::string_view key, std::string_view text)
+// Against what the editor opened, so a download updated meanwhile keeps its new values; one removed meanwhile leaves
+// nothing to patch, so the game is saved whole.
+std::expected<void, std::string> SaveGame(std::filesystem::path const& userDir, std::string_view key, std::string_view text, std::string_view downloaded)
 {
 	TGE_ASSERT(!userDir.empty() && IsValidKey(key), "A game is saved under a key that is not a safe folder name");
 
 	std::filesystem::path const folder{ GetGameFolder(userDir, key) };
-	std::optional<std::string> const downloaded{ ReadDownloadedText(userDir, key) };
-	std::expected<std::optional<std::string>, std::string> const file{ downloaded.has_value() ? MakePatch(*downloaded, text)
+	bool const isPatch{ !downloaded.empty() && IsDownloaded(userDir, key) };
+	std::expected<std::optional<std::string>, std::string> const file{ isPatch ? MakePatch(downloaded, text)
 		: std::expected<std::optional<std::string>, std::string>{ std::string{ text } } };
 	std::expected<void, std::string> result{};
 
@@ -193,7 +200,7 @@ std::expected<void, std::string> SaveGame(std::filesystem::path const& userDir, 
 	{
 		result = std::unexpected{ std::format("games/{}/{}: {}", key, GameFileName, file.error()) };
 	}
-	else if (file->has_value() && downloaded.has_value())
+	else if (file->has_value() && isPatch)
 	{
 		result = WriteGameFile(folder, key, std::format("{}\n", **file));
 	}
