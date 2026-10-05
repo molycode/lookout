@@ -3,14 +3,17 @@
 A native Linux game server browser. It lists the servers from each game's masters, filters and sorts them, shows
 who is playing, and joins with a double-click through the game's own launcher.
 
+Lookout knows no game by itself. Each game is a description and each query protocol a sandboxed Lua script, downloaded
+from [lookout-games](https://github.com/molycode/lookout-games) or written by you, so adding a game, even one still in
+development, needs no new Lookout.
+
 ![The Lookout window: the games in the sidebar, OpenArena's servers in the list, and the selected server's players and rules](docs/screenshot.png)
 
 ## Games
 
-Lookout knows no game by itself and ships none: each is a description, `games/<key>/game.json`, and each protocol a
-Lua script, `protocols/<name>.lua`. The published ones are in
-[lookout-games](https://github.com/molycode/lookout-games), which Lookout downloads, updates and removes from the
-download button above the game list (or `lookout --download`), into `~/.local/share/lookout/downloaded/` (or
+A game is a description, `games/<key>/game.json`, and a protocol a Lua script, `protocols/<name>.lua`. The published
+ones are in [lookout-games](https://github.com/molycode/lookout-games), which Lookout downloads, updates and removes
+from the download button above the game list (or `lookout --download`), into `~/.local/share/lookout/downloaded/` (or
 `$XDG_DATA_HOME/lookout/downloaded/`), checking each file against the repository's index. Yours go in
 `~/.local/share/lookout/`, where a description under a downloaded game's key changes only what it names, so it survives
 the game's updates. In the app, click the pencil on a game to edit its description, or click the gamepad above the game

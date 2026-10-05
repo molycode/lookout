@@ -5,6 +5,10 @@ A game server browser for Linux. It lists the servers from each game's master se
 filters and sorts them, shows who is playing, and joins with a double-click through the
 game's own launcher.
 
+Lookout knows no game by itself. Each game is a description and each query protocol a
+sandboxed Lua script, downloaded from github.com/molycode/lookout-games or written by you,
+so adding a game, even one still in development, needs no new Lookout.
+
 Requirements
 ------------
 x86-64 (64-bit PC) Linux with glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later),
