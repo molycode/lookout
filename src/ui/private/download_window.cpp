@@ -12,6 +12,7 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
+#include <cfloat>
 #include <cstddef>
 #include <utility>
 
@@ -22,6 +23,7 @@ namespace
 constexpr float WidthEm{ 32.0f };
 constexpr float HeightEm{ 30.0f };
 constexpr float PromptWidthEm{ 22.0f };
+constexpr float ProgressBarHeightEm{ 0.4f };
 constexpr char const* RemoveAllPopupId{ "Remove all games###removeAll" };
 constexpr std::array<Download::EOfferState, 2> Downloadable{ Download::EOfferState::NotInstalled, Download::EOfferState::UpdateAvailable };
 constexpr std::array<Download::EOfferState, 3> Removable{ Download::EOfferState::Installed, Download::EOfferState::UpdateAvailable,
@@ -172,9 +174,14 @@ void CDownloadWindow::DrawStatus() const
 	}
 	else if (m_downloads.GetPhase() == Download::EDownloadPhase::Downloading)
 	{
-		std::string_view const progress{ FormatTo(buffer, "Downloading: {} of {} files…", m_downloads.GetNumFetched(), m_downloads.GetNumToFetch()) };
+		size_t const numFetched{ m_downloads.GetNumFetched() };
+		size_t const numToFetch{ m_downloads.GetNumToFetch() };
+		float const fraction{ (numToFetch != 0) ? static_cast<float>(numFetched) / static_cast<float>(numToFetch) : 0.0f };
+		std::string_view const progress{ FormatTo(buffer, "Downloading: {} of {} files…", numFetched, numToFetch) };
 
 		ImGui::TextUnformatted(progress.data(), progress.data() + progress.size());
+		// A label over the bar would end up light text on amber, which cannot be read.
+		ImGui::ProgressBar(fraction, ImVec2{ -FLT_MIN, ProgressBarHeightEm * ImGui::GetFontSize() }, "");
 	}
 
 	ImGui::PushTextWrapPos(0.0f);
