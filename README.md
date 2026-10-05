@@ -13,9 +13,9 @@ Lua script, `protocols/<name>.lua`. The published ones are in
 download button above the game list (or `lookout --download`), into `~/.local/share/lookout/downloaded/` (or
 `$XDG_DATA_HOME/lookout/downloaded/`), checking each file against the repository's index. Yours go in
 `~/.local/share/lookout/`, where a description under a downloaded game's key changes only what it names, so it survives
-the game's updates. In the app, right-click a game to edit its description, or click the gamepad above the game list to
-add one; Lookout checks it as you type and reloads the games whenever that folder changes. `lookout --check <folder>`
-checks a lookout-games folder before a pull request.
+the game's updates. In the app, click the pencil on a game to edit its description, or click the gamepad above the game
+list to add one; Lookout checks it as you type and reloads the games whenever that folder changes.
+`lookout --check <folder>` checks a lookout-games folder before a pull request.
 
 ## Building
 

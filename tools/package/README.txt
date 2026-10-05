@@ -35,8 +35,8 @@ way to: open the gear beside the game in the sidebar and add your install.
 
 Adding and changing games
 -------------------------
-Right-click a game in the sidebar to edit its description, or click the gamepad above the
-game list to add a game. Lookout checks a description as you type and
+Click the pencil on a game in the sidebar to edit its description, or the gamepad above
+the game list to add a game. Lookout checks a description as you type and
 keeps it in
 
     ~/.local/share/lookout/games/<name>/game.json

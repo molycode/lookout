@@ -46,6 +46,26 @@ void DrawGearButton(Query::SGameDefinition const& game, SFrameIntents& intents)
 }
 
 //////////////////////////////////////////////////////////////////////////
+void DrawEditButton(Query::SGameDefinition const& game, std::filesystem::path const& userDir, SFrameIntents& intents)
+{
+	std::array<char, 96> buffer{};
+
+	ImGui::BeginDisabled(userDir.empty());
+
+	if (IconButton("##edit", LKT_ICON_PEN))
+	{
+		intents.editGame = game.key;
+	}
+
+	ImGui::EndDisabled();
+
+	std::string_view const tooltip{ userDir.empty() ? std::string_view{ "Edit the description: Lookout cannot locate its data folder" }
+		: FormatTo(buffer, "Edit the description of {}", game.name) };
+
+	ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
+}
+
+//////////////////////////////////////////////////////////////////////////
 void DragToReorder(Query::EGame game, SFrameIntents& intents)
 {
 	if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
@@ -76,26 +96,23 @@ void DragToReorder(Query::EGame game, SFrameIntents& intents)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// On the item drawn last. The data folder is read only while the menu is open.
+// On the item drawn last. The data folder is read on a right-click, so a game with nothing to offer opens no empty
+// menu, and while the menu is open.
 void DrawGameMenu(Query::SGameDefinition const& game, std::filesystem::path const& userDir, SFrameIntents& intents)
 {
-	if (ImGui::BeginPopupContextItem("##game-menu"))
+	if (ImGui::IsMouseReleased(ImGuiMouseButton_Right) && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
 	{
 		Games::EGameSource const source{ Games::FindGameSource(userDir, game.key) };
 
-		ImGui::BeginDisabled(userDir.empty());
-
-		if (ImGui::MenuItem("Edit description…"))
+		if (source == Games::EGameSource::Patched || source == Games::EGameSource::User)
 		{
-			intents.editGame = game.key;
+			ImGui::OpenPopup("##game-menu");
 		}
+	}
 
-		ImGui::EndDisabled();
-
-		if (userDir.empty())
-		{
-			ImGui::SetItemTooltip("Lookout cannot locate its data folder");
-		}
+	if (ImGui::BeginPopup("##game-menu"))
+	{
+		Games::EGameSource const source{ Games::FindGameSource(userDir, game.key) };
 
 		if (source == Games::EGameSource::Patched && ImGui::MenuItem("Revert to downloaded…"))
 		{
@@ -163,6 +180,7 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 	ImVec2 const text{ icon.x + iconSize + style.ItemInnerSpacing.x, icon.y };
 	float const gearX{ start.x + size.x - padding.x - lineHeight };
 	float const hideX{ gearX - style.ItemInnerSpacing.x - lineHeight };
+	float const editX{ hideX - style.ItemInnerSpacing.x - lineHeight };
 	float const spinnerWidth{ status.isRefreshing ? ImGui::CalcTextSize(LKT_ICON_ROTATE).x + style.ItemInnerSpacing.x : 0.0f };
 	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
 	std::array<char, 96> buffer{};
@@ -184,7 +202,7 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 		ImGui::GetFontSize() * CardRoundingEm);
 	gGameIcons.Draw(pDrawList, game.game, icon, iconSize);
 
-	float const nameEnd{ DrawEllipsised(game.name, text, hideX - style.ItemInnerSpacing.x - spinnerWidth, isSelected ? colors.amber : colors.text) };
+	float const nameEnd{ DrawEllipsised(game.name, text, editX - style.ItemInnerSpacing.x - spinnerWidth, isSelected ? colors.amber : colors.text) };
 
 	if (status.isRefreshing)
 	{
@@ -197,6 +215,8 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 		: std::string_view{ "—" } };
 
 	DrawEllipsised(counts, ImVec2{ text.x, text.y + ImGui::GetTextLineHeightWithSpacing() }, start.x + size.x - padding.x, colors.textDisabled);
+	ImGui::SetCursorScreenPos(ImVec2{ editX, text.y });
+	DrawEditButton(game, userDir, intents);
 	ImGui::SetCursorScreenPos(ImVec2{ hideX, text.y });
 	ImGui::BeginDisabled(isLastListed);
 
@@ -274,12 +294,15 @@ void DrawHiddenGame(Query::SGameDefinition const& game, std::filesystem::path co
 
 	float const gearX{ start.x + ImGui::GetContentRegionAvail().x - style.FramePadding.x - lineHeight };
 	float const showX{ gearX - style.ItemInnerSpacing.x - lineHeight };
+	float const editX{ showX - style.ItemInnerSpacing.x - lineHeight };
 	ImVec2 const icon{ start.x + style.FramePadding.x, start.y };
 	std::array<char, 96> buffer{};
 
 	gGameIcons.Draw(ImGui::GetWindowDrawList(), game.game, icon, lineHeight);
-	DrawEllipsised(game.name, ImVec2{ icon.x + lineHeight + style.ItemInnerSpacing.x, start.y }, showX - style.ItemInnerSpacing.x, GetThemeColors().textDisabled);
-	ImGui::SetCursorScreenPos(ImVec2{ showX, start.y });
+	DrawEllipsised(game.name, ImVec2{ icon.x + lineHeight + style.ItemInnerSpacing.x, start.y }, editX - style.ItemInnerSpacing.x, GetThemeColors().textDisabled);
+	ImGui::SetCursorScreenPos(ImVec2{ editX, start.y });
+	DrawEditButton(game, userDir, intents);
+	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
 
 	if (IconButton("##show", LKT_ICON_EYE))
 	{
