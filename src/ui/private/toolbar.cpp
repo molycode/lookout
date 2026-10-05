@@ -242,11 +242,9 @@ void DrawCountryFilter(Browser::CBrowser const& browser, Config::SServerFilter c
 //////////////////////////////////////////////////////////////////////////
 void DrawGameButtons(bool canEditGames, bool canDownload, SFrameIntents& intents)
 {
-	ImVec2 const size{ ImGui::GetFrameHeight(), ImGui::GetFrameHeight() };
-
 	ImGui::BeginDisabled(!canEditGames);
 
-	if (ImGui::Button(LKT_ICON_GAMEPAD "##add-game", size))
+	if (SquareIconButton(LKT_ICON_GAMEPAD "##add-game"))
 	{
 		intents.openAddGame = true;
 	}
@@ -256,7 +254,7 @@ void DrawGameButtons(bool canEditGames, bool canDownload, SFrameIntents& intents
 	ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
 	ImGui::BeginDisabled(!canDownload);
 
-	if (ImGui::Button(LKT_ICON_DOWNLOAD "##download-games", size))
+	if (SquareIconButton(LKT_ICON_DOWNLOAD "##download-games"))
 	{
 		intents.openDownloads = true;
 	}
@@ -293,7 +291,7 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, bool ca
 	DrawRefreshButtons(browser, intents);
 	ImGui::SameLine();
 
-	if (ImGui::Button(LKT_ICON_PLUS "##add-server", ImVec2{ ImGui::GetFrameHeight(), ImGui::GetFrameHeight() }))
+	if (SquareIconButton(LKT_ICON_PLUS "##add-server"))
 	{
 		intents.openAddServer = true;
 	}

@@ -90,6 +90,21 @@ bool IconButton(char const* id, std::string_view glyph)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// ImGui centres a label only within the frame padding, which leaves a frame-high square narrower than its glyph.
+bool SquareIconButton(char const* label)
+{
+	float const size{ ImGui::GetFrameHeight() };
+
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{ 0.0f, ImGui::GetStyle().FramePadding.y });
+
+	bool const isPressed{ ImGui::Button(label, ImVec2{ size, size }) };
+
+	ImGui::PopStyleVar();
+
+	return isPressed;
+}
+
+//////////////////////////////////////////////////////////////////////////
 // ImGui would outline the text alone and cut the cross off, so its outline is held back and drawn around both.
 bool SearchField(char const* id, char const* hint, std::string& text, bool& shouldFocus)
 {
