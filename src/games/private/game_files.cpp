@@ -4,6 +4,7 @@
 #include "json/files.hpp"
 #include <tge/assert.hpp>
 #include <algorithm>
+#include <array>
 #include <format>
 #include <optional>
 #include <system_error>
@@ -15,6 +16,7 @@ namespace
 {
 constexpr std::string_view GameFileName{ "game.json" };
 constexpr std::string_view DownloadedFolderName{ "downloaded" };
+constexpr std::array<std::string_view, 2> IconFileNames{ "icon.png", "icon-licence.txt" };
 
 //////////////////////////////////////////////////////////////////////////
 std::filesystem::path GetGameFolder(std::filesystem::path const& userDir, std::string_view key)
@@ -91,6 +93,26 @@ std::expected<void, std::string> RemoveGameFile(std::filesystem::path const& fol
 	}
 
 	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool AreIconsAsDownloaded(std::filesystem::path const& folder, std::filesystem::path const& downloadedFolder)
+{
+	bool isSame{ true };
+
+	for (std::string_view const name : IconFileNames)
+	{
+		std::expected<std::string, std::error_code> const own{ Json::ReadFile(folder / name, MaxUserFileSize) };
+
+		if (own.has_value())
+		{
+			std::expected<std::string, std::error_code> const downloaded{ Json::ReadFile(downloadedFolder / name, MaxUserFileSize) };
+
+			isSame = isSame && downloaded.has_value() && *downloaded == *own;
+		}
+	}
+
+	return isSame;
 }
 } // namespace
 
@@ -215,11 +237,32 @@ std::expected<void, std::string> SaveGame(std::filesystem::path const& userDir, 
 }
 
 //////////////////////////////////////////////////////////////////////////
+// An icon of the user's own stays; one the download carries too, byte for byte, goes, so the folder can go with it.
 std::expected<void, std::string> RevertGame(std::filesystem::path const& userDir, std::string_view key)
 {
 	TGE_ASSERT(IsDownloaded(userDir, key), "Only a downloaded game can be reverted");
 
-	return RemoveGameFile(GetGameFolder(userDir, key), key);
+	std::filesystem::path const folder{ GetGameFolder(userDir, key) };
+	std::expected<void, std::string> result{};
+
+	if (AreIconsAsDownloaded(folder, GetGameFolder(GetDownloadedDir(userDir), key)))
+	{
+		for (std::string_view const name : IconFileNames)
+		{
+			std::error_code error{};
+
+			std::filesystem::remove(folder / name, error);
+
+			if (error.value() != 0 && result.has_value())
+			{
+				result = std::unexpected{ std::format("games/{}/{}: {}", key, name, error.message()) };
+			}
+		}
+	}
+
+	std::expected<void, std::string> const removed{ RemoveGameFile(folder, key) };
+
+	return result.has_value() ? removed : result;
 }
 
 //////////////////////////////////////////////////////////////////////////

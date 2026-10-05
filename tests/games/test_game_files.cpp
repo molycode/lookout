@@ -203,6 +203,32 @@ TEST_F(CGameFilesTest, RevertKeepsTheUsersIcon)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// As a contributor has it once the game they sent is downloaded: their folder goes whole.
+TEST_F(CGameFilesTest, RevertRemovesAnIconTheDownloadCarriesToo)
+{
+	std::filesystem::path const downloaded{ std::filesystem::path{ LKT_LOOKOUT_GAMES_DIR } / "games/quake3" };
+
+	WriteFile("games/quake3/game.json", R"json({ "name": "Quake III, mine" })json");
+	std::filesystem::copy_file(downloaded / "icon.png", m_dir / "games/quake3/icon.png");
+	std::filesystem::copy_file(downloaded / "icon-licence.txt", m_dir / "games/quake3/icon-licence.txt");
+
+	ASSERT_TRUE(RevertGame(m_dir, "quake3").has_value());
+	EXPECT_FALSE(std::filesystem::exists(m_dir / "games/quake3"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameFilesTest, RevertKeepsTheDownloadedIconBesideALicenceOfTheUsers)
+{
+	WriteFile("games/quake3/game.json", R"json({ "name": "Quake III, mine" })json");
+	std::filesystem::copy_file(std::filesystem::path{ LKT_LOOKOUT_GAMES_DIR } / "games/quake3/icon.png", m_dir / "games/quake3/icon.png");
+	WriteFile("games/quake3/icon-licence.txt", "mine");
+
+	ASSERT_TRUE(RevertGame(m_dir, "quake3").has_value());
+	EXPECT_TRUE(std::filesystem::exists(m_dir / "games/quake3/icon.png"));
+	EXPECT_TRUE(std::filesystem::exists(m_dir / "games/quake3/icon-licence.txt"));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CGameFilesTest, RemoveDeletesTheWholeFolder)
 {
 	WriteFile("games/mygame/game.json", UserGame);
