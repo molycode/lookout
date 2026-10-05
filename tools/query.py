@@ -40,6 +40,12 @@ GAMES = {
 	"cod2": ("quake3", [("cod2master.activision.com", 20710), ("master.cod2x.me", 20710)], "118,120 full empty"),
 	"cod4": ("quake3", [("cod4master.activision.com", 20810)], "6 full empty"),
 	"alienarena": ("quake2", [("master.alienarena.org", 27900), ("master2.alienarena.org", 27900)], ""),
+	"ut99": ("gamespy1", [("master.333networks.com", 28900), ("master.openspy.net", 28900)], "ut"),
+	"unreal": ("gamespy1", [("master.333networks.com", 28900), ("master.openspy.net", 28900)], "unreal"),
+	"mohaa": ("gamespy1", [("master.333networks.com", 28900), ("master.openspy.net", 28900)], "mohaa"),
+	"bf1942": ("gamespy1", [("master.openspy.net", 28900)], "bfield1942"),
+	"rune": ("gamespy1", [("master.333networks.com", 28900), ("master.openspy.net", 28900)], "rune"),
+	"deusex": ("gamespy1", [("master.333networks.com", 28900)], "deusex"),
 }
 # Elite Force's masters write each address as twelve hex digits.
 HEX_ENTRIES = {"eliteforce"}
@@ -57,6 +63,11 @@ UNREAL2_KEY_HASH = "0" * 32
 UNREAL2_QUERIES = [b"\x79\x00\x00\x00" + bytes([command]) for command in (0, 1, 2)]
 UNREAL2_QUIET = 0.6
 UNREAL2_INFO = 0
+
+# GameSpy v1: TCP masters that speak first with a challenge, answered by gsmsalg under a key; both masters take the
+# gspylite key for listing any game. Servers answer \status\ in datagrams numbered by \queryid\, \final\ in the last.
+GAMESPY_KEY = b"mgNUaC"
+GAMESPY_QUIET = 0.6
 
 
 def master_requests(family, args):
@@ -322,6 +333,165 @@ def main_unreal2(options, masters):
 				(target / f"status-{address}_{port}-{index:02}.bin").write_bytes(packet)
 
 
+def gamespy_validate(secure, key=GAMESPY_KEY):
+	"""Luigi Auriemma's gsmsalg, enctype 0, as 333networks' Masterserver-Qt5 implements it."""
+	enc = list(range(256))
+	a = 0
+
+	for j in range(256):
+		a = (a + enc[j] + key[j % len(key)]) & 0xFF
+		enc[a], enc[j] = enc[j], enc[a]
+
+	mixed = []
+	a = b = 0
+
+	for c in secure:
+		a = (a + c + 1) & 0xFF
+		x = enc[a]
+		b = (b + x) & 0xFF
+		y = enc[b]
+		enc[b], enc[a] = x, y
+		mixed.append(c ^ enc[(x + y) & 0xFF])
+
+	mixed += [0] * (-len(mixed) % 3)
+	alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	out = ""
+
+	for i in range(0, len(mixed), 3):
+		x, y, z = mixed[i:i + 3]
+		out += alphabet[x >> 2] + alphabet[((x & 3) << 4) | (y >> 4)] + alphabet[((y & 15) << 2) | (z >> 6)] + alphabet[z & 63]
+
+	return out
+
+
+def query_gamespy_master(host, port, game):
+	"""Everything the master sent, and the query addresses it listed."""
+	stream = bytearray()
+	servers = []
+
+	try:
+		with socket.create_connection((host, port), timeout=MASTER_WAIT * 5) as sock:
+			while b"\\secure\\" not in stream or len(stream) < stream.index(b"\\secure\\") + 14:
+				chunk = sock.recv(4096)
+
+				if not chunk:
+					raise OSError("the master closed the connection before its challenge")
+
+				stream.extend(chunk)
+
+			secure = bytes(stream[stream.index(b"\\secure\\") + 8:]).split(b"\\")[0]
+			sock.sendall(f"\\gamename\\gspylite\\location\\0\\validate\\{gamespy_validate(secure)}\\final\\\\list\\\\gamename\\{game}\\final\\".encode())
+
+			while not stream.endswith(b"\\final\\"):
+				chunk = sock.recv(65536)
+
+				if not chunk:
+					break
+
+				stream.extend(chunk)
+	except OSError as error:
+		print(f"master {host}: {error}", file=sys.stderr)
+
+	for entry in bytes(stream).split(b"\\ip\\")[1:]:
+		address, _, port_text = entry.split(b"\\")[0].decode("latin-1").partition(":")
+		servers.append((address, int(port_text)))
+
+	return bytes(stream), servers
+
+
+def gamespy_fields(packet):
+	fields = packet.decode("latin-1").split("\\")[1:]
+	return dict(zip(fields[::2], fields[1::2]))
+
+
+def is_gamespy_complete(packets):
+	"""\\final\\ has come, and every numbered part up to the one it came in."""
+	parts = set()
+	last = None
+
+	for packet in packets:
+		fields = gamespy_fields(packet)
+		part = int(fields.get("queryid", "0.1").rpartition(".")[2] or 1)
+		parts.add(part)
+
+		if b"\\final\\" in packet:
+			last = part
+
+	return last is not None and parts >= set(range(1, last + 1))
+
+
+def query_gamespy_status(servers):
+	"""Each server's datagrams, for those that answered."""
+	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	pending = list(servers)
+	last_heard = {}
+	packets = {}
+
+	while pending or last_heard:
+		while pending and len(last_heard) < IN_FLIGHT:
+			server = pending.pop()
+
+			try:
+				sock.sendto(b"\\status\\", server)
+				last_heard[server] = time.time()
+				packets[server] = []
+			except OSError as error:
+				print(f"server {server[0]}:{server[1]}: {error}", file=sys.stderr)
+
+		ready, _, _ = select.select([sock], [], [], 0.05)
+
+		if ready:
+			packet, source = sock.recvfrom(65535)
+
+			if source in last_heard:
+				packets[source].append(packet)
+				last_heard[source] = time.time()
+
+				if is_gamespy_complete(packets[source]):
+					del last_heard[source]
+
+		for server, heard in list(last_heard.items()):
+			if time.time() - heard > (GAMESPY_QUIET if packets[server] else STATUS_WAIT):
+				del last_heard[server]
+
+	return {server: found for server, found in packets.items() if found}
+
+
+def describe_gamespy(packets):
+	info = {}
+
+	for packet in packets:
+		info.update(gamespy_fields(packet))
+
+	players = [key for key in info if key.startswith(("player_", "playername_"))]
+	return f"{len(players)}/{info.get('maxplayers', '?')} {info.get('mapname', '?')} {info.get('hostname', '')}"
+
+
+def main_gamespy(options, masters, game):
+	answers = [(host, *query_gamespy_master(host, port, game)) for host, port in masters]
+	servers = sorted({server for _, _, listed in answers for server in listed}, key=lambda server: (socket.inet_aton(server[0]), server[1]))
+	replies = query_gamespy_status(servers)
+
+	for server in servers:
+		if server in replies:
+			print(f"{server[0]}:{server[1]} {describe_gamespy(replies[server])}")
+
+	print(f"{len(replies)} of {len(servers)} servers answered", file=sys.stderr)
+
+	if options.save_fixtures is not None:
+		target = options.save_fixtures / options.game
+		target.mkdir(parents=True, exist_ok=True)
+
+		for host, stream, _ in answers:
+			(target / f"master-{host}-stream.bin").write_bytes(stream)
+
+		chosen = sorted(replies.items(), key=lambda item: -int(describe_gamespy(item[1]).split("/")[0]))
+
+		for (address, port), packets in chosen[:options.count]:
+			for index, packet in enumerate(packets):
+				(target / f"status-{address}_{port}-{index:02}.bin").write_bytes(packet)
+
+
 def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("game", choices=sorted(GAMES))
@@ -333,6 +503,10 @@ def main():
 
 	if family == "unreal2":
 		main_unreal2(options, masters)
+		return
+
+	if family == "gamespy1":
+		main_gamespy(options, masters, args)
 		return
 
 	answers = query_masters(family, masters, args)
