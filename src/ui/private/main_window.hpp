@@ -2,7 +2,6 @@
 
 #include "about_dialog.hpp"
 #include "add_server_prompt.hpp"
-#include "discard_prompt.hpp"
 #include "download_window.hpp"
 #include "game_editor.hpp"
 #include "game_settings_popup.hpp"
@@ -72,7 +71,6 @@ private:
 	CAboutDialog m_aboutDialog;
 	CGameSettingsPopup m_gameSettings;
 	CGameEditor m_gameEditor;
-	CDiscardPrompt m_discardPrompt;
 	CDownloadWindow m_downloadWindow;
 	std::filesystem::path m_userDir;
 	std::function<void()> m_requestReload;

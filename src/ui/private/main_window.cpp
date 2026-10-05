@@ -365,20 +365,6 @@ void CMainWindow::Apply(Browser::CBrowser& browser, SFrameIntents const& intents
 		m_gameEditor.Open(*intents.editGame, m_userDir);
 	}
 
-	if (intents.revertGame.has_value())
-	{
-		Query::SGameDefinition const& game{ Query::GetGame(*intents.revertGame) };
-
-		m_discardPrompt.Open(EDiscardKind::Changes, game.key, game.name, m_userDir);
-	}
-
-	if (intents.removeGame.has_value())
-	{
-		Query::SGameDefinition const& game{ Query::GetGame(*intents.removeGame) };
-
-		m_discardPrompt.Open(EDiscardKind::Game, game.key, game.name, m_userDir);
-	}
-
 	if (intents.quit && m_gameEditor.HasUnsavedChanges())
 	{
 		m_gameEditor.AskToQuit();
@@ -409,9 +395,8 @@ void CMainWindow::SetGameListed(Browser::CBrowser& browser, Query::EGame game, b
 void CMainWindow::DrawGamePrompts()
 {
 	EEditorOutcome const edited{ m_gameEditor.Draw(m_userDir, m_message) };
-	bool const isDiscarded{ m_discardPrompt.Draw(m_userDir, m_message) };
 
-	if (edited == EEditorOutcome::FilesChanged || isDiscarded)
+	if (edited == EEditorOutcome::FilesChanged)
 	{
 		m_requestReload();
 	}

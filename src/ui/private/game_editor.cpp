@@ -10,10 +10,12 @@
 #include "games/game_files.hpp"
 #include "games/game_form.hpp"
 #include "games/game_source.hpp"
+#include "launch/file_url.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <SDL3/SDL.h>
 #include <array>
 #include <cfloat>
 #include <expected>
@@ -167,7 +169,7 @@ EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::stri
 
 			if (!m_unreadable.empty())
 			{
-				isCloseClicked = DrawUnreadable();
+				isCloseClicked = DrawUnreadable(userDir);
 			}
 			else
 			{
@@ -206,6 +208,20 @@ EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::stri
 			EEditorOutcome const prompted{ DrawDiscardPrompt(userDir) };
 
 			outcome = (prompted != EEditorOutcome::None) ? prompted : outcome;
+
+			if (m_discardPrompt.Draw(userDir, message))
+			{
+				outcome = EEditorOutcome::FilesChanged;
+
+				if (m_discardKind == EDiscardKind::Changes)
+				{
+					Load(m_key, userDir);
+				}
+				else
+				{
+					m_isOpen = false;
+				}
+			}
 		}
 
 		ImGui::End();
@@ -231,6 +247,7 @@ void CGameEditor::Load(std::string_view key, std::filesystem::path const& userDi
 
 	m_key = key;
 	m_name = (pGame != nullptr) ? pGame->name : m_key;
+	m_source = Games::FindGameSource(userDir, key);
 	m_downloadedText = opened.downloaded;
 	m_savedAs = opened.downloaded.empty() ? std::format("Saved as {}", file) : std::format("Saved as your changes to the download, in {}", file);
 	m_unreadable = !opened.problem.empty() ? opened.problem : (form.has_value() ? std::string{} : std::format("games/{}/game.json: {}", key, form.error()));
@@ -253,6 +270,7 @@ void CGameEditor::LoadNew()
 {
 	m_key.clear();
 	m_name.clear();
+	m_source = Games::EGameSource::None;
 	m_downloadedText.clear();
 	m_savedAs.clear();
 	m_unreadable.clear();
@@ -412,6 +430,7 @@ bool CGameEditor::DrawFooter(std::filesystem::path const& userDir, std::string& 
 
 	bool const isCloseClicked{ ImGui::Button("Close") };
 
+	DrawFileButtons(userDir);
 	ImGui::SameLine(0.0f, ImGui::GetFontSize());
 	ImGui::AlignTextToFramePadding();
 	ImGui::TextDisabled("%s", m_savedAs.c_str());
@@ -425,16 +444,63 @@ bool CGameEditor::DrawFooter(std::filesystem::path const& userDir, std::string& 
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool CGameEditor::DrawUnreadable() const
+bool CGameEditor::DrawUnreadable(std::filesystem::path const& userDir)
 {
 	ImGui::PushTextWrapPos(0.0f);
 	ImGui::TextColored(GetThemeColors().error, "Lookout cannot show this description: %s", m_unreadable.c_str());
 	ImGui::Spacing();
-	ImGui::TextUnformatted("Fix the file in a text editor; the editor shows it again once it can be read.");
+	ImGui::TextUnformatted("Fix the file in a text editor, and the editor shows it once it can be read, or let it go.");
+
+	if (!m_note.empty())
+	{
+		ImGui::TextColored(GetThemeColors().amber, "%s", m_note.c_str());
+	}
+
 	ImGui::PopTextWrapPos();
 	ImGui::Spacing();
 
-	return ImGui::Button("Close");
+	bool const isCloseClicked{ ImGui::Button("Close") };
+
+	DrawFileButtons(userDir);
+	ImGui::SameLine();
+
+	if (ImGui::Button("Show folder"))
+	{
+		ShowFolder(userDir);
+	}
+
+	return isCloseClicked;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A downloaded game's changes can be reverted, a game of the user's own removed; each asks first.
+void CGameEditor::DrawFileButtons(std::filesystem::path const& userDir)
+{
+	bool const canRevert{ m_source == Games::EGameSource::Patched };
+	bool const canRemove{ m_source == Games::EGameSource::User };
+
+	if (canRevert || canRemove)
+	{
+		ImGui::SameLine(0.0f, ImGui::GetFontSize());
+
+		if (ImGui::Button(canRevert ? "Revert to downloaded…" : "Remove…"))
+		{
+			m_discardKind = canRevert ? EDiscardKind::Changes : EDiscardKind::Game;
+			m_discardPrompt.Open(m_discardKind, m_key, m_name, userDir);
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CGameEditor::ShowFolder(std::filesystem::path const& userDir)
+{
+	std::string const url{ Launch::ToFileUrl((userDir / "games" / m_key).string()) };
+
+	if (!SDL_OpenURL(url.c_str()))
+	{
+		gLog.Warning("Cannot show the folder of {}: {}", m_key, SDL_GetError());
+		m_note = std::format("Cannot show the folder: {}", SDL_GetError());
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////

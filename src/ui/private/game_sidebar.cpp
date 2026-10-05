@@ -8,7 +8,6 @@
 #include "theme_colors.hpp"
 #include "widgets.hpp"
 #include "browser/browser.hpp"
-#include "games/game_files.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <imgui.h>
@@ -96,39 +95,6 @@ void DragToReorder(Query::EGame game, SFrameIntents& intents)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// On the item drawn last. The data folder is read on a right-click, so a game with nothing to offer opens no empty
-// menu, and while the menu is open.
-void DrawGameMenu(Query::SGameDefinition const& game, std::filesystem::path const& userDir, SFrameIntents& intents)
-{
-	if (ImGui::IsMouseReleased(ImGuiMouseButton_Right) && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
-	{
-		Games::EGameSource const source{ Games::FindGameSource(userDir, game.key) };
-
-		if (source == Games::EGameSource::Patched || source == Games::EGameSource::User)
-		{
-			ImGui::OpenPopup("##game-menu");
-		}
-	}
-
-	if (ImGui::BeginPopup("##game-menu"))
-	{
-		Games::EGameSource const source{ Games::FindGameSource(userDir, game.key) };
-
-		if (source == Games::EGameSource::Patched && ImGui::MenuItem("Revert to downloaded…"))
-		{
-			intents.revertGame = game.game;
-		}
-
-		if (source == Games::EGameSource::User && ImGui::MenuItem("Remove…"))
-		{
-			intents.removeGame = game.game;
-		}
-
-		ImGui::EndPopup();
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
 // The selected card is a muted amber tint, so its amber name stands out on it.
 ImU32 GetCardFill(bool isSelected, bool isHovered, bool isActive)
 {
@@ -194,7 +160,6 @@ void DrawListedGame(Query::SGameDefinition const& game, Browser::CBrowser const&
 	}
 
 	DragToReorder(game.game, intents);
-	DrawGameMenu(game, userDir, intents);
 
 	bool const isHovered{ ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenOverlappedByItem) };
 
@@ -289,7 +254,6 @@ void DrawHiddenGame(Query::SGameDefinition const& game, std::filesystem::path co
 
 	ImGui::SetNextItemAllowOverlap();
 	ImGui::InvisibleButton("##row", ImVec2{ ImGui::GetContentRegionAvail().x, lineHeight });
-	DrawGameMenu(game, userDir, intents);
 	ImGui::SetCursorScreenPos(start);
 
 	float const gearX{ start.x + ImGui::GetContentRegionAvail().x - style.FramePadding.x - lineHeight };

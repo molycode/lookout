@@ -22,8 +22,6 @@ struct SFrameIntents final
 	std::optional<Query::EGame> openGameSettings;
 	// By key: a game whose description has a problem may not be in the catalog.
 	std::optional<std::string> editGame;
-	std::optional<Query::EGame> revertGame;
-	std::optional<Query::EGame> removeGame;
 	std::optional<Config::SServerFilter> filter;
 	std::optional<Config::SSortOrder> sort;
 	std::optional<uint32_t> autoRefreshSeconds;
