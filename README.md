@@ -3,7 +3,7 @@
 A native Linux game server browser. It lists the servers from each game's masters, filters and sorts them, shows
 who is playing, and joins with a double-click through the game's own launcher.
 
-![The Lookout window: the games in the sidebar, their servers in the list, and the selected server's players and rules](docs/screenshot.png)
+![The Lookout window: the games in the sidebar, OpenArena's servers in the list, and the selected server's players and rules](docs/screenshot.png)
 
 ## Games
 
@@ -16,6 +16,8 @@ download button above the game list (or `lookout --download`), into `~/.local/sh
 the game's updates. In the app, click the pencil on a game to edit its description, or click the gamepad above the game
 list to add one; Lookout checks it as you type and reloads the games whenever that folder changes.
 `lookout --check <folder>` checks a lookout-games folder before a pull request.
+
+![Download games on a first start: every game in lookout-games, ready to download](docs/download-games.png)
 
 ## Building
 
