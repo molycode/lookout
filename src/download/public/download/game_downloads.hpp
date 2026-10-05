@@ -45,6 +45,7 @@ public:
 	bool HasIndex() const;
 	std::span<SGameOffer const> GetOffers() const;
 	std::string_view GetIcon(std::string_view sha256) const;
+	std::span<std::string const> GetDownloadKeys() const;
 	// What went wrong in the last reading, download or removal, each naming its game or file.
 	std::span<std::string const> GetProblems() const;
 	size_t GetNumFetched() const;

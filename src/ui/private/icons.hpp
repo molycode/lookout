@@ -18,3 +18,5 @@
 #define LKT_ICON_GLOBE "\xef\x82\xac"
 #define LKT_ICON_GAMEPAD "\xef\x84\x9b"
 #define LKT_ICON_CHECK "\xef\x80\x8c"
+#define LKT_ICON_DOWNLOAD "\xef\x80\x99"
+#define LKT_ICON_CIRCLE_UP "\xef\x8d\x9b"

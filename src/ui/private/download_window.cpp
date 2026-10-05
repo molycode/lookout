@@ -1,23 +1,28 @@
 #include "download_window.hpp"
 #include "format_to.hpp"
+#include "icon_textures.hpp"
+#include "icons.hpp"
 #include "loggers.hpp"
 #include "theme.hpp"
 #include "theme_colors.hpp"
+#include "widgets.hpp"
 #include "download/lookout_games.hpp"
 #include <imgui.h>
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <utility>
 
 namespace Lkt::Ui
 {
 namespace
 {
-constexpr float WidthEm{ 44.0f };
-constexpr float HeightEm{ 24.0f };
-constexpr std::array<Download::EOfferState, 1> Missing{ Download::EOfferState::NotInstalled };
+constexpr float WidthEm{ 32.0f };
+constexpr float HeightEm{ 28.0f };
+constexpr float PromptWidthEm{ 22.0f };
+constexpr char const* RemoveAllPopupId{ "Remove all games###removeAll" };
 constexpr std::array<Download::EOfferState, 2> Downloadable{ Download::EOfferState::NotInstalled, Download::EOfferState::UpdateAvailable };
-constexpr std::array<Download::EOfferState, 1> Updatable{ Download::EOfferState::UpdateAvailable };
 constexpr std::array<Download::EOfferState, 3> Removable{ Download::EOfferState::Installed, Download::EOfferState::UpdateAvailable,
 	Download::EOfferState::Withdrawn };
 
@@ -60,12 +65,24 @@ bool Button(char const* pLabel, bool isEnabled, char const* pTooltip)
 
 	return isPressed;
 }
+
+//////////////////////////////////////////////////////////////////////////
+bool GameButton(char const* id, std::string_view glyph, std::string_view tooltip)
+{
+	bool const isPressed{ IconButton(id, glyph) };
+
+	ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
+
+	return isPressed;
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CDownloadWindow::Initialize(std::filesystem::path const& userDir, std::string_view version, std::function<void()> wake)
+void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, std::filesystem::path const& userDir, std::string_view version, std::function<void()> wake)
 {
-	m_isReady = !userDir.empty() && m_downloads.Initialize(userDir, Download::GetLookoutGamesSource(version), Download::EIndexIcons::Skip, std::move(wake));
+	m_pRenderer = pRenderer;
+	m_isReady = !userDir.empty()
+		&& m_downloads.Initialize(userDir, Download::GetLookoutGamesSource(version), Download::EIndexIcons::Fetch, std::move(wake));
 
 	if (!userDir.empty() && !m_isReady)
 	{
@@ -77,6 +94,13 @@ void CDownloadWindow::Initialize(std::filesystem::path const& userDir, std::stri
 void CDownloadWindow::Terminate()
 {
 	m_downloads.Terminate();
+
+	for (auto& [hash, levels] : m_icons)
+	{
+		DestroyIconLevels(levels);
+	}
+
+	m_icons.clear();
 	m_isReady = false;
 }
 
@@ -162,126 +186,192 @@ void CDownloadWindow::DrawStatus() const
 }
 
 //////////////////////////////////////////////////////////////////////////
+// A click is acted on after the list is drawn: a removal rebuilds the offers being drawn.
 void CDownloadWindow::DrawGames()
 {
-	ImGuiTableFlags const flags{ ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollY };
-	float const height{ -ImGui::GetFrameHeightWithSpacing() * 2.0f };
-	SThemeColors const& colors{ GetThemeColors() };
+	std::vector<std::string> toDownload{};
+	std::vector<std::string> toRemove{};
 
-	if (ImGui::BeginTable("##games", 2, flags, ImVec2{ 0.0f, height }))
+	if (ImGui::BeginChild("##games", ImVec2{ 0.0f, -ImGui::GetFrameHeightWithSpacing() }))
 	{
-		ImGui::TableSetupColumn("Game", ImGuiTableColumnFlags_WidthStretch);
-		ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed);
-		ImGui::TableSetupScrollFreeze(0, 1);
-		ImGui::TableHeadersRow();
-
 		for (Download::SGameOffer const& offer : m_downloads.GetOffers())
 		{
-			bool isSelected{ m_selected.contains(offer.key) };
-			bool const isAvailable{ offer.state != Download::EOfferState::NeedsNewerLookout };
-			std::string_view const state{ Describe(offer.state) };
+			DrawGame(offer, toDownload, toRemove);
+		}
+	}
 
-			ImGui::PushID(offer.key.c_str());
-			ImGui::TableNextRow();
-			ImGui::TableNextColumn();
-			ImGui::BeginDisabled(!isAvailable);
+	ImGui::EndChild();
 
-			if (ImGui::Checkbox("##select", &isSelected))
-			{
-				if (isSelected)
-				{
-					m_selected.insert(offer.key);
-				}
-				else
-				{
-					m_selected.erase(offer.key);
-				}
-			}
+	if (!toDownload.empty())
+	{
+		m_downloads.Download(toDownload);
+	}
 
-			ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-			ImGui::TextUnformatted(offer.name.data(), offer.name.data() + offer.name.size());
-			ImGui::EndDisabled();
-			ImGui::TableNextColumn();
-			ImGui::AlignTextToFramePadding();
-			ImGui::PushStyleColor(ImGuiCol_Text, (offer.state == Download::EOfferState::UpdateAvailable) ? colors.amber
-				: ((offer.state == Download::EOfferState::Installed) ? colors.text : colors.textDisabled));
-			ImGui::TextUnformatted(state.data(), state.data() + state.size());
-			ImGui::PopStyleColor();
-			ImGui::PopID();
+	if (!toRemove.empty())
+	{
+		m_downloads.Remove(toRemove);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A group, so the layout carries on below the card.
+void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<std::string>& toDownload, std::vector<std::string>& toRemove)
+{
+	SThemeColors const& colors{ GetThemeColors() };
+	ImGuiStyle const& style{ ImGui::GetStyle() };
+	Download::EOfferState const state{ offer.state };
+	bool const isDownloading{ std::ranges::contains(m_downloads.GetDownloadKeys(), offer.key) };
+	bool const canGet{ state == Download::EOfferState::NotInstalled };
+	bool const canUpdate{ state == Download::EOfferState::UpdateAvailable };
+	bool const canRemove{ std::ranges::contains(Removable, state) };
+	float const numButtons{ static_cast<float>(static_cast<int>(canGet) + static_cast<int>(canUpdate) + static_cast<int>(canRemove)) };
+	float const lineHeight{ ImGui::GetTextLineHeight() };
+	ImVec2 const padding{ style.FramePadding };
+	ImVec2 const start{ ImGui::GetCursorScreenPos() };
+	float const iconSize{ ImGui::GetTextLineHeightWithSpacing() + lineHeight };
+	ImVec2 const size{ ImGui::GetContentRegionAvail().x, padding.y * 2.0f + iconSize };
+	ImVec2 const icon{ start.x + padding.x, start.y + padding.y };
+	ImVec2 const text{ icon.x + iconSize + style.ItemInnerSpacing.x, icon.y };
+	float const buttonsX{ start.x + size.x - padding.x - numButtons * lineHeight - std::max(numButtons - 1.0f, 0.0f) * style.ItemInnerSpacing.x };
+	std::string_view const stateText{ isDownloading ? std::string_view{ "Downloading…" } : Describe(state) };
+	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
+	std::array<char, 128> buffer{};
+
+	ImGui::PushID(offer.key.c_str());
+	ImGui::BeginGroup();
+	ImGui::Dummy(size);
+	pDrawList->AddRectFilled(start, ImVec2{ start.x + size.x, start.y + size.y }, ImGui::GetColorU32(ImGuiCol_FrameBg), ImGui::GetFontSize() * CardRoundingEm);
+	DrawIcon(pDrawList, FindIcon(offer), icon, iconSize);
+	DrawEllipsised(offer.name, text, buttonsX - style.ItemInnerSpacing.x, colors.text);
+	DrawEllipsised(stateText, ImVec2{ text.x, text.y + ImGui::GetTextLineHeightWithSpacing() }, start.x + size.x - padding.x,
+		(isDownloading || canUpdate) ? colors.amber : colors.textDisabled);
+	ImGui::SetCursorScreenPos(ImVec2{ buttonsX, text.y });
+	ImGui::BeginDisabled(m_downloads.GetPhase() != Download::EDownloadPhase::Idle);
+
+	if (canGet && GameButton("##get", LKT_ICON_DOWNLOAD, FormatTo(buffer, "Download {}", offer.name)))
+	{
+		toDownload.emplace_back(offer.key);
+	}
+
+	if (canUpdate)
+	{
+		if (GameButton("##update", LKT_ICON_CIRCLE_UP, FormatTo(buffer, "Download the update of {}", offer.name)))
+		{
+			toDownload.emplace_back(offer.key);
 		}
 
-		ImGui::EndTable();
+		ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
 	}
+
+	if (canRemove && GameButton("##remove", LKT_ICON_TRASH, FormatTo(buffer, "Remove {}; your own changes to it stay", offer.name)))
+	{
+		toRemove.emplace_back(offer.key);
+	}
+
+	ImGui::EndDisabled();
+	ImGui::EndGroup();
+	ImGui::PopID();
 }
 
 //////////////////////////////////////////////////////////////////////////
-// The keys are collected only on a click, so drawing the buttons allocates nothing.
 void CDownloadWindow::DrawButtons()
 {
-	bool const canDownload{ m_downloads.GetPhase() == Download::EDownloadPhase::Idle && m_downloads.HasIndex() };
-	bool const canRemove{ m_downloads.GetPhase() == Download::EDownloadPhase::Idle };
+	bool const isIdle{ m_downloads.GetPhase() == Download::EDownloadPhase::Idle };
 
-	ImGui::Spacing();
-
-	if (Button("Download all", canDownload && HasAny(Downloadable, false), "Every game not installed or with an update"))
+	if (Button("Download all", CanDownload() && HasAny(Downloadable), "Every game not installed or with an update"))
 	{
-		StartDownload(Collect(Downloadable, false));
+		m_downloads.Download(Collect(Downloadable));
 	}
 
 	ImGui::SameLine();
 
-	if (Button("Download missing", canDownload && HasAny(Missing, false), "Every game not installed yet"))
+	if (Button("Remove all", isIdle && HasAny(Removable), "Every downloaded game; your own changes to them stay"))
 	{
-		StartDownload(Collect(Missing, false));
+		ImGui::OpenPopup(RemoveAllPopupId);
 	}
 
-	ImGui::SameLine();
+	DrawRemoveAllPrompt();
+}
 
-	if (Button("Download selected", canDownload && HasAny(Downloadable, true), "The ticked games not installed or with an update"))
+//////////////////////////////////////////////////////////////////////////
+void CDownloadWindow::DrawRemoveAllPrompt()
+{
+	ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2{ 0.5f, 0.5f });
+
+	if (ImGui::BeginPopupModal(RemoveAllPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
-		StartDownload(Collect(Downloadable, true));
-	}
+		ImGui::PushTextWrapPos(ImGui::GetFontSize() * PromptWidthEm);
+		ImGui::TextUnformatted("Remove every downloaded game? Your own changes to them stay, and each can be downloaded again.");
+		ImGui::PopTextWrapPos();
+		ImGui::Spacing();
 
-	ImGui::SameLine();
+		bool const isConfirmed{ ImGui::Button("Remove") };
 
-	if (Button("Update", canDownload && HasAny(Updatable, false), "Every installed game with an update"))
-	{
-		StartDownload(Collect(Updatable, false));
-	}
+		ImGui::SameLine();
 
-	ImGui::SameLine();
+		bool const shouldClose{ isConfirmed || ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape, false) };
 
-	if (Button("Remove selected", canRemove && HasAny(Removable, true), "The ticked games that are installed; your own changes to them stay"))
-	{
-		m_downloads.Remove(Collect(Removable, true));
-		m_selected.clear();
+		if (isConfirmed)
+		{
+			m_downloads.Remove(Collect(Removable));
+		}
+
+		if (shouldClose)
+		{
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CDownloadWindow::StartDownload(std::vector<std::string> const& keys)
+// Made into textures the first time it is drawn; one that cannot be is kept empty, so it is not tried every frame.
+std::span<SIconLevel const> CDownloadWindow::FindIcon(Download::SGameOffer const& offer)
 {
-	m_downloads.Download(keys);
-	m_selected.clear();
+	auto icon{ m_icons.find(offer.iconSha256) };
+
+	if (icon == m_icons.end() && !offer.iconSha256.empty())
+	{
+		std::string_view const png{ m_downloads.GetIcon(offer.iconSha256) };
+
+		if (!png.empty())
+		{
+			icon = m_icons.emplace(offer.iconSha256, LoadIconLevels(m_pRenderer, std::as_bytes(std::span{ png }))).first;
+
+			if (icon->second.empty())
+			{
+				gLog.Warning("Cannot load the icon of {}, so a stand-in shows instead: {}", offer.name, SDL_GetError());
+			}
+		}
+	}
+
+	return (icon != m_icons.end()) ? std::span<SIconLevel const>{ icon->second } : std::span<SIconLevel const>{};
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool CDownloadWindow::HasAny(std::span<Download::EOfferState const> states, bool isSelectedOnly) const
+bool CDownloadWindow::CanDownload() const
 {
-	return std::ranges::any_of(m_downloads.GetOffers(), [this, states, isSelectedOnly](Download::SGameOffer const& offer)
+	return m_downloads.GetPhase() == Download::EDownloadPhase::Idle && m_downloads.HasIndex();
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool CDownloadWindow::HasAny(std::span<Download::EOfferState const> states) const
+{
+	return std::ranges::any_of(m_downloads.GetOffers(), [states](Download::SGameOffer const& offer)
 	{
-		return std::ranges::contains(states, offer.state) && (!isSelectedOnly || m_selected.contains(offer.key));
+		return std::ranges::contains(states, offer.state);
 	});
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<std::string> CDownloadWindow::Collect(std::span<Download::EOfferState const> states, bool isSelectedOnly) const
+std::vector<std::string> CDownloadWindow::Collect(std::span<Download::EOfferState const> states) const
 {
 	std::vector<std::string> keys{};
 
 	for (Download::SGameOffer const& offer : m_downloads.GetOffers())
 	{
-		if (std::ranges::contains(states, offer.state) && (!isSelectedOnly || m_selected.contains(offer.key)))
+		if (std::ranges::contains(states, offer.state))
 		{
 			keys.emplace_back(offer.key);
 		}

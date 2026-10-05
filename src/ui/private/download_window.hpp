@@ -1,14 +1,17 @@
 #pragma once
 
+#include "icon_level.hpp"
 #include "download/game_downloads.hpp"
 #include <tge/non_copyable.hpp>
 #include <filesystem>
 #include <functional>
-#include <set>
+#include <map>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
+
+struct SDL_Renderer;
 
 namespace Lkt::Ui
 {
@@ -22,7 +25,7 @@ public:
 	~CDownloadWindow() = default;
 
 	// Without a data folder there is nowhere to download to, and it stays closed.
-	void Initialize(std::filesystem::path const& userDir, std::string_view version, std::function<void()> wake);
+	void Initialize(SDL_Renderer* pRenderer, std::filesystem::path const& userDir, std::string_view version, std::function<void()> wake);
 	void Terminate();
 
 	void Open();
@@ -35,13 +38,17 @@ private:
 
 	void DrawStatus() const;
 	void DrawGames();
+	void DrawGame(Download::SGameOffer const& offer, std::vector<std::string>& toDownload, std::vector<std::string>& toRemove);
 	void DrawButtons();
-	void StartDownload(std::vector<std::string> const& keys);
-	bool HasAny(std::span<Download::EOfferState const> states, bool isSelectedOnly) const;
-	std::vector<std::string> Collect(std::span<Download::EOfferState const> states, bool isSelectedOnly) const;
+	void DrawRemoveAllPrompt();
+	std::span<SIconLevel const> FindIcon(Download::SGameOffer const& offer);
+	bool CanDownload() const;
+	bool HasAny(std::span<Download::EOfferState const> states) const;
+	std::vector<std::string> Collect(std::span<Download::EOfferState const> states) const;
 
 	Download::CGameDownloads m_downloads;
-	std::set<std::string> m_selected;
+	std::map<std::string, std::vector<SIconLevel>, std::less<>> m_icons;
+	SDL_Renderer* m_pRenderer{ nullptr };
 	bool m_isReady{ false };
 	bool m_isOpen{ false };
 	bool m_shouldFocus{ false };

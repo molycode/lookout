@@ -93,7 +93,7 @@ void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutI
 {
 	m_userDir = userDir;
 	m_requestReload = std::move(requestReload);
-	m_downloadWindow.Initialize(userDir, about.version, std::move(wake));
+	m_downloadWindow.Initialize(SDL_GetRenderer(pWindow), userDir, about.version, std::move(wake));
 	m_gameSettings.Initialize(pWindow);
 	m_aboutDialog.Initialize(pWindow, about);
 	m_detailsEm = static_cast<float>(detailsWidth) / BaseFontSize;

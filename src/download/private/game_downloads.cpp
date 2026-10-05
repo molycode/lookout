@@ -256,6 +256,12 @@ std::string_view CGameDownloads::GetIcon(std::string_view sha256) const
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::span<std::string const> CGameDownloads::GetDownloadKeys() const
+{
+	return m_downloadKeys;
+}
+
+//////////////////////////////////////////////////////////////////////////
 std::span<std::string const> CGameDownloads::GetProblems() const
 {
 	return m_problems;
