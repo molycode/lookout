@@ -343,10 +343,11 @@ bool DrawTextList(SGameField const& field, SGameFormNode& node, SGameFormNode co
 
 	bool isEdited{ ImGui::InputTextMultiline("##value", &text, ImVec2{ -GetButtonsWidth(), height }) };
 
+	// Emptied by the user, an optional list leaves the description; only one the file wrote as [] keeps it.
 	if (isEdited)
 	{
 		node.texts = SplitLines(text);
-		node.isPresent = true;
+		node.isPresent = !node.texts.empty();
 	}
 
 	DrawHelp(field.description, field.kind, {});
@@ -459,7 +460,7 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 	if (removed.has_value())
 	{
 		node.children.erase(node.children.begin() + static_cast<std::ptrdiff_t>(*removed));
-		node.isPresent = true;
+		node.isPresent = !node.children.empty();
 		isEdited = true;
 	}
 
