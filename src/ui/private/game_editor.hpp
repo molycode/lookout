@@ -1,14 +1,17 @@
 #pragma once
 
-#include "new_game.hpp"
+#include "editor_outcome.hpp"
+#include "editor_pending.hpp"
+#include "games/field_problem.hpp"
+#include "games/game_form_node.hpp"
 #include <tge/non_copyable.hpp>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 
 namespace Lkt::Ui
 {
-// A game description as JSON text, checked as it is typed, beside a reference of what it may hold.
 class CGameEditor final : private Tge::SNoCopyNoMove
 {
 public:
@@ -16,31 +19,48 @@ public:
 	CGameEditor() = default;
 	~CGameEditor() = default;
 
-	// A key the catalog lacks opens as written, or as a new game when it has no description at all.
 	void Open(std::string_view key, std::filesystem::path const& userDir);
-	void OpenNew(SNewGame game, std::filesystem::path const& userDir);
-	// True once the description was saved.
-	bool Draw(std::filesystem::path const& userDir, std::string& message);
+	void OpenNew();
+	void AskToQuit();
+	bool HasUnsavedChanges() const;
+	void OnCatalogChanged(std::filesystem::path const& userDir);
+	EEditorOutcome Draw(std::filesystem::path const& userDir, std::string& message);
 
 private:
 
-	void Opened(std::filesystem::path const& userDir);
+	void Load(std::string_view key, std::filesystem::path const& userDir);
+	void LoadNew();
+	void Prefill(std::string_view key, std::filesystem::path const& userDir);
+	void Ask(EEditorPending pending, std::string_view key);
 	void Check();
-	void DrawStatus(float width) const;
+	void DrawNewGameHeader(std::filesystem::path const& userDir);
+	bool DrawFooter(std::filesystem::path const& userDir, std::string& message, EEditorOutcome& outcome);
+	bool DrawUnreadable() const;
+	EEditorOutcome DrawDiscardPrompt(std::filesystem::path const& userDir);
 	bool Save(std::filesystem::path const& userDir, std::string& message);
+	std::string FindKeyProblem(std::filesystem::path const& userDir) const;
 
 	std::string m_key;
 	std::string m_name;
-	std::string m_text;
-	std::string m_openedText;
-	std::string m_downloaded;
-	std::string m_note;
-	std::string m_problem;
-	std::string m_saveError;
+	std::string m_downloadedText;
 	std::string m_savedAs;
+	std::string m_unreadable;
+	std::string m_keyProblem;
+	std::string m_pendingKey;
+	std::string m_prefilledFrom;
+	std::string m_saveError;
+	std::string m_note;
+	std::string m_scriptSignature;
+	Games::SGameFormNode m_form;
+	Games::SGameFormNode m_openedForm;
+	std::optional<Games::SGameFormNode> m_downloadedForm;
+	std::optional<Games::SFieldProblem> m_problem;
+	std::optional<Games::SFieldProblem> m_scriptProblem;
 	float m_footerHeight{ 0.0f };
-	bool m_isDownloaded{ false };
+	EEditorPending m_pending{ EEditorPending::None };
 	bool m_isNew{ false };
-	bool m_shouldOpen{ false };
+	bool m_isOpen{ false };
+	bool m_shouldFocus{ false };
+	bool m_shouldAsk{ false };
 };
 } // namespace Lkt::Ui

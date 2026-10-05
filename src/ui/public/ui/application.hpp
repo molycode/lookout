@@ -64,6 +64,7 @@ private:
 	bool m_hasVsync{ false };
 	bool m_isImGuiInitialized{ false };
 	bool m_hasReportedRenderFailure{ false };
+	bool m_isQuitRequested{ false };
 	std::chrono::steady_clock::time_point m_activeUntil{};
 	std::atomic<bool> m_isReloadRequested{ false };
 };

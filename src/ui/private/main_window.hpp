@@ -1,7 +1,6 @@
 #pragma once
 
 #include "about_dialog.hpp"
-#include "add_game_prompt.hpp"
 #include "add_server_prompt.hpp"
 #include "discard_prompt.hpp"
 #include "download_window.hpp"
@@ -51,6 +50,7 @@ public:
 	void Terminate();
 	void Draw(Browser::CBrowser& browser);
 	void OnCatalogChanged(std::span<std::string const> oldKeys);
+	void RequestQuit();
 	uint32_t GetDetailsWidth() const;
 
 private:
@@ -71,7 +71,6 @@ private:
 	CAddServerPrompt m_addServerPrompt;
 	CAboutDialog m_aboutDialog;
 	CGameSettingsPopup m_gameSettings;
-	CAddGamePrompt m_addGamePrompt;
 	CGameEditor m_gameEditor;
 	CDiscardPrompt m_discardPrompt;
 	CDownloadWindow m_downloadWindow;
@@ -85,6 +84,7 @@ private:
 	bool m_isNarrow{ false };
 	bool m_isDetailsShown{ false };
 	bool m_hasStarted{ false };
+	bool m_isQuitRequested{ false };
 };
 } // namespace Ui
 } // namespace Lkt

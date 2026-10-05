@@ -25,5 +25,4 @@ std::expected<void, std::string> RevertGame(std::filesystem::path const& userDir
 // Removes a game of the user's own with everything in its folder.
 std::expected<void, std::string> RemoveGame(std::filesystem::path const& userDir, std::string_view key);
 
-std::string_view GetNewGameText();
 } // namespace Lkt::Games

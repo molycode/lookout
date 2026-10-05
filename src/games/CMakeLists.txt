@@ -17,4 +17,3 @@ target_link_libraries(LktGames
 		Tge::Logging
 )
 
-LktEmbedFile(LktGames NewGame ${PROJECT_SOURCE_DIR}/assets/new-game.json)

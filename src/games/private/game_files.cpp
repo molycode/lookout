@@ -1,6 +1,4 @@
 #include "games/game_files.hpp"
-#include "embedded_new_game.hpp"
-#include "embedded_text.hpp"
 #include "merge_patch.hpp"
 #include "user_file_size.hpp"
 #include "json/files.hpp"
@@ -240,11 +238,5 @@ std::expected<void, std::string> RemoveGame(std::filesystem::path const& userDir
 	}
 
 	return result;
-}
-
-//////////////////////////////////////////////////////////////////////////
-std::string_view GetNewGameText()
-{
-	return Embedded::AsText(Embedded::NewGame);
 }
 } // namespace Lkt::Games

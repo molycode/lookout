@@ -21,6 +21,7 @@
 #include <cmath>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Lkt::Ui
@@ -146,6 +147,12 @@ bool CApplication::Initialize(SAboutInfo const& about, Config::SWindowSettings c
 
 	bool initialized{ false };
 
+	// Closing the window is asked of the main window, which may keep it open; SDL would quit behind its back.
+	if (!SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0"))
+	{
+		gLog.Warning("Cannot keep SDL from quitting when the window closes: {}", SDL_GetError());
+	}
+
 	if (SDL_Init(SDL_INIT_VIDEO))
 	{
 		m_wakeEventType = SDL_RegisterEvents(1);
@@ -225,6 +232,11 @@ void CApplication::Run(Browser::CBrowser& browser, std::function<void()> const& 
 		{
 			ProcessEvent(event);
 			hasEvent = SDL_PollEvent(&event);
+		}
+
+		if (std::exchange(m_isQuitRequested, false))
+		{
+			mainWindow.RequestQuit();
 		}
 
 		// No one sees the list of a minimised, hidden or suspended window; an overdue refresh runs once it shows again.
@@ -438,11 +450,9 @@ void CApplication::ProcessEvent(SDL_Event const& event)
 			Tge::gRuntime->Quit();
 			break;
 
+		// The main window asks first when the game editor holds unsaved changes.
 		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-			if (event.window.windowID == SDL_GetWindowID(m_pWindow))
-			{
-				Tge::gRuntime->Quit();
-			}
+			m_isQuitRequested = m_isQuitRequested || event.window.windowID == SDL_GetWindowID(m_pWindow);
 			break;
 
 		case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:

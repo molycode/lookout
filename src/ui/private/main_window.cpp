@@ -117,6 +117,7 @@ void CMainWindow::OnCatalogChanged(std::span<std::string const> oldKeys)
 
 	m_selectedKeys = std::move(selectedKeys);
 	m_toolbar.OnCatalogChanged();
+	m_gameEditor.OnCatalogChanged(m_userDir);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -126,11 +127,19 @@ void CMainWindow::Terminate()
 }
 
 //////////////////////////////////////////////////////////////////////////
+void CMainWindow::RequestQuit()
+{
+	m_isQuitRequested = true;
+}
+
+//////////////////////////////////////////////////////////////////////////
 // A first start with no games opens the download window by itself.
 void CMainWindow::Draw(Browser::CBrowser& browser)
 {
 	SFrameIntents intents{};
 	bool const hasNewDownloads{ m_downloadWindow.Update() };
+
+	intents.quit = std::exchange(m_isQuitRequested, false);
 
 	if (!m_hasStarted)
 	{
@@ -348,7 +357,7 @@ void CMainWindow::Apply(Browser::CBrowser& browser, SFrameIntents const& intents
 
 	if (intents.openAddGame)
 	{
-		m_addGamePrompt.Open();
+		m_gameEditor.OpenNew();
 	}
 
 	if (intents.editGame.has_value())
@@ -370,7 +379,11 @@ void CMainWindow::Apply(Browser::CBrowser& browser, SFrameIntents const& intents
 		m_discardPrompt.Open(EDiscardKind::Game, game.key, game.name, m_userDir);
 	}
 
-	if (intents.quit)
+	if (intents.quit && m_gameEditor.HasUnsavedChanges())
+	{
+		m_gameEditor.AskToQuit();
+	}
+	else if (intents.quit)
 	{
 		Tge::gRuntime->Quit();
 	}
@@ -395,19 +408,17 @@ void CMainWindow::SetGameListed(Browser::CBrowser& browser, Query::EGame game, b
 // What they change in the data folder is read again at the end of a frame with no popup open.
 void CMainWindow::DrawGamePrompts()
 {
-	std::optional<SNewGame> newGame{ m_addGamePrompt.Draw(m_userDir) };
-
-	if (newGame.has_value())
-	{
-		m_gameEditor.OpenNew(std::move(*newGame), m_userDir);
-	}
-
-	bool const isSaved{ m_gameEditor.Draw(m_userDir, m_message) };
+	EEditorOutcome const edited{ m_gameEditor.Draw(m_userDir, m_message) };
 	bool const isDiscarded{ m_discardPrompt.Draw(m_userDir, m_message) };
 
-	if (isSaved || isDiscarded)
+	if (edited == EEditorOutcome::FilesChanged || isDiscarded)
 	{
 		m_requestReload();
+	}
+
+	if (edited == EEditorOutcome::Quit)
+	{
+		Tge::gRuntime->Quit();
 	}
 }
 

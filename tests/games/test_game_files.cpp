@@ -344,15 +344,5 @@ TEST(GameFiles, CheckNamesAnUnknownProtocol)
 	EXPECT_EQ(checked.error().path, "protocol");
 	EXPECT_TRUE(checked.error().reason.starts_with("'mine' is not one of ")) << checked.error().reason;
 }
-
-//////////////////////////////////////////////////////////////////////////
-TEST(GameFiles, NewGameAsksForItsNameFirst)
-{
-	std::expected<void, SFieldProblem> const checked{ CheckGameText(GetNewGameText(), Query::GetProtocolCatalog()) };
-
-	ASSERT_FALSE(checked.has_value());
-	EXPECT_EQ(checked.error().path, "name");
-	EXPECT_EQ(checked.error().reason, "must be a non-empty string without NUL");
-}
 } // namespace
 } // namespace Lkt::Games
