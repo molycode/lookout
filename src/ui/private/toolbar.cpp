@@ -328,24 +328,7 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 		intents.filter = changed;
 	}
 
-	if (hasSearch)
-	{
-		DrawClearButton(filter, intents);
-	}
-
-	ImGui::EndDisabled();
-}
-
-//////////////////////////////////////////////////////////////////////////
-// Its background reaches back under the field's rounded right corners, so the two read as one frame.
-void CToolbar::DrawClearButton(Config::SServerFilter const& filter, SFrameIntents& intents)
-{
-	float const size{ ImGui::GetFrameHeight() };
-	float const rounding{ ImGui::GetStyle().FrameRounding };
-
-	ImGui::SameLine(0.0f, 0.0f);
-
-	if (ImGui::InvisibleButton("##clear-search", ImVec2{ size, size }))
+	if (hasSearch && ClearSearchButton())
 	{
 		Config::SServerFilter changed{ filter };
 
@@ -355,17 +338,9 @@ void CToolbar::DrawClearButton(Config::SServerFilter const& filter, SFrameIntent
 		m_shouldFocusSearch = true;
 	}
 
-	SThemeColors const& colors{ GetThemeColors() };
-	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
-	ImVec2 const min{ ImGui::GetItemRectMin() };
-	ImVec2 const max{ ImGui::GetItemRectMax() };
-	ImVec2 const glyphSize{ ImGui::CalcTextSize(LKT_ICON_XMARK) };
-
-	pDrawList->AddRectFilled(ImVec2{ min.x - rounding, min.y }, max, ImGui::GetColorU32(ImGuiCol_FrameBg), rounding, ImDrawFlags_RoundCornersRight);
-	pDrawList->AddText(ImVec2{ min.x + (size - glyphSize.x) * 0.5f, min.y + (size - glyphSize.y) * 0.5f },
-		ImGui::GetColorU32(ImGui::IsItemHovered() ? colors.text : colors.textDisabled), LKT_ICON_XMARK);
-	ImGui::SetItemTooltip("Clear the search");
+	ImGui::EndDisabled();
 }
+
 //////////////////////////////////////////////////////////////////////////
 // The selected game may keep its number and yet be another, so its search is read again.
 void CToolbar::OnCatalogChanged()

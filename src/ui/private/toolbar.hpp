@@ -32,7 +32,6 @@ public:
 
 private:
 
-	void DrawClearButton(Config::SServerFilter const& filter, SFrameIntents& intents);
 
 	std::string m_search;
 	Query::EGame m_game{ Query::NoGame };
