@@ -320,6 +320,66 @@ TEST(GameJson, RgbCodesTakeNoPalette)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(GameJson, HexCodesAreRead)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7",
+		"colourCodes": { "escape": "^", "codes": "alphanumeric", "palette": [ "#000000" ], "hexCodes": [ "xRGB", "##RRGGBB" ] } })json");
+
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	ASSERT_EQ(read->text.hexCodes.size(), 2u);
+	EXPECT_EQ(read->text.hexCodes[0], (Query::SHexColorCode{ "x", 3 }));
+	EXPECT_EQ(read->text.hexCodes[1], (Query::SHexColorCode{ "##", 6 }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, HexCodeMustEndInItsDigits)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7",
+		"colourCodes": { "escape": "^", "codes": "alphanumeric", "palette": [ "#000000" ], "hexCodes": [ "xRGB", "xRG" ] } })json");
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.hexCodes[1]:"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, HexCodeNeedsAPrefix)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7",
+		"colourCodes": { "escape": "^", "codes": "alphanumeric", "palette": [ "#000000" ], "hexCodes": [ "RGB" ] } })json");
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.hexCodes[0]:"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, HexCodePrefixCannotHoldTheEscape)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7",
+		"colourCodes": { "escape": "^", "codes": "alphanumeric", "palette": [ "#000000" ], "hexCodes": [ "^RGB" ] } })json");
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.hexCodes[0]:"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, RgbCodesTakeNoHexCodes)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["text"] = JsonValue::parse(R"json({ "encoding": "ascii7",
+		"colourCodes": { "escape": "\u001b", "codes": "rgb", "hexCodes": [ "xRGB" ] } })json");
+
+	EXPECT_TRUE(ReadProblem(game).starts_with("text.colourCodes.hexCodes:"));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(GameJson, EscapeMustBeOneCharacter)
 {
 	JsonValue game = MakeMinimalGame();

@@ -23,6 +23,7 @@ constexpr bool IgnoreComments{ false };
 constexpr std::string_view CommentPrefix{ "//" };
 constexpr std::string_view ListSuffix{ "[]" };
 constexpr std::string_view PaletteField{ "palette" };
+constexpr std::string_view HexCodesField{ "hexCodes" };
 constexpr std::string_view CodesField{ "codes" };
 constexpr std::string_view RgbCodes{ "rgb" };
 constexpr int HexBase{ 16 };
@@ -392,12 +393,12 @@ bool HasText(SGameFormNode const& node)
 JsonValue WriteFields(SGameFormNode const& node, std::string_view schemaParent);
 
 //////////////////////////////////////////////////////////////////////////
-// Rgb codes carry their colour, so a palette kept from other codes is not written for them.
-bool IsPaletteUnused(SGameField const& field, SGameFormNode const& siblings)
+// Rgb codes carry their colour, so a palette or hex codes kept from other codes are not written for them.
+bool IsUnusedByRgbCodes(SGameField const& field, SGameFormNode const& siblings)
 {
 	SGameFormNode const* const pCodes{ FindFormField(siblings, CodesField) };
 
-	return field.name == PaletteField && pCodes != nullptr && pCodes->text == RgbCodes;
+	return (field.name == PaletteField || field.name == HexCodesField) && pCodes != nullptr && pCodes->text == RgbCodes;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -434,7 +435,7 @@ std::optional<JsonValue> WriteField(SGameFormNode const& node, SGameField const&
 
 			break;
 		case EGameFieldKind::TextList:
-			if ((field.isRequired || node.isPresent || !node.texts.empty()) && !IsPaletteUnused(field, siblings))
+			if ((field.isRequired || node.isPresent || !node.texts.empty()) && !IsUnusedByRgbCodes(field, siblings))
 			{
 				JsonValue list = JsonValue::array();
 

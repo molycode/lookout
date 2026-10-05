@@ -39,6 +39,7 @@ constexpr char const* RequiredHint{ "required" };
 constexpr char const* OptionalHint{ "optional" };
 constexpr std::string_view ListSuffix{ "[]" };
 constexpr std::string_view PaletteField{ "palette" };
+constexpr std::string_view HexCodesField{ "hexCodes" };
 constexpr std::string_view CodesField{ "codes" };
 constexpr std::string_view RgbCodes{ "rgb" };
 constexpr std::string_view ProtocolField{ "protocol" };
@@ -599,7 +600,7 @@ bool DrawField(SGameField const& field, SGameFormNode& parent, SGameFormNode con
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Rgb codes carry their colour, so the palette is hidden for them; it stays in the form, unwritten.
+// Rgb codes carry their colour, so the palette and hex codes are hidden for them; they stay in the form, unwritten.
 bool DrawFields(std::string_view schemaParent, SGameFormNode& group, SGameFormNode const* pBaseGroup, std::string_view path, SFieldProblem const* pProblem)
 {
 	SGameFormNode const* const pCodes{ Games::FindFormField(group, CodesField) };
@@ -608,7 +609,7 @@ bool DrawFields(std::string_view schemaParent, SGameFormNode& group, SGameFormNo
 
 	for (SGameField const& field : Games::GetGameFields())
 	{
-		if (field.parent == schemaParent && !(isRgb && field.name == PaletteField))
+		if (field.parent == schemaParent && !(isRgb && (field.name == PaletteField || field.name == HexCodesField)))
 		{
 			isEdited = DrawField(field, group, pBaseGroup, path, pProblem) || isEdited;
 		}

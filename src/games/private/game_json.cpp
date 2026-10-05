@@ -38,7 +38,7 @@ constexpr std::array<std::string_view, 3> ColourCodeNames{ "alphanumeric", "prin
 
 using enum EGameFieldKind;
 
-constexpr std::array<SGameField, 40> Fields{ {
+constexpr std::array<SGameField, 41> Fields{ {
 	{ "", "format", "Format", Version, true, {}, "The version of this format: 1." },
 	{ "", "name", "Name", Text, true, {}, "The game's name in the game list." },
 	{ "", "protocol", "Protocol", Protocol, true, {}, "The protocol script that queries the game's masters and servers, by name." },
@@ -75,6 +75,9 @@ constexpr std::array<SGameField, 40> Fields{ {
 		"or rgb (three bytes of red, green and blue)." },
 	{ "text.colourCodes", "palette", "Palette", TextList, true, {},
 		"The colours the codes pick, each \"#rrggbb\", a power of two of them up to 256; not for rgb." },
+	{ "text.colourCodes", "hexCodes", "Hex codes", TextList, false, {},
+		"Optional: codes that carry their colour in hex, each what follows the escape, then RGB or RRGGBB, such as "
+		"\"xRGB\" or \"#RRGGBB\"; tried before the palette, not for rgb." },
 	{ "", "join", "Joining", Group, true, {}, "The arguments the game is started with to join a server." },
 	{ "join", "arguments", "Arguments", TextList, true, {}, "To join a server; {address} is its address." },
 	{ "join", "passwordArguments", "Arguments with a password", TextList, true, {},
@@ -529,6 +532,34 @@ void ReadPalette(JsonValue const& codes, std::vector<Tge::SColor>& palette, SFie
 }
 
 //////////////////////////////////////////////////////////////////////////
+void ReadHexCodes(JsonValue const& json, char escape, std::vector<Query::SHexColorCode>& hexCodes, SFieldProblem& problem)
+{
+	constexpr std::string_view Path{ "text.colourCodes.hexCodes" };
+	constexpr std::string_view ShortDigits{ "RGB" };
+	constexpr std::string_view LongDigits{ "RRGGBB" };
+	std::vector<std::string> forms{};
+
+	ReadStrings(json, Path, forms, problem);
+
+	for (size_t index{ 0 }; index < forms.size(); ++index)
+	{
+		std::string_view const form{ forms[index] };
+		size_t const numDigits{ form.ends_with(LongDigits) ? LongDigits.size() : (form.ends_with(ShortDigits) ? ShortDigits.size() : 0) };
+		std::string_view const prefix{ form.substr(0, form.size() - numDigits) };
+		bool const isPrintable{ std::ranges::all_of(prefix, [escape](char c) { return c > ' ' && c < '\x7F' && c != escape; }) };
+
+		if (numDigits != 0 && !prefix.empty() && isPrintable)
+		{
+			hexCodes.emplace_back(std::string{ prefix }, static_cast<uint8_t>(numDigits));
+		}
+		else
+		{
+			Fail(problem, std::format("{}[{}]", Path, index), "must be printable characters other than the escape, then RGB or RRGGBB");
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 void ReadColourCodes(JsonValue const& text, Query::STextStyle& style, SFieldProblem& problem)
 {
 	constexpr std::string_view Path{ "text.colourCodes" };
@@ -563,6 +594,17 @@ void ReadColourCodes(JsonValue const& text, Query::STextStyle& style, SFieldProb
 		else if (style.codes == Query::EColorCodes::Alphanumeric || style.codes == Query::EColorCodes::Printable)
 		{
 			ReadPalette(*it, style.palette, problem);
+		}
+
+		JsonValue::const_iterator const hexCodes{ it->find("hexCodes") };
+
+		if (style.codes == Query::EColorCodes::Rgb && hexCodes != it->cend())
+		{
+			Fail(problem, JoinPath(Path, "hexCodes"), "is not used by rgb codes");
+		}
+		else if (hexCodes != it->cend())
+		{
+			ReadHexCodes(*hexCodes, style.escape, style.hexCodes, problem);
 		}
 	}
 }

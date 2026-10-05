@@ -1,6 +1,7 @@
 #pragma once
 
 #include "query/color_codes.hpp"
+#include "query/hex_color_code.hpp"
 #include "query/text_encoding.hpp"
 #include <tge/color.hpp>
 #include <vector>
@@ -14,6 +15,7 @@ struct STextStyle final
 	EColorCodes codes{ EColorCodes::None };
 	char escape{ '\0' };
 	std::vector<Tge::SColor> palette;
+	std::vector<SHexColorCode> hexCodes;
 
 	bool operator==(STextStyle const&) const = default;
 };

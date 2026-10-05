@@ -175,6 +175,16 @@ TEST(GameForm, RgbCodesWriteNoPalette)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(GameForm, RgbCodesWriteNoHexCodes)
+{
+	SGameFormNode form{ ReadForm(ReadDownloaded("ut2004")) };
+
+	GetFormField(GetFormField(GetFormField(form, "text"), "colourCodes"), "hexCodes").texts.emplace_back("xRGB");
+
+	EXPECT_FALSE(JsonValue::parse(WriteGameForm(form))["text"]["colourCodes"].contains("hexCodes"));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(GameForm, ClearedNotesWriteNoComments)
 {
 	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };

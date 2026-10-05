@@ -36,6 +36,16 @@ STextStyle MakeRgbStyle()
 }
 
 //////////////////////////////////////////////////////////////////////////
+STextStyle MakeHexStyle()
+{
+	STextStyle style{ Quake3Style() };
+
+	style.hexCodes = { SHexColorCode{ "x", 3 }, SHexColorCode{ "#", 6 } };
+
+	return style;
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool IsColor(STextRun const& run, uint8_t r, uint8_t g, uint8_t b)
 {
 	return run.hasColor && run.color.r == r && run.color.g == g && run.color.b == b;
@@ -190,6 +200,37 @@ TEST(StyledText, RgbCodeCarriesItsColour)
 TEST(StyledText, CutRgbCodeIsDropped)
 {
 	EXPECT_EQ(DecodeText(MakeRgbStyle(), "ab\x1B\x01").plain, "ab");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(StyledText, HexCodeCarriesItsColour)
+{
+	SStyledText const text{ DecodeText(MakeHexStyle(), "^x1dFName") };
+
+	ASSERT_EQ(text.runs.size(), 1u);
+	EXPECT_EQ(text.runs[0].text, "Name");
+	EXPECT_TRUE(IsColor(text.runs[0], 0x11, 0xDD, 0xFF));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(StyledText, LongHexCodeCarriesItsColour)
+{
+	SStyledText const text{ DecodeText(MakeHexStyle(), "^#33a0FfName") };
+
+	ASSERT_EQ(text.runs.size(), 1u);
+	EXPECT_TRUE(IsColor(text.runs[0], 0x33, 0xA0, 0xFF));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(StyledText, CutHexCodeIsText)
+{
+	EXPECT_EQ(DecodeText(MakeHexStyle(), "^#33a").plain, "^#33a");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(StyledText, HexCodeWithoutHexDigitsFallsBackToThePalette)
+{
+	EXPECT_EQ(DecodeText(MakeHexStyle(), "^xyz").plain, "yz");
 }
 
 //////////////////////////////////////////////////////////////////////////
