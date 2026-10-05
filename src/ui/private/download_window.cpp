@@ -65,7 +65,7 @@ bool Button(char const* pLabel, bool isEnabled, char const* pTooltip)
 //////////////////////////////////////////////////////////////////////////
 void CDownloadWindow::Initialize(std::filesystem::path const& userDir, std::string_view version, std::function<void()> wake)
 {
-	m_isReady = !userDir.empty() && m_downloads.Initialize(userDir, Download::GetLookoutGamesSource(version), std::move(wake));
+	m_isReady = !userDir.empty() && m_downloads.Initialize(userDir, Download::GetLookoutGamesSource(version), Download::EIndexIcons::Skip, std::move(wake));
 
 	if (!userDir.empty() && !m_isReady)
 	{

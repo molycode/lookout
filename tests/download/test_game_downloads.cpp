@@ -117,7 +117,7 @@ protected:
 		m_server.SetReply("/repo/main/index.json", Fixtures::SHttpsReply{ .body = index.dump() });
 	}
 
-	void Start()
+	void Start(EIndexIcons icons = EIndexIcons::Skip)
 	{
 		SDownloadSource source{};
 
@@ -127,7 +127,7 @@ protected:
 		source.origin.caFile = (std::filesystem::path{ LKT_FIXTURES_DIR } / "tls" / "ca.pem").string();
 		source.origin.address = Query::SServerAddress{ Loopback, m_server.GetPort() };
 		source.repository = "/repo";
-		ASSERT_TRUE(m_downloads.Initialize(m_dir, std::move(source), [this]()
+		ASSERT_TRUE(m_downloads.Initialize(m_dir, std::move(source), icons, [this]()
 		{
 			{
 				std::lock_guard const lock{ m_mutex };
@@ -348,6 +348,66 @@ TEST_F(CGameDownloadsTest, KeyThatIsNoFolderNameRefusesTheIndex)
 	ASSERT_EQ(m_downloads.GetProblems().size(), 1u);
 	EXPECT_EQ(m_downloads.GetProblems().front(), "index.json: games.../kingpin: is not a key: small letters, digits, '-' and '_'");
 	EXPECT_TRUE(m_downloads.GetOffers().empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The second reading is answered after the icon, so the icon has been taken by then.
+TEST_F(CGameDownloadsTest, IconOfAnOfferedGameIsFetched)
+{
+	Start(EIndexIcons::Fetch);
+	ReadIndex();
+	ReadIndex();
+
+	ASSERT_EQ(m_downloads.GetOffers().size(), 1u);
+	EXPECT_EQ(m_downloads.GetIcon(m_downloads.GetOffers().front().iconSha256), m_files.at("games/kingpin/icon.png"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, IconThatDiffersFromTheIndexIsNotKept)
+{
+	JsonValue const index = MakeIndex();
+
+	m_files["games/kingpin/icon.png"][0] ^= 1;
+	Serve(index);
+	Start(EIndexIcons::Fetch);
+	ReadIndex();
+	ReadIndex();
+
+	ASSERT_EQ(m_downloads.GetOffers().size(), 1u);
+	EXPECT_TRUE(m_downloads.GetIcon(m_downloads.GetOffers().front().iconSha256).empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, IndexReadWithoutIconsFetchesNoIcon)
+{
+	Start();
+	ReadIndex();
+	ReadIndex();
+
+	EXPECT_EQ(m_server.GetNumRequests(), 2u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, IconHeldIsNotFetchedAgain)
+{
+	Start(EIndexIcons::Fetch);
+	ReadIndex();
+	ReadIndex();
+	ReadIndex();
+
+	EXPECT_EQ(m_server.GetNumRequests(), 4u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// No Update runs between the reading and the download, so the icon is still pending when the download asks for it.
+TEST_F(CGameDownloadsTest, DownloadAskingForAPendingIconInstallsTheGame)
+{
+	Start(EIndexIcons::Fetch);
+	ReadIndex();
+
+	EXPECT_TRUE(Download("kingpin"));
+	EXPECT_EQ(GetState("kingpin"), EOfferState::Installed);
+	EXPECT_EQ(m_downloads.GetIcon(m_downloads.GetOffers().front().iconSha256), m_files.at("games/kingpin/icon.png"));
 }
 } // namespace
 } // namespace Lkt::Download

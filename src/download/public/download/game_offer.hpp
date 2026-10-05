@@ -10,5 +10,6 @@ struct SGameOffer final
 	std::string key;
 	std::string name;
 	EOfferState state{ EOfferState::NotInstalled };
+	std::string iconSha256;
 };
 } // namespace Lkt::Download

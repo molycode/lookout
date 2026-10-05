@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <expected>
 #include <format>
+#include <ranges>
 #include <set>
 #include <string_view>
 #include <utility>
@@ -22,6 +23,7 @@ namespace
 constexpr size_t MaxIndexSize{ 1024 * 1024 };
 constexpr std::string_view IndexBranch{ "main" };
 constexpr std::string_view IndexFile{ "index.json" };
+constexpr std::string_view IconFile{ "icon.png" };
 
 //////////////////////////////////////////////////////////////////////////
 bool IsSupported(SIndexGame const& game, SIndexProtocol const& protocol)
@@ -43,6 +45,14 @@ SIndexProtocol const* FindProtocol(SGameIndex const& index, std::string_view nam
 	auto const it{ std::ranges::find(index.protocols, name, &SIndexProtocol::name) };
 
 	return (it != index.protocols.end()) ? &*it : nullptr;
+}
+
+//////////////////////////////////////////////////////////////////////////
+SIndexFile const* FindIcon(SIndexGame const& game)
+{
+	auto const it{ std::ranges::find(game.files, IconFile, &SIndexFile::name) };
+
+	return (it != game.files.end()) ? &*it : nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -71,11 +81,12 @@ CGameDownloads::CGameDownloads() = default;
 CGameDownloads::~CGameDownloads() = default;
 
 //////////////////////////////////////////////////////////////////////////
-bool CGameDownloads::Initialize(std::filesystem::path const& userDir, SDownloadSource source, std::function<void()> onResults)
+bool CGameDownloads::Initialize(std::filesystem::path const& userDir, SDownloadSource source, EIndexIcons icons, std::function<void()> onResults)
 {
 	m_userDir = userDir;
 	m_downloadedDir = Games::GetDownloadedDir(userDir);
 	m_source = std::move(source);
+	m_indexIcons = icons;
 
 	bool const isReady{ !m_downloadedDir.empty() && m_fetcher.Initialize(m_source.origin, std::move(onResults)) };
 
@@ -91,6 +102,8 @@ void CGameDownloads::Terminate()
 	m_pIndex.reset();
 	m_offers.clear();
 	m_fetched.clear();
+	m_pendingIconHashes.clear();
+	m_iconsByHash.clear();
 	m_phase = EDownloadPhase::Idle;
 }
 
@@ -184,7 +197,17 @@ bool CGameDownloads::Update()
 
 	for (Net::SFetchResult& result : results)
 	{
-		if (m_phase == EDownloadPhase::ReadingIndex)
+		auto const pendingIcon{ m_pendingIconHashes.find(result.path) };
+
+		// A download may ask for a pending icon's path too; the fetcher answers in order, so the first answer is the icon's.
+		if (pendingIcon != m_pendingIconHashes.end())
+		{
+			std::string const sha256{ std::move(pendingIcon->second) };
+
+			m_pendingIconHashes.erase(pendingIcon);
+			TakeIcon(std::move(result), sha256);
+		}
+		else if (m_phase == EDownloadPhase::ReadingIndex)
 		{
 			TakeIndex(std::move(result));
 		}
@@ -225,6 +248,14 @@ std::span<SGameOffer const> CGameDownloads::GetOffers() const
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::string_view CGameDownloads::GetIcon(std::string_view sha256) const
+{
+	auto const it{ m_iconsByHash.find(sha256) };
+
+	return (it != m_iconsByHash.end()) ? std::string_view{ it->second } : std::string_view{};
+}
+
+//////////////////////////////////////////////////////////////////////////
 std::span<std::string const> CGameDownloads::GetProblems() const
 {
 	return m_problems;
@@ -254,6 +285,11 @@ void CGameDownloads::TakeIndex(Net::SFetchResult result)
 		if (index.has_value())
 		{
 			m_pIndex = std::make_unique<SGameIndex>(std::move(*index));
+
+			if (m_indexIcons == EIndexIcons::Fetch)
+			{
+				RequestIcons();
+			}
 		}
 		else
 		{
@@ -266,6 +302,45 @@ void CGameDownloads::TakeIndex(Net::SFetchResult result)
 	}
 
 	RefreshOffers();
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CGameDownloads::RequestIcons()
+{
+	std::vector<Net::SFetchRequest> requests{};
+
+	for (SIndexGame const& game : m_pIndex->games)
+	{
+		SIndexFile const* const pIcon{ FindIcon(game) };
+
+		if (pIcon != nullptr && !m_iconsByHash.contains(pIcon->sha256) && !std::ranges::contains(m_pendingIconHashes | std::views::values, pIcon->sha256))
+		{
+			std::string path{ MakePath(m_pIndex->commit, std::format("games/{}/{}", game.key, IconFile)) };
+
+			requests.emplace_back(path, pIcon->size);
+			m_pendingIconHashes.emplace(std::move(path), pIcon->sha256);
+		}
+	}
+
+	if (!requests.empty())
+	{
+		m_fetcher.Fetch(std::move(requests));
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The request was capped at the indexed size, so the hash alone tells the icon is the one indexed.
+void CGameDownloads::TakeIcon(Net::SFetchResult result, std::string_view sha256)
+{
+	if (result.body.has_value() && HashSha256(*result.body) == sha256)
+	{
+		m_iconsByHash.insert_or_assign(std::string{ sha256 }, std::move(*result.body));
+	}
+	else
+	{
+		gLog.Warning("Cannot show the icon {}: {}", result.path,
+			result.body.has_value() ? std::string_view{ "it differs from what the index says it is" } : std::string_view{ result.body.error() });
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -354,7 +429,9 @@ void CGameDownloads::RefreshOffers()
 			SIndexProtocol const& protocol{ *FindProtocol(*m_pIndex, game.protocol) };
 			EOfferState const state{ IsSupported(game, protocol) ? FindInstalledState(m_downloadedDir, game, protocol) : EOfferState::NeedsNewerLookout };
 
-			m_offers.emplace_back(game.key, game.name, state);
+			SIndexFile const* const pIcon{ FindIcon(game) };
+
+			m_offers.emplace_back(game.key, game.name, state, (pIcon != nullptr) ? pIcon->sha256 : std::string{});
 			downloaded.erase(game.key);
 		}
 	}
