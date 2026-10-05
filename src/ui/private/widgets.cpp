@@ -90,8 +90,11 @@ bool IconButton(char const* id, std::string_view glyph)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// ImGui would outline the text alone and cut the cross off, so its outline is held back and drawn around both.
 bool SearchField(char const* id, char const* hint, std::string& text, bool& shouldFocus)
 {
+	ImGuiWindow* const pWindow{ ImGui::GetCurrentWindow() };
+	bool const isOutlineHidden{ pWindow->DC.NavHideHighlightOneFrame };
 	bool const hasText{ !text.empty() };
 
 	if (shouldFocus)
@@ -101,8 +104,13 @@ bool SearchField(char const* id, char const* hint, std::string& text, bool& shou
 	}
 
 	ImGui::SetNextItemWidth(hasText ? -ImGui::GetFrameHeight() : -FLT_MIN);
+	pWindow->DC.NavHideHighlightOneFrame = true;
 
 	bool isChanged{ ImGui::InputTextWithHint(id, hint, &text, ImGuiInputTextFlags_EscapeClearsAll) };
+	ImGuiID const fieldId{ ImGui::GetItemID() };
+	ImVec2 const min{ ImGui::GetItemRectMin() };
+
+	pWindow->DC.NavHideHighlightOneFrame = isOutlineHidden;
 
 	if (hasText && ClearSearchButton())
 	{
@@ -110,6 +118,8 @@ bool SearchField(char const* id, char const* hint, std::string& text, bool& shou
 		shouldFocus = true;
 		isChanged = true;
 	}
+
+	ImGui::RenderNavCursor(ImRect{ min, ImGui::GetItemRectMax() }, fieldId);
 
 	return isChanged;
 }
