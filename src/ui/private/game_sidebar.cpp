@@ -25,7 +25,6 @@ namespace Lkt::Ui
 {
 namespace
 {
-constexpr float CardRoundingEm{ 0.5f };
 constexpr float SelectedFillAlpha{ 0.16f };
 constexpr float HoveredSelectedFillAlpha{ 0.22f };
 constexpr float ActiveSelectedFillAlpha{ 0.30f };

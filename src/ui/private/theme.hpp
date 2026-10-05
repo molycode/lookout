@@ -7,6 +7,7 @@ namespace Lkt::Ui
 struct SThemeColors;
 
 inline constexpr float BaseFontSize{ 16.0f };
+inline constexpr float CardRoundingEm{ 0.5f };
 
 // Rebuilds the style from scratch: ScaleAllSizes multiplies, so scaling an already scaled style compounds.
 void ApplyTheme(float scale);
