@@ -280,9 +280,9 @@ TEST(GameFiles, EveryDownloadedGamePassesTheCheck)
 {
 	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
 	{
-		std::expected<void, std::string> const checked{ CheckGameText(ReadDownloadedText(game.key), Query::GetProtocolCatalog()) };
+		std::expected<void, SFieldProblem> const checked{ CheckGameText(ReadDownloadedText(game.key), Query::GetProtocolCatalog()) };
 
-		EXPECT_TRUE(checked.has_value()) << game.key << ": " << checked.error();
+		EXPECT_TRUE(checked.has_value()) << game.key << ": " << checked.error().path << ": " << checked.error().reason;
 	}
 }
 
@@ -293,19 +293,21 @@ TEST(GameFiles, CheckNamesAnUnknownProtocol)
 
 	game.replace(game.find("\"quake2\""), 8, "\"mine\"");
 
-	std::expected<void, std::string> const checked{ CheckGameText(game, Query::GetProtocolCatalog()) };
+	std::expected<void, SFieldProblem> const checked{ CheckGameText(game, Query::GetProtocolCatalog()) };
 
 	ASSERT_FALSE(checked.has_value());
-	EXPECT_TRUE(checked.error().starts_with("protocol: 'mine' is not one of ")) << checked.error();
+	EXPECT_EQ(checked.error().path, "protocol");
+	EXPECT_TRUE(checked.error().reason.starts_with("'mine' is not one of ")) << checked.error().reason;
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST(GameFiles, NewGameAsksForItsNameFirst)
 {
-	std::expected<void, std::string> const checked{ CheckGameText(GetNewGameText(), Query::GetProtocolCatalog()) };
+	std::expected<void, SFieldProblem> const checked{ CheckGameText(GetNewGameText(), Query::GetProtocolCatalog()) };
 
 	ASSERT_FALSE(checked.has_value());
-	EXPECT_EQ(checked.error(), "name: must be a non-empty string without NUL");
+	EXPECT_EQ(checked.error().path, "name");
+	EXPECT_EQ(checked.error().reason, "must be a non-empty string without NUL");
 }
 } // namespace
 } // namespace Lkt::Games

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "games/field_problem.hpp"
 #include "query/game_definition.hpp"
 #include "query/protocol_definition.hpp"
 #include <expected>
@@ -12,4 +13,5 @@ namespace Lkt::Games
 // The error names where the file first went wrong ("masters[0].port: …"). The key is left for the caller: it is the
 // name of the game's folder.
 std::expected<Query::SGameDefinition, std::string> ReadGameJson(std::string_view text, std::span<Query::SProtocolDefinition const> protocols);
+std::expected<Query::SGameDefinition, SFieldProblem> ReadGameFields(std::string_view text, std::span<Query::SProtocolDefinition const> protocols);
 } // namespace Lkt::Games

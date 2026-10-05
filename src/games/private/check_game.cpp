@@ -9,10 +9,10 @@
 namespace Lkt::Games
 {
 //////////////////////////////////////////////////////////////////////////
-std::expected<void, std::string> CheckGameText(std::string_view text, std::span<Query::SProtocolDefinition const> protocols)
+std::expected<void, SFieldProblem> CheckGameText(std::string_view text, std::span<Query::SProtocolDefinition const> protocols)
 {
-	std::expected<Query::SGameDefinition, std::string> const game{ ReadGameJson(text, protocols) };
-	std::expected<void, std::string> result{};
+	std::expected<Query::SGameDefinition, SFieldProblem> const game{ ReadGameFields(text, protocols) };
+	std::expected<void, SFieldProblem> result{};
 
 	if (game.has_value())
 	{
@@ -20,13 +20,12 @@ std::expected<void, std::string> CheckGameText(std::string_view text, std::span<
 		Script::CProtocolScript script{};
 		std::expected<void, std::string> const loaded{ script.Initialize(protocol.name, protocol.source) };
 
-		if (loaded.has_value())
+		std::expected<void, std::string> const tried{ loaded.has_value() ? TryConversations(script, game->protocolOptions)
+			: std::expected<void, std::string>{ std::unexpected{ std::format("the {} protocol cannot be loaded: {}", protocol.name, loaded.error()) } } };
+
+		if (!tried.has_value())
 		{
-			result = TryConversations(script, game->protocolOptions);
-		}
-		else
-		{
-			result = std::unexpected{ std::format("the {} protocol cannot be loaded: {}", protocol.name, loaded.error()) };
+			result = std::unexpected{ SFieldProblem{ {}, tried.error() } };
 		}
 
 		script.Terminate();

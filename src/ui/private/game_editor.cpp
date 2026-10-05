@@ -136,9 +136,10 @@ void CGameEditor::Opened(std::filesystem::path const& userDir)
 // A failed save is shown until the next edit, which may well be what fixes it.
 void CGameEditor::Check()
 {
-	std::expected<void, std::string> const checked{ Games::CheckGameText(m_text, Query::GetProtocolCatalog()) };
+	std::expected<void, Games::SFieldProblem> const checked{ Games::CheckGameText(m_text, Query::GetProtocolCatalog()) };
 
-	m_problem = checked.has_value() ? std::string{} : checked.error();
+	m_problem = checked.has_value() ? std::string{}
+		: (checked.error().path.empty() ? checked.error().reason : std::format("{}: {}", checked.error().path, checked.error().reason));
 	m_saveError.clear();
 }
 
