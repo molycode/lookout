@@ -88,6 +88,12 @@ TEST(ServerSummary, MaxPlayersUnknownWithoutTheRule)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(ServerSummary, RuleNamesIgnoreCase)
+{
+	EXPECT_EQ(Summarize(Fixtures::GetGameByKey("quake3"), MakeReply({ { "sv_maxClients", "12" } })).maxPlayers, 12u);
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(ServerSummary, CountsThePlayers)
 {
 	EXPECT_EQ(SummarizeFixture("rtcw", RtcwFixture).numPlayers, 32u);
