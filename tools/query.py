@@ -24,7 +24,25 @@ GAMES = {
 	"et": ("quake3", [("etmaster.idsoftware.com", 27950), ("etmaster.etlegacy.com", 27950)], "84 empty full"),
 	"quake3": ("quake3", [("master.quake3arena.com", 27950), ("master.ioquake3.org", 27950), ("dpmaster.deathmask.net", 27950)], "68 empty full"),
 	"ut2004": ("unreal2", [("ut2004master.333networks.com", 28902), ("utmaster.openspy.net", 28902)], ""),
+	"urbanterror": ("quake3", [("master.urbanterror.info", 27900)], "68 empty full"),
+	"jka": ("quake3", [("master.jkhub.org", 29060), ("master.jk2mv.org", 29060)], "26 empty full"),
+	"jk2": ("quake3", [("master.jkhub.org", 28060), ("master.jk2mv.org", 28060), ("master.jk2.daggolin.de", 28060)], "15,16 empty full"),
+	"sof2": ("quake3", [("master.1fxmod.org", 20110)], "2004 empty full"),
+	"xonotic": ("quake3", [("dpmaster.deathmask.net", 27950), ("dpmaster.tchr.no", 27950)], "Xonotic 3 empty full"),
+	"nexuiz": ("quake3", [("dpmaster.deathmask.net", 27950), ("dpmaster.tchr.no", 27950)], "Nexuiz 3 empty full"),
+	"warsow": ("quake3", [("dpmaster.deathmask.net", 27950), ("dpmaster.tchr.no", 27950)], "Warsow 22 empty full"),
+	"tremulous": ("quake3", [("master.tremulous.net", 30700)], "71 empty full"),
+	"unvanquished": ("quake3", [("master.unvanquished.net", 27950), ("master2.unvanquished.net", 27950)], "86 empty full"),
+	"smokinguns": ("quake3", [("master.smokin-guns.org", 27950)], "68 empty full"),
+	"eliteforce": ("quake3", [("efmaster.tjps.eu", 27953), ("master.stef1.daggolin.de", 27953), ("master.stvef.org", 27953)], "24 empty full"),
+	"cod": ("quake3", [("codmaster.activision.com", 20510)], "6 full empty"),
+	"coduo": ("quake3", [("coduomaster.activision.com", 20610)], "22 full empty"),
+	"cod2": ("quake3", [("cod2master.activision.com", 20710), ("master.cod2x.me", 20710)], "118,120 full empty"),
+	"cod4": ("quake3", [("cod4master.activision.com", 20810)], "6 full empty"),
+	"alienarena": ("quake2", [("master.alienarena.org", 27900), ("master2.alienarena.org", 27900)], ""),
 }
+# Elite Force's masters write each address as twelve hex digits.
+HEX_ENTRIES = {"eliteforce"}
 
 HEADER = b"\xff\xff\xff\xff"
 NAME_KEYS = ("hostname", "sv_hostname")
@@ -41,11 +59,18 @@ UNREAL2_QUIET = 0.6
 UNREAL2_INFO = 0
 
 
-def master_request(family, args):
-	return b"query" if family == "quake2" else HEADER + b"getservers " + args.encode()
+def master_requests(family, args):
+	"""One request, or one per protocol number when they are joined by commas ("15,16 empty full")."""
+	if family == "quake2":
+		return [b"query"]
+
+	words = args.split(" ")
+	index = next((i for i, word in enumerate(words) if "," in word), None)
+	queries = [args] if index is None else [" ".join(words[:index] + [number] + words[index + 1:]) for number in words[index].split(",")]
+	return [HEADER + b"getservers " + query.encode() for query in queries]
 
 
-def parse_master(family, packet):
+def parse_master(family, packet, is_hex=False):
 	servers = []
 
 	if family == "quake2":
@@ -53,13 +78,19 @@ def parse_master(family, packet):
 			body = packet[len(HEADER + b"servers") + 1:]
 			servers = [(socket.inet_ntoa(body[i:i + 4]), struct.unpack(">H", body[i + 4:i + 6])[0]) for i in range(0, len(body) - 5, 6)]
 	elif packet.startswith(HEADER + b"getserversResponse"):
-		body = packet[len(HEADER + b"getserversResponse"):]
+		# Call of Duty's masters put "\n\0" before the first entry, JK2MV's "\n", Elite Force's a space.
+		body = packet[len(HEADER + b"getserversResponse"):].lstrip(b"\n\0 ")
+		size = 13 if is_hex else 7
 		pos = 0
 
-		# "\EOT" ends a datagram only when nothing but padding follows: 69.79.84.x spells the same bytes.
-		while pos + 7 <= len(body) and not (body[pos:pos + 4] == b"\\EOT" and body[pos + 4:].strip(b"\0") == b""):
-			servers.append((socket.inet_ntoa(body[pos + 1:pos + 5]), struct.unpack(">H", body[pos + 5:pos + 7])[0]))
-			pos += 7
+		# An end marker ends a datagram only when nothing but padding follows: 69.79.84.x spells the same bytes.
+		while pos + size <= len(body) and not (body[pos:pos + 4] in (b"\\EOT", b"\\EOF") and body[pos + 4:].strip(b"\0") == b""):
+			if is_hex:
+				servers.append((socket.inet_ntoa(bytes.fromhex(body[pos + 1:pos + 9].decode())), int(body[pos + 9:pos + 13], 16)))
+			else:
+				servers.append((socket.inet_ntoa(body[pos + 1:pos + 5]), struct.unpack(">H", body[pos + 5:pos + 7])[0]))
+
+			pos += size
 
 	return servers
 
@@ -71,7 +102,10 @@ def query_masters(family, masters, args):
 	for host, port in masters:
 		try:
 			address = (socket.gethostbyname(host), port)
-			sock.sendto(master_request(family, args), address)
+
+			for request in master_requests(family, args):
+				sock.sendto(request, address)
+
 			packets_by_master[address] = (host, [])
 		except OSError as error:
 			print(f"master {host}: {error}", file=sys.stderr)
@@ -112,7 +146,11 @@ def query_status(family, servers):
 		if ready:
 			packet, source = sock.recvfrom(65535)
 
-			if source in sent:
+			# Some OpenJK servers ask for a challenge to be echoed before they answer.
+			if source in sent and packet.startswith(HEADER + b'echo "echoResponse getstatus ') and packet.endswith(b'"'):
+				sock.sendto(HEADER + packet[len(HEADER) + 6:-1], source)
+				sent[source] = time.time()
+			elif source in sent:
 				del sent[source]
 				replies[source] = packet
 
@@ -130,7 +168,7 @@ def describe(packet):
 		return "0/? ? (malformed reply)"
 
 	fields = lines[1].split("\\")[1:]
-	info = dict(zip(fields[::2], fields[1::2]))
+	info = dict(zip((key.lower() for key in fields[::2]), fields[1::2]))
 	players = [line for line in lines[2:] if line.strip()]
 	name = next((info[key] for key in NAME_KEYS if key in info), "")
 	maximum = next((info[key] for key in MAX_KEYS if key in info), "?")
@@ -298,7 +336,7 @@ def main():
 		return
 
 	answers = query_masters(family, masters, args)
-	servers = sorted({server for _, packets in answers for packet in packets for server in parse_master(family, packet)},
+	servers = sorted({server for _, packets in answers for packet in packets for server in parse_master(family, packet, options.game in HEX_ENTRIES)},
 		key=lambda server: (socket.inet_aton(server[0]), server[1]))
 	replies = query_status(family, servers)
 

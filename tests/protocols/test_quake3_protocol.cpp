@@ -22,6 +22,10 @@ using Fixtures::ToBytes;
 constexpr std::string_view Header{ "\xFF\xFF\xFF\xFFgetserversResponse" };
 constexpr std::string_view Entry{ "\\\x2D\x5E\x3A\x3C\x6D\x38" };
 constexpr SServerAddress EntryAddress{ 0x2D5E3A3C, 27960 };
+constexpr std::string_view HexEntry{ "\\2D5E3A3C6D38" };
+constexpr std::string_view EchoChallenge{ "\xFF\xFF\xFF\xFF" "echo \"echoResponse getstatus oo3KyTWe6F7YBlNw8K4htAikGv1O1wIUJlf8ysTEUrxGloYr338BJL1IQG7PrTSf\"" };
+constexpr std::string_view EchoAnswer{ "\xFF\xFF\xFF\xFF" "echoResponse getstatus oo3KyTWe6F7YBlNw8K4htAikGv1O1wIUJlf8ysTEUrxGloYr338BJL1IQG7PrTSf" };
+std::map<std::string, std::string> const HexOptions{ { "masterQuery", "24 empty full" }, { "masterEntries", "hex" } };
 
 //////////////////////////////////////////////////////////////////////////
 class CQuake3ProtocolTest : public testing::Test
@@ -47,6 +51,16 @@ protected:
 		return Fixtures::ReadMasterDatagram(m_script, MasterOptions(), ToBytes(std::string{ Header } + std::string{ entries }), servers);
 	}
 
+	std::expected<void, EParseError> ParseHexMaster(std::string_view entries, std::vector<SServerAddress>& servers)
+	{
+		return Fixtures::ReadMasterDatagram(m_script, HexOptions, ToBytes(std::string{ Header } + std::string{ entries }), servers);
+	}
+
+	std::expected<Script::SScriptAction, std::string> StartMaster(std::string_view masterQuery)
+	{
+		return Fixtures::StartOnce(m_script, Script::EConversationKind::Master, { { "masterQuery", std::string{ masterQuery } } });
+	}
+
 	std::map<std::string, std::string> const& MasterOptions() const
 	{
 		return Fixtures::GetGameByKey("quake3").protocolOptions;
@@ -69,6 +83,36 @@ protected:
 TEST_F(CQuake3ProtocolTest, AsksMastersWithTheGamesProtocolNumber)
 {
 	EXPECT_EQ(GetFirstSend(Script::EConversationKind::Master, "et"), std::vector<std::vector<std::byte>>{ ToBytes("\xFF\xFF\xFF\xFFgetservers 84 empty full") });
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, AsksForEachProtocolVersionInTurn)
+{
+	std::expected<Script::SScriptAction, std::string> const started{ StartMaster("15,16 empty full") };
+
+	ASSERT_TRUE(started.has_value()) << started.error_or("");
+	EXPECT_EQ(started->send, (std::vector<std::vector<std::byte>>{ ToBytes("\xFF\xFF\xFF\xFFgetservers 15 empty full"), ToBytes("\xFF\xFF\xFF\xFFgetservers 16 empty full") }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, ProtocolVersionsMayFollowTheGameName)
+{
+	std::expected<Script::SScriptAction, std::string> const started{ StartMaster("Tremulous 70,71") };
+
+	ASSERT_TRUE(started.has_value()) << started.error_or("");
+	EXPECT_EQ(started->send, (std::vector<std::vector<std::byte>>{ ToBytes("\xFF\xFF\xFF\xFFgetservers Tremulous 70"), ToBytes("\xFF\xFF\xFF\xFFgetservers Tremulous 71") }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, RefusesAnEmptyProtocolVersion)
+{
+	EXPECT_FALSE(StartMaster("15, empty full").has_value());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, RefusesUnknownMasterEntries)
+{
+	EXPECT_FALSE(Fixtures::StartOnce(m_script, Script::EConversationKind::Master, { { "masterQuery", "24" }, { "masterEntries", "text" } }).has_value());
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -106,6 +150,53 @@ TEST_F(CQuake3ProtocolTest, EndMarkerWithoutPaddingEndsTheDatagram)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, LastEndMarkerEndsTheDatagram)
+{
+	std::vector<SServerAddress> servers{};
+
+	ASSERT_TRUE(ParseMaster(std::string{ Entry } + "\\EOF", servers).has_value());
+	EXPECT_EQ(servers.size(), 1u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, LoneBackslashEndsTheDatagram)
+{
+	std::vector<SServerAddress> servers{};
+
+	ASSERT_TRUE(ParseMaster(std::string{ Entry } + "\\", servers).has_value());
+	EXPECT_EQ(servers.size(), 1u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, SkipsWhatPrecedesTheFirstEntry)
+{
+	std::vector<SServerAddress> servers{};
+
+	ASSERT_TRUE(ParseMaster(std::string{ "\n\0 ", 3 } + std::string{ Entry }, servers).has_value());
+	ASSERT_EQ(servers.size(), 1u);
+	EXPECT_EQ(servers[0], EntryAddress);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, ReadsHexEntries)
+{
+	std::vector<SServerAddress> servers{};
+
+	ASSERT_TRUE(ParseHexMaster(std::string{ " " } + std::string{ HexEntry } + std::string{ HexEntry } + "\\EOT", servers).has_value());
+	ASSERT_EQ(servers.size(), 2u);
+	EXPECT_EQ(servers[0], EntryAddress);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, RejectsHexEntryWithAnotherCharacter)
+{
+	std::vector<SServerAddress> servers{};
+
+	EXPECT_EQ(ParseHexMaster(std::string{ HexEntry } + "\\2D5E3A3C6D3G", servers), std::unexpected{ EParseError::Malformed });
+	EXPECT_EQ(servers.size(), 1u);
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake3ProtocolTest, EndMarkerLeavesTheEndToTheQuietPeriod)
 {
 	std::expected<Script::SScriptAction, std::string> const action{ Fixtures::ReceiveOnce(m_script, Script::EConversationKind::Master, MasterOptions(),
@@ -129,7 +220,7 @@ TEST_F(CQuake3ProtocolTest, AddressThatSpellsTheEndMarkerIsAServer)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedMasterDatagram)
 {
-	for (std::string_view const game : { "rtcw", "et", "quake3" })
+	for (std::string_view const game : { "rtcw", "et", "quake3", "cod4", "jk2", "tremulous" })
 	{
 		for (std::filesystem::path const& path : Fixtures::ListFixtures(game, "master-"))
 		{
@@ -137,6 +228,17 @@ TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedMasterDatagram)
 
 			EXPECT_TRUE(Fixtures::ReadMasterDatagram(m_script, MasterOptions(), LoadFixture(path.string()), servers).has_value() && !servers.empty()) << path;
 		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedHexMasterDatagram)
+{
+	for (std::filesystem::path const& path : Fixtures::ListFixtures("eliteforce", "master-"))
+	{
+		std::vector<SServerAddress> servers{};
+
+		EXPECT_TRUE(Fixtures::ReadMasterDatagram(m_script, HexOptions, LoadFixture(path.string()), servers).has_value() && !servers.empty()) << path;
 	}
 }
 
@@ -168,7 +270,7 @@ TEST_F(CQuake3ProtocolTest, RejectsQuake2MasterReply)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedStatus)
 {
-	for (std::string_view const game : { "rtcw", "et", "quake3" })
+	for (std::string_view const game : { "rtcw", "et", "quake3", "cod4", "jk2", "eliteforce", "tremulous" })
 	{
 		for (std::filesystem::path const& path : Fixtures::ListFixtures(game, "status-"))
 		{
@@ -178,6 +280,25 @@ TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedStatus)
 				&& reply->numMalformedPlayerLines == 0) << path;
 		}
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, EchoesTheChallenge)
+{
+	std::expected<Script::SScriptAction, std::string> const action{ Fixtures::ReceiveOnce(m_script, Script::EConversationKind::Server, {}, ToBytes(EchoChallenge)) };
+
+	ASSERT_TRUE(action.has_value()) << action.error_or("");
+	EXPECT_EQ(action->send, std::vector<std::vector<std::byte>>{ ToBytes(EchoAnswer) });
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, StatusAfterTheChallengeIsTheReply)
+{
+	std::vector<std::vector<std::byte>> const datagrams{ ToBytes(EchoChallenge), ToBytes(EchoChallenge), LoadFixture("jk2/status-91.120.101.92_28070.bin") };
+	std::expected<SStatusReply, EParseError> const reply{ Fixtures::ReadStatusDatagrams(m_script, datagrams) };
+
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_FALSE(FindRule(reply.value(), "sv_hostname").empty());
 }
 
 //////////////////////////////////////////////////////////////////////////

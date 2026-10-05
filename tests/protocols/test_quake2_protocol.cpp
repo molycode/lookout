@@ -157,7 +157,7 @@ TEST_F(CQuake2ProtocolTest, ReadsKingpinStatus)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake2ProtocolTest, ReadsEveryCapturedStatus)
 {
-	for (std::string_view const game : { "kingpin", "quake2" })
+	for (std::string_view const game : { "kingpin", "quake2", "alienarena" })
 	{
 		for (std::filesystem::path const& path : Fixtures::ListFixtures(game, "status-"))
 		{
@@ -178,6 +178,16 @@ TEST_F(CQuake2ProtocolTest, ReadsPlayerScorePingAndName)
 	EXPECT_EQ(reply->players[0].score, -3);
 	EXPECT_EQ(reply->players[0].ping, 81u);
 	EXPECT_EQ(reply->players[0].name, "Big Joe");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake2ProtocolTest, NameEndsAtItsClosingQuote)
+{
+	std::expected<SStatusReply, EParseError> const reply{ ParseStatus("\xFF\xFF\xFF\xFFprint\n\\hostname\\x\n8 0 \"^4Sharky\" \"127.0.0.1\" 0\n") };
+
+	ASSERT_TRUE(reply.has_value());
+	ASSERT_EQ(reply->players.size(), 1u);
+	EXPECT_EQ(reply->players[0].name, "^4Sharky");
 }
 
 //////////////////////////////////////////////////////////////////////////
