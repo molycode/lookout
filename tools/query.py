@@ -192,7 +192,8 @@ def describe(packet):
 
 	fields = lines[1].split("\\")[1:]
 	info = dict(zip((key.lower() for key in fields[::2]), fields[1::2]))
-	players = [line for line in lines[2:] if line.strip()]
+	# QuakeWorld's servers may end their reply with a NUL.
+	players = [line for line in lines[2:] if line.strip(" \t\r\0")]
 	name = next((info[key] for key in NAME_KEYS if key in info), "")
 	maximum = next((info[key] for key in MAX_KEYS if key in info), "?")
 	plain = re.sub(r"\^[^\^]", "", "".join(ch for ch in name if ord(ch) >= 32))
