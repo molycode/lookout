@@ -22,7 +22,7 @@ namespace
 constexpr std::array<uint32_t, 5> PingLimits{ Config::NoPingLimit, 50, 100, 150, 250 };
 constexpr std::array<uint32_t, 5> AutoRefreshChoices{ 0, 30, 60, 120, 300 };
 constexpr char const* AutoRefreshPopupId{ "##auto-refresh-menu" };
-constexpr float MinSearchEm{ 12.0f };
+constexpr float MinSearchEm{ 10.0f };
 
 //////////////////////////////////////////////////////////////////////////
 std::string_view DescribeAutoRefresh(uint32_t seconds, std::array<char, 32>& buffer)
@@ -53,8 +53,10 @@ void DrawRefreshButtons(Browser::CBrowser const& browser, SFrameIntents& intents
 	std::array<char, 96> tooltip{};
 
 	bool const isRefreshing{ browser.GetSelectedGame() != Query::NoGame && browser.GetStatus(browser.GetSelectedGame()).isRefreshing };
+	// As wide as its longer label, so a refresh moves nothing beside it, nor the search between its rows.
+	float const width{ ImGui::CalcTextSize(LKT_ICON_ROTATE " Refreshing…").x + ImGui::GetStyle().FramePadding.x * 2.0f };
 
-	if (ImGui::Button(isRefreshing ? LKT_ICON_ROTATE " Refreshing…###refresh" : LKT_ICON_ROTATE " Refresh###refresh"))
+	if (ImGui::Button(isRefreshing ? LKT_ICON_ROTATE " Refreshing…###refresh" : LKT_ICON_ROTATE " Refresh###refresh", ImVec2{ width, 0.0f }))
 	{
 		intents.refresh = true;
 	}
