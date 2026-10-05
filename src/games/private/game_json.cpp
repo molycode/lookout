@@ -33,59 +33,72 @@ constexpr std::string_view PasswordPlaceholder{ "{password}" };
 constexpr uint64_t MaxPasswordLength{ 1024 };
 constexpr size_t MaxPaletteSize{ 256 };
 
+constexpr std::array<std::string_view, 2> EncodingNames{ "ascii7", "utf8OrWindows1252" };
+constexpr std::array<std::string_view, 3> ColourCodeNames{ "alphanumeric", "printable", "rgb" };
+
+using enum EGameFieldKind;
+
 constexpr std::array<SGameField, 40> Fields{ {
-	{ "", "format", "The version of this format: 1." },
-	{ "", "name", "The game's name in the game list." },
-	{ "", "protocol", "The protocol script that queries the game's masters and servers, by name." },
-	{ "", "protocolOptions", "The protocol's options, each a string; optional unless the protocol requires one." },
-	{ "", "queryPortOffset", "Optional: the query port less the join port, for servers that answer queries on another port." },
-	{ "", "text", "How names and maps are encoded and coloured." },
-	{ "text", "encoding", "ascii7 (the high bit is dropped) or utf8OrWindows1252 (UTF-8 where valid, else Windows-1252)." },
-	{ "text", "colourCodes", "Optional: the colour codes in names." },
-	{ "text.colourCodes", "escape", "The ASCII character that starts a colour code, such as \"^\"." },
-	{ "text.colourCodes", "codes", "What follows the escape: alphanumeric (a letter or digit), printable (any printable character but the escape) "
+	{ "", "format", "Format", Version, true, {}, "The version of this format: 1." },
+	{ "", "name", "Name", Text, true, {}, "The game's name in the game list." },
+	{ "", "protocol", "Protocol", Protocol, true, {}, "The protocol script that queries the game's masters and servers, by name." },
+	{ "", "protocolOptions", "Protocol options", ProtocolOptions, false, {},
+		"The protocol's options, each a string; optional unless the protocol requires one." },
+	{ "", "queryPortOffset", "Query port offset", Number, false, {},
+		"Optional: the query port less the join port, for servers that answer queries on another port." },
+	{ "", "masters", "Masters", GroupList, true, {}, "The master servers that list the game's servers; at least one." },
+	{ "masters[]", "host", "Host", Text, true, {}, "The master's host name or IP address." },
+	{ "masters[]", "port", "Port", Number, true, {}, "The master's port, 1 to 65535." },
+	{ "", "keys", "Server rules", Group, true, {}, "Which of a server's rules hold what the list shows." },
+	{ "keys", "hostname", "Name rule", Text, true, {}, "The rule holding the server's name." },
+	{ "keys", "map", "Map rule", Text, true, {}, "The rule holding the map." },
+	{ "keys", "numPlayers", "Players rule", Text, false, {},
+		"Optional: the rule holding the number of players; without it, the listed players are counted." },
+	{ "keys", "maxPlayers", "Max players rule", Text, true, {}, "The rule holding how many players fit." },
+	{ "keys", "password", "Password rule", Text, true, {}, "The rule whose lowest bit says joining needs a password." },
+	{ "keys", "mods", "Mod rules", TextList, false, {}, "Optional: the rules that may name the mod; the first a server has is shown." },
+	{ "", "modes", "Modes", GroupList, false, {}, "Optional: the game's modes; the first that matches a server's rules is shown." },
+	{ "modes[]", "key", "Rule", Text, true, {}, "The rule to look at." },
+	{ "modes[]", "value", "Value", Text, true, {}, "The value the rule holds in this mode." },
+	{ "modes[]", "label", "Label", Text, true, {}, "The mode's name in the list." },
+	{ "", "foreignServers", "Other games' servers", GroupList, false, {},
+		"Optional: rule values that mark another game's servers on the same masters, which are left out." },
+	{ "foreignServers[]", "key", "Rule", Text, true, {}, "The rule to look at." },
+	{ "foreignServers[]", "value", "Value", Text, true, {}, "The value that marks another game's server." },
+	{ "", "text", "Text", Group, true, {}, "How names and maps are encoded and coloured." },
+	{ "text", "encoding", "Encoding", Choice, true, EncodingNames,
+		"ascii7 (the high bit is dropped) or utf8OrWindows1252 (UTF-8 where valid, else Windows-1252)." },
+	{ "text", "colourCodes", "Colour codes", Group, false, {}, "Optional: the colour codes in names." },
+	{ "text.colourCodes", "escape", "Escape", Characters, true, {}, "The ASCII character that starts a colour code, such as \"^\"." },
+	{ "text.colourCodes", "codes", "Codes", Choice, true, ColourCodeNames,
+		"What follows the escape: alphanumeric (a letter or digit), printable (any printable character but the escape) "
 		"or rgb (three bytes of red, green and blue)." },
-	{ "text.colourCodes", "palette", "The colours the codes pick, each \"#rrggbb\", a power of two of them up to 256; not for rgb." },
-	{ "", "masters", "The master servers that list the game's servers; at least one." },
-	{ "masters[]", "host", "The master's host name or IP address." },
-	{ "masters[]", "port", "The master's port, 1 to 65535." },
-	{ "", "keys", "Which of a server's rules hold what the list shows." },
-	{ "keys", "hostname", "The rule holding the server's name." },
-	{ "keys", "map", "The rule holding the map." },
-	{ "keys", "numPlayers", "Optional: the rule holding the number of players; without it, the listed players are counted." },
-	{ "keys", "maxPlayers", "The rule holding how many players fit." },
-	{ "keys", "password", "The rule whose lowest bit says joining needs a password." },
-	{ "keys", "mods", "Optional: the rules that may name the mod; the first a server has is shown." },
-	{ "", "modes", "Optional: the game's modes; the first that matches a server's rules is shown." },
-	{ "modes[]", "key", "The rule to look at." },
-	{ "modes[]", "value", "The value the rule holds in this mode." },
-	{ "modes[]", "label", "The mode's name in the list." },
-	{ "", "foreignServers", "Optional: rule values that mark another game's servers on the same masters, which are left out." },
-	{ "foreignServers[]", "key", "The rule to look at." },
-	{ "foreignServers[]", "value", "The value that marks another game's server." },
-	{ "", "launch", "Optional: how to find the installed game, to join with it." },
-	{ "launch", "desktopFiles", "Desktop entries that start the game, by file name, in order of preference." },
-	{ "launch", "installDir", "The game's usual install folder, under the home folder." },
-	{ "launch", "program", "The program to run, inside the install folder." },
-	{ "launch", "requiredFiles", "Files inside the install folder that show the game is there." },
-	{ "", "join", "The arguments the game is started with to join a server." },
-	{ "join", "arguments", "To join a server; {address} is its address." },
-	{ "join", "passwordArguments", "To join a server with a password; {address} is its address and {password} the password." },
-	{ "join", "password", "The passwords the game can take." },
-	{ "join.password", "maxLength", "The longest password, 1 to 1024 characters." },
-	{ "join.password", "refusedCharacters", "Optional: characters a password cannot hold." },
-	{ "join.password", "refusedSequences", "Optional: character sequences a password cannot hold." }
+	{ "text.colourCodes", "palette", "Palette", TextList, true, {},
+		"The colours the codes pick, each \"#rrggbb\", a power of two of them up to 256; not for rgb." },
+	{ "", "join", "Joining", Group, true, {}, "The arguments the game is started with to join a server." },
+	{ "join", "arguments", "Arguments", TextList, true, {}, "To join a server; {address} is its address." },
+	{ "join", "passwordArguments", "Arguments with a password", TextList, true, {},
+		"To join a server with a password; {address} is its address and {password} the password." },
+	{ "join", "password", "Passwords", Group, true, {}, "The passwords the game can take." },
+	{ "join.password", "maxLength", "Longest", Number, true, {}, "The longest password, 1 to 1024 characters." },
+	{ "join.password", "refusedCharacters", "Refused characters", Characters, false, {}, "Optional: characters a password cannot hold." },
+	{ "join.password", "refusedSequences", "Refused sequences", TextList, false, {}, "Optional: character sequences a password cannot hold." },
+	{ "", "launch", "Installed game", Group, false, {}, "Optional: how to find the installed game, to join with it." },
+	{ "launch", "desktopFiles", "Desktop files", TextList, true, {}, "Desktop entries that start the game, by file name, in order of preference." },
+	{ "launch", "installDir", "Install folder", Text, true, {}, "The game's usual install folder, under the home folder." },
+	{ "launch", "program", "Program", Text, true, {}, "The program to run, inside the install folder." },
+	{ "launch", "requiredFiles", "Required files", TextList, true, {}, "Files inside the install folder that show the game is there." }
 } };
 
 constexpr std::array<std::pair<std::string_view, Query::ETextEncoding>, 2> Encodings{ {
-	{ "ascii7", Query::ETextEncoding::Ascii7 },
-	{ "utf8OrWindows1252", Query::ETextEncoding::Utf8OrWindows1252 }
+	{ EncodingNames[0], Query::ETextEncoding::Ascii7 },
+	{ EncodingNames[1], Query::ETextEncoding::Utf8OrWindows1252 }
 } };
 
 constexpr std::array<std::pair<std::string_view, Query::EColorCodes>, 3> ColourCodes{ {
-	{ "alphanumeric", Query::EColorCodes::Alphanumeric },
-	{ "printable", Query::EColorCodes::Printable },
-	{ "rgb", Query::EColorCodes::Rgb }
+	{ ColourCodeNames[0], Query::EColorCodes::Alphanumeric },
+	{ ColourCodeNames[1], Query::EColorCodes::Printable },
+	{ ColourCodeNames[2], Query::EColorCodes::Rgb }
 } };
 
 //////////////////////////////////////////////////////////////////////////
@@ -762,12 +775,12 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 	}
 
 	ReadQueryPortOffset(root, game.queryPortOffset, problem);
-	ReadText(root, game.text, problem);
-	ReadJoin(root, game.join, problem);
 	ReadMasters(root, game, problem);
 	ReadKeys(root, game.keys, problem);
 	ReadModes(root, game.modes, problem);
 	ReadForeignServers(root, game.foreignServers, problem);
+	ReadText(root, game.text, problem);
+	ReadJoin(root, game.join, problem);
 	ReadLaunch(root, game.launch, problem);
 }
 } // namespace
