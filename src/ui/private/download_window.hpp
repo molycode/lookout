@@ -37,7 +37,6 @@ public:
 private:
 
 	void DrawStatus() const;
-	void DrawSearch();
 	void DrawGames();
 	void DrawGame(Download::SGameOffer const& offer, std::vector<std::string>& toDownload, std::vector<std::string>& toRemove);
 	void DrawButtons();

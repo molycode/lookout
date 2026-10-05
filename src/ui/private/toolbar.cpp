@@ -11,7 +11,6 @@
 #include "geo/countries.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <imgui_stdlib.h>
 #include <array>
 #include <cstdint>
 
@@ -310,32 +309,17 @@ void CToolbar::Draw(Browser::CBrowser const& browser, bool canEditGames, SFrameI
 	bool const wantsSearch{ ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_F, ImGuiInputFlags_RouteGlobal) };
 
 	// Focusing skips the modal check, so under a prompt the typing would land behind it.
-	if ((wantsSearch && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) || m_shouldFocusSearch)
+	if (wantsSearch && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId))
 	{
-		ImGui::SetKeyboardFocusHere();
-		m_shouldFocusSearch = false;
+		m_shouldFocusSearch = true;
 	}
 
-	bool const hasSearch{ !m_search.empty() };
-
-	ImGui::SetNextItemWidth(hasSearch ? -ImGui::GetFrameHeight() : -FLT_MIN);
-
-	if (ImGui::InputTextWithHint("##search", LKT_ICON_SEARCH "  Names, maps, mods, countries, players", &m_search, ImGuiInputTextFlags_EscapeClearsAll))
+	if (SearchField("##search", LKT_ICON_SEARCH "  Names, maps, mods, countries, players", m_search, m_shouldFocusSearch))
 	{
 		Config::SServerFilter changed{ filter };
 
 		changed.search = m_search;
 		intents.filter = changed;
-	}
-
-	if (hasSearch && ClearSearchButton())
-	{
-		Config::SServerFilter changed{ filter };
-
-		m_search.clear();
-		changed.search.clear();
-		intents.filter = changed;
-		m_shouldFocusSearch = true;
 	}
 
 	ImGui::EndDisabled();

@@ -4,7 +4,9 @@
 #include "theme_colors.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <imgui_stdlib.h>
 #include <algorithm>
+#include <cfloat>
 
 namespace Lkt::Ui
 {
@@ -32,6 +34,30 @@ float CalcLauncherLabelWidth(std::string_view name, std::string_view location)
 {
 	return ImGui::CalcTextSize(name.data(), name.data() + name.size()).x
 		+ (location.empty() ? 0.0f : ImGui::CalcTextSize(" · ").x + ImGui::CalcTextSize(location.data(), location.data() + location.size()).x);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Its background reaches back under the field's rounded right corners, so the two read as one frame.
+bool ClearSearchButton()
+{
+	SThemeColors const& colors{ GetThemeColors() };
+	float const size{ ImGui::GetFrameHeight() };
+	float const rounding{ ImGui::GetStyle().FrameRounding };
+
+	ImGui::SameLine(0.0f, 0.0f);
+
+	bool const isPressed{ ImGui::InvisibleButton("##clear-search", ImVec2{ size, size }) };
+	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
+	ImVec2 const min{ ImGui::GetItemRectMin() };
+	ImVec2 const max{ ImGui::GetItemRectMax() };
+	ImVec2 const glyphSize{ ImGui::CalcTextSize(LKT_ICON_XMARK) };
+
+	pDrawList->AddRectFilled(ImVec2{ min.x - rounding, min.y }, max, ImGui::GetColorU32(ImGuiCol_FrameBg), rounding, ImDrawFlags_RoundCornersRight);
+	pDrawList->AddText(ImVec2{ min.x + (size - glyphSize.x) * 0.5f, min.y + (size - glyphSize.y) * 0.5f },
+		ImGui::GetColorU32(ImGui::IsItemHovered() ? colors.text : colors.textDisabled), LKT_ICON_XMARK);
+	ImGui::SetItemTooltip("Clear the search");
+
+	return isPressed;
 }
 } // namespace
 
@@ -64,27 +90,28 @@ bool IconButton(char const* id, std::string_view glyph)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Its background reaches back under the field's rounded right corners, so the two read as one frame.
-bool ClearSearchButton()
+bool SearchField(char const* id, char const* hint, std::string& text, bool& shouldFocus)
 {
-	SThemeColors const& colors{ GetThemeColors() };
-	float const size{ ImGui::GetFrameHeight() };
-	float const rounding{ ImGui::GetStyle().FrameRounding };
+	bool const hasText{ !text.empty() };
 
-	ImGui::SameLine(0.0f, 0.0f);
+	if (shouldFocus)
+	{
+		ImGui::SetKeyboardFocusHere();
+		shouldFocus = false;
+	}
 
-	bool const isPressed{ ImGui::InvisibleButton("##clear-search", ImVec2{ size, size }) };
-	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
-	ImVec2 const min{ ImGui::GetItemRectMin() };
-	ImVec2 const max{ ImGui::GetItemRectMax() };
-	ImVec2 const glyphSize{ ImGui::CalcTextSize(LKT_ICON_XMARK) };
+	ImGui::SetNextItemWidth(hasText ? -ImGui::GetFrameHeight() : -FLT_MIN);
 
-	pDrawList->AddRectFilled(ImVec2{ min.x - rounding, min.y }, max, ImGui::GetColorU32(ImGuiCol_FrameBg), rounding, ImDrawFlags_RoundCornersRight);
-	pDrawList->AddText(ImVec2{ min.x + (size - glyphSize.x) * 0.5f, min.y + (size - glyphSize.y) * 0.5f },
-		ImGui::GetColorU32(ImGui::IsItemHovered() ? colors.text : colors.textDisabled), LKT_ICON_XMARK);
-	ImGui::SetItemTooltip("Clear the search");
+	bool isChanged{ ImGui::InputTextWithHint(id, hint, &text, ImGuiInputTextFlags_EscapeClearsAll) };
 
-	return isPressed;
+	if (hasText && ClearSearchButton())
+	{
+		text.clear();
+		shouldFocus = true;
+		isChanged = true;
+	}
+
+	return isChanged;
 }
 
 //////////////////////////////////////////////////////////////////////////

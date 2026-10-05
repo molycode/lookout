@@ -9,11 +9,9 @@
 #include "browser/text_compare.hpp"
 #include "download/lookout_games.hpp"
 #include <imgui.h>
-#include <imgui_stdlib.h>
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
-#include <cfloat>
 #include <cstddef>
 #include <utility>
 
@@ -115,6 +113,7 @@ void CDownloadWindow::Open()
 	{
 		m_isOpen = true;
 		m_shouldFocus = true;
+		m_shouldFocusSearch = true;
 		m_search.clear();
 		m_downloads.ReadIndex();
 	}
@@ -145,7 +144,7 @@ void CDownloadWindow::Draw()
 		if (ImGui::Begin("Download games###downloads", &m_isOpen, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings))
 		{
 			DrawStatus();
-			DrawSearch();
+			SearchField("##search", LKT_ICON_SEARCH "  Game names", m_search, m_shouldFocusSearch);
 			DrawGames();
 			DrawButtons();
 		}
@@ -188,27 +187,6 @@ void CDownloadWindow::DrawStatus() const
 
 	ImGui::PopStyleColor();
 	ImGui::PopTextWrapPos();
-}
-
-//////////////////////////////////////////////////////////////////////////
-void CDownloadWindow::DrawSearch()
-{
-	bool const hasSearch{ !m_search.empty() };
-
-	if (ImGui::IsWindowAppearing() || m_shouldFocusSearch)
-	{
-		ImGui::SetKeyboardFocusHere();
-		m_shouldFocusSearch = false;
-	}
-
-	ImGui::SetNextItemWidth(hasSearch ? -ImGui::GetFrameHeight() : -FLT_MIN);
-	ImGui::InputTextWithHint("##search", LKT_ICON_SEARCH "  Game names", &m_search, ImGuiInputTextFlags_EscapeClearsAll);
-
-	if (hasSearch && ClearSearchButton())
-	{
-		m_search.clear();
-		m_shouldFocusSearch = true;
-	}
 }
 
 //////////////////////////////////////////////////////////////////////////
