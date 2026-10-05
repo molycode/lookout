@@ -283,6 +283,18 @@ TEST_F(CQuake3ProtocolTest, ReadsEveryCapturedStatus)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, PlayerStillConnectingHasNoPing)
+{
+	std::expected<SStatusReply, EParseError> const reply{ Fixtures::ReadStatusDatagram(m_script, ToBytes("\xFF\xFF\xFF\xFFstatusResponse\n\\sv_hostname\\x\n0 -1 \"Dusza\"\n")) };
+
+	ASSERT_TRUE(reply.has_value());
+	ASSERT_EQ(reply->players.size(), 1u);
+	EXPECT_EQ(reply->players[0].name, "Dusza");
+	EXPECT_FALSE(reply->players[0].ping.has_value());
+	EXPECT_EQ(reply->numMalformedPlayerLines, 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake3ProtocolTest, EchoesTheChallenge)
 {
 	std::expected<Script::SScriptAction, std::string> const action{ Fixtures::ReceiveOnce(m_script, Script::EConversationKind::Server, {}, ToBytes(EchoChallenge)) };
