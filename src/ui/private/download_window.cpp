@@ -64,6 +64,18 @@ std::string_view Describe(Download::EOfferState state)
 }
 
 //////////////////////////////////////////////////////////////////////////
+float GetIconSize()
+{
+	return ImGui::GetTextLineHeightWithSpacing() + ImGui::GetTextLineHeight();
+}
+
+//////////////////////////////////////////////////////////////////////////
+float GetCardHeight()
+{
+	return ImGui::GetStyle().FramePadding.y * 2.0f + GetIconSize();
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool IsDownloadable(Download::SGameOffer const& offer)
 {
 	return std::ranges::contains(Downloadable, offer.state);
@@ -253,20 +265,33 @@ void CDownloadWindow::DrawGames()
 {
 	std::vector<std::string> toDownload{};
 	std::vector<std::string> toRemove{};
-	bool isAnyShown{ false };
 
 	if (ImGui::BeginChild("##games", ImVec2{ 0.0f, -ImGui::GetFrameHeightWithSpacing() }))
 	{
-		for (Download::SGameOffer const& offer : m_downloads.GetOffers())
+		std::span<Download::SGameOffer const> const offers{ m_downloads.GetOffers() };
+		std::vector<Download::SGameOffer const*> shown{};
+		ImGuiListClipper clipper{};
+
+		for (Download::SGameOffer const& offer : offers)
 		{
 			if (Browser::ContainsIgnoringCase(offer.name, m_search) || Browser::ContainsIgnoringCase(offer.key, m_search))
 			{
-				DrawGame(offer, toDownload, toRemove);
-				isAnyShown = true;
+				shown.emplace_back(&offer);
 			}
 		}
 
-		if (!isAnyShown && !m_downloads.GetOffers().empty())
+		// Given rather than measured: measuring draws the first card wherever the list is scrolled to.
+		clipper.Begin(static_cast<int>(shown.size()), GetCardHeight() + ImGui::GetStyle().ItemSpacing.y);
+
+		while (clipper.Step())
+		{
+			for (int index{ clipper.DisplayStart }; index < clipper.DisplayEnd; ++index)
+			{
+				DrawGame(*shown[static_cast<size_t>(index)], toDownload, toRemove);
+			}
+		}
+
+		if (shown.empty() && !offers.empty())
 		{
 			ImGui::TextDisabled("No game matches \"%s\".", m_search.c_str());
 		}
@@ -300,8 +325,8 @@ void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<st
 	float const lineHeight{ ImGui::GetTextLineHeight() };
 	ImVec2 const padding{ style.FramePadding };
 	ImVec2 const start{ ImGui::GetCursorScreenPos() };
-	float const iconSize{ ImGui::GetTextLineHeightWithSpacing() + lineHeight };
-	ImVec2 const size{ ImGui::GetContentRegionAvail().x, padding.y * 2.0f + iconSize };
+	float const iconSize{ GetIconSize() };
+	ImVec2 const size{ ImGui::GetContentRegionAvail().x, GetCardHeight() };
 	ImVec2 const icon{ start.x + padding.x, start.y + padding.y };
 	ImVec2 const text{ icon.x + iconSize + style.ItemInnerSpacing.x, icon.y };
 	float const buttonsX{ start.x + size.x - padding.x - numButtons * lineHeight - std::max(numButtons - 1.0f, 0.0f) * style.ItemInnerSpacing.x };
