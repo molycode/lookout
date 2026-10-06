@@ -69,12 +69,15 @@ for game in kingpin ut2004; do
 done
 for uninstaller in "$HOME/.local/share/lookout/uninstall.sh" /tmp/pkg/uninstall.sh; do
 	[ -f "$HOME/.local/bin/lookout" ] || sh /tmp/pkg/install.sh > /tmp/out 2>&1 || fail "install.sh, again"
+	# Only the window keeps icons, so one is put there for the uninstaller to remove.
+	mkdir -p "$HOME/.cache/lookout/icons" && : > "$HOME/.cache/lookout/icons/seed.png" || fail "seeding the icon cache"
 	sh "$uninstaller" > /tmp/out 2>&1 || fail "$uninstaller"
 	grep -q "is uninstalled" /tmp/out || fail "$uninstaller found nothing to remove"
 	for leftover in "$HOME/.local/bin/lookout" "$HOME/.local/share/applications/lookout.desktop" \
 		"$HOME/.local/share/icons/hicolor/scalable/apps/lookout.svg" "$HOME/.local/share/lookout/uninstall.sh"; do
 		[ ! -e "$leftover" ] || fail "$uninstaller left $leftover"
 	done
+	[ ! -e "$HOME/.cache/lookout" ] || fail "$uninstaller left $HOME/.cache/lookout"
 	# The downloaded games stay, as the settings do, and nothing else.
 	[ "$(ls -A "$HOME/.local/share/lookout")" = "downloaded" ] || fail "$uninstaller left $(ls -A "$HOME/.local/share/lookout")"
 done

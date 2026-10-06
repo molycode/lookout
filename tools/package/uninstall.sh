@@ -1,5 +1,6 @@
 #!/bin/sh
-# Removes what install.sh put in place; settings, logs and the user's game descriptions are kept.
+# Removes what install.sh put in place and the game icons Lookout keeps; settings, logs and the user's game descriptions
+# are kept.
 #
 #   ./uninstall.sh      (from the package, or as ~/.local/share/lookout/uninstall.sh)
 
@@ -20,6 +21,7 @@ xdg_dir() {
 DATA_DIR=$(xdg_dir "${XDG_DATA_HOME:-}" .local/share)
 CONFIG_DIR=$(xdg_dir "${XDG_CONFIG_HOME:-}" .config)/lookout
 STATE_DIR=$(xdg_dir "${XDG_STATE_HOME:-}" .local/state)/lookout
+CACHE_DIR=$(xdg_dir "${XDG_CACHE_HOME:-}" .cache)/lookout
 APPS_DIR="$DATA_DIR/applications"
 UNINSTALL_DIR="$DATA_DIR/lookout"
 isFound=false
@@ -32,6 +34,7 @@ for file in "$HOME/.local/bin/lookout" "$APPS_DIR/lookout.desktop" "$DATA_DIR/ic
 	fi
 done
 
+rm -rf "$CACHE_DIR"
 rmdir "$UNINSTALL_DIR" 2>/dev/null || true
 
 # Still there, it holds the downloaded games or the user's own.
