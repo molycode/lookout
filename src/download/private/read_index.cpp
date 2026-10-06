@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <utility>
 
 namespace Lkt::Download
@@ -130,6 +131,7 @@ void ReadProtocol(std::string const& name, JsonValue const& json, SIndexProtocol
 {
 	std::string const path{ std::format("protocols.{}", name) };
 	JsonValue::const_iterator const api{ json.is_object() ? json.find("api") : json.cend() };
+	JsonValue::const_iterator const version{ json.is_object() ? json.find("version") : json.cend() };
 
 	protocol.name = name;
 
@@ -141,9 +143,14 @@ void ReadProtocol(std::string const& name, JsonValue const& json, SIndexProtocol
 	{
 		Fail(problem, std::format("{}.api", path), "must be a whole number");
 	}
+	else if (version != json.cend() && (!version->is_number_unsigned() || version->get<uint64_t>() == 0))
+	{
+		Fail(problem, std::format("{}.version", path), "must be a whole number from 1");
+	}
 	else
 	{
 		protocol.api = api->get<int64_t>();
+		protocol.version = (version != json.cend()) ? std::optional<uint64_t>{ version->get<uint64_t>() } : std::nullopt;
 		ReadFile(json, path, std::format("{}.lua", name), MaxScriptSize, protocol.file, problem);
 	}
 }

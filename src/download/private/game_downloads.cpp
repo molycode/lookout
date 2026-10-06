@@ -437,7 +437,7 @@ void CGameDownloads::RefreshOffers()
 
 			SIndexFile const* const pIcon{ FindIcon(game) };
 
-			m_offers.emplace_back(game.key, game.name, state, (pIcon != nullptr) ? pIcon->sha256 : std::string{});
+			m_offers.emplace_back(game.key, game.name, state, (pIcon != nullptr) ? pIcon->sha256 : std::string{}, game.protocol, protocol.version);
 			downloaded.erase(game.key);
 		}
 	}

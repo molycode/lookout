@@ -13,6 +13,8 @@
 #include <iterator>
 #include <map>
 #include <mutex>
+#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -178,6 +180,16 @@ protected:
 		return RunUntilIdle();
 	}
 
+	SGameOffer GetOffer(std::string_view key) const
+	{
+		std::span<SGameOffer const> const offers{ m_downloads.GetOffers() };
+		auto const it{ std::ranges::find(offers, key, &SGameOffer::key) };
+
+		EXPECT_NE(it, offers.end()) << key;
+
+		return (it != offers.end()) ? *it : SGameOffer{};
+	}
+
 	EOfferState GetState(std::string_view key) const
 	{
 		std::span<SGameOffer const> const offers{ m_downloads.GetOffers() };
@@ -207,6 +219,51 @@ TEST_F(CGameDownloadsTest, OffersComeFromTheIndex)
 	EXPECT_EQ(m_downloads.GetOffers().front().name, "Kingpin: Life of Crime");
 	EXPECT_EQ(GetState("kingpin"), EOfferState::NotInstalled);
 	EXPECT_TRUE(m_downloads.GetProblems().empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, OfferNamesItsProtocol)
+{
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(GetOffer("kingpin").protocol, "quake2");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, OfferCarriesItsProtocolsVersion)
+{
+	JsonValue index = MakeIndex();
+
+	index["protocols"]["quake2"]["version"] = 9041;
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(GetOffer("kingpin").protocolVersion, 9041u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolWithoutAVersionOffersNone)
+{
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(GetOffer("kingpin").protocolVersion, std::nullopt);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolVersionBelowOneRefusesTheIndex)
+{
+	JsonValue index = MakeIndex();
+
+	index["protocols"]["quake2"]["version"] = 0;
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	ASSERT_EQ(m_downloads.GetProblems().size(), 1u);
+	EXPECT_EQ(m_downloads.GetProblems().front(), "index.json: protocols.quake2.version: must be a whole number from 1");
 }
 
 //////////////////////////////////////////////////////////////////////////
