@@ -742,6 +742,28 @@ TEST_F(CGameDownloadsTest, CachedIconThatDiffersIsFetchedPastTheCap)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, IndexReadingKeepsOnlyTheIconsItNames)
+{
+	std::filesystem::path const iconDir{ GetCacheDir() / "icons" };
+	std::string const kept{ std::format("{}.png", HashSha256(m_files.at("games/kingpin/icon.png"))) };
+	std::vector<std::string> names{};
+	std::error_code error{};
+
+	WriteFile(iconDir / kept, m_files.at("games/kingpin/icon.png"));
+	WriteFile(iconDir / std::format("{}.png", HashSha256("withdrawn")), "withdrawn");
+	WriteFile(iconDir / std::format("{}.Ab12Cd", kept), "left over");
+	Start();
+	ReadIndex();
+
+	for (std::filesystem::directory_iterator it{ iconDir, error }, end{}; error.value() == 0 && it != end; it.increment(error))
+	{
+		names.emplace_back(it->path().filename().string());
+	}
+
+	EXPECT_EQ(names, std::vector<std::string>{ kept });
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CGameDownloadsTest, IconThatCannotBeCachedIsStillHeld)
 {
 	WriteFile(GetCacheDir(), "not a folder");

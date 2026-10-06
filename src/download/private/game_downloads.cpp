@@ -303,6 +303,11 @@ void CGameDownloads::TakeIndex(Net::SFetchResult result)
 		if (index.has_value())
 		{
 			m_pIndex = std::make_unique<SGameIndex>(std::move(*index));
+
+			if (!m_iconDir.empty())
+			{
+				PruneIcons();
+			}
 		}
 		else
 		{
@@ -315,6 +320,28 @@ void CGameDownloads::TakeIndex(Net::SFetchResult result)
 	}
 
 	RefreshOffers();
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The kept icons are those the index names, so the cache holds no more than lookout-games does.
+void CGameDownloads::PruneIcons() const
+{
+	std::set<std::string, std::less<>> iconHashes{};
+
+	for (SIndexGame const& game : m_pIndex->games)
+	{
+		SIndexFile const* const pIcon{ FindIcon(game) };
+
+		if (pIcon != nullptr)
+		{
+			iconHashes.insert(pIcon->sha256);
+		}
+	}
+
+	for (std::string const& problem : PruneIconCache(m_iconDir, iconHashes))
+	{
+		gLog.Warning("Cannot remove an icon the index no longer names: {}", problem);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -53,4 +53,42 @@ std::expected<void, std::string> CacheIcon(std::filesystem::path const& iconDir,
 
 	return written.has_value() ? written : std::unexpected{ std::format("{}: {}", path.string(), written.error()) };
 }
+
+//////////////////////////////////////////////////////////////////////////
+// Everything else goes, a write's leftover temporary file included; a missing folder holds nothing to remove.
+std::vector<std::string> PruneIconCache(std::filesystem::path const& iconDir, std::set<std::string, std::less<>> const& iconHashes)
+{
+	std::vector<std::string> problems{};
+	std::vector<std::filesystem::path> unnamed{};
+	std::error_code error{};
+
+	for (std::filesystem::directory_iterator it{ iconDir, error }, end{}; error.value() == 0 && it != end; it.increment(error))
+	{
+		std::filesystem::path const& path{ it->path() };
+
+		if (path.extension() != IconExtension || !iconHashes.contains(path.stem().string()))
+		{
+			unnamed.emplace_back(path);
+		}
+	}
+
+	if (error.value() != 0 && error != std::errc::no_such_file_or_directory)
+	{
+		problems.emplace_back(std::format("{}: {}", iconDir.string(), error.message()));
+	}
+
+	for (std::filesystem::path const& path : unnamed)
+	{
+		std::error_code removeError{};
+
+		std::filesystem::remove_all(path, removeError);
+
+		if (removeError.value() != 0)
+		{
+			problems.emplace_back(std::format("{}: {}", path.string(), removeError.message()));
+		}
+	}
+
+	return problems;
+}
 } // namespace Lkt::Download

@@ -55,6 +55,7 @@ public:
 private:
 
 	void TakeIndex(Net::SFetchResult result);
+	void PruneIcons() const;
 	void TakeIcon(Net::SFetchResult result, std::string_view sha256);
 	void InstallFetched();
 	void RefreshOffers();
