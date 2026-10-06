@@ -6,6 +6,7 @@
 #include "config/xdg_paths.hpp"
 #include "download/game_downloads.hpp"
 #include "download/lookout_games.hpp"
+#include "download/lookout_release.hpp"
 #include "games/game_files.hpp"
 #include "games/load_games.hpp"
 #include "launch/launch_environment.hpp"
@@ -274,6 +275,11 @@ bool CLookout::RunDownload(std::span<std::string const> keys)
 		downloads.ReadIndex();
 		waitUntilIdle();
 		success = downloads.HasIndex();
+
+		if (Download::IsNewerLookout(downloads.GetLookoutVersion(), LKT_VERSION))
+		{
+			gLog.Warning("Lookout {} is out: {}", downloads.GetLookoutVersion(), Download::LookoutReleaseUrl);
+		}
 	}
 	else
 	{
