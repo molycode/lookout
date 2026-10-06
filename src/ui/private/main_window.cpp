@@ -88,11 +88,11 @@ std::string GetDisplayName(Browser::SServerEntry const& entry)
 
 //////////////////////////////////////////////////////////////////////////
 void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutInfo const& about, std::filesystem::path const& userDir,
-	std::function<void()> requestReload, std::function<void()> wake)
+	std::filesystem::path const& cacheDir, std::function<void()> requestReload, std::function<void()> wake)
 {
 	m_userDir = userDir;
 	m_requestReload = std::move(requestReload);
-	m_downloadWindow.Initialize(SDL_GetRenderer(pWindow), userDir, about.version, std::move(wake));
+	m_downloadWindow.Initialize(SDL_GetRenderer(pWindow), userDir, cacheDir, about.version, std::move(wake));
 	m_gameSettings.Initialize(pWindow);
 	m_aboutDialog.Initialize(pWindow, about);
 	m_detailsEm = static_cast<float>(detailsWidth) / BaseFontSize;

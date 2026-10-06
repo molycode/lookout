@@ -32,7 +32,7 @@ public:
 	~CApplication() = default;
 
 	// Game descriptions are edited in userDir; empty, they cannot be.
-	bool Initialize(SAboutInfo const& about, Config::SWindowSettings const& window, std::filesystem::path const& userDir);
+	bool Initialize(SAboutInfo const& about, Config::SWindowSettings const& window, std::filesystem::path const& userDir, std::filesystem::path const& cacheDir);
 	std::function<void()> MakeWakeCallback() const;
 	std::function<void()> MakeReloadCallback();
 	void Run(Browser::CBrowser& browser, std::function<void()> const& reloadGames);
@@ -59,6 +59,7 @@ private:
 	Config::SWindowSettings m_window;
 	SAboutInfo m_about;
 	std::filesystem::path m_userDir;
+	std::filesystem::path m_cacheDir;
 	float m_scale{ 1.0f };
 	uint32_t m_wakeEventType{ 0 };
 	bool m_hasVsync{ false };

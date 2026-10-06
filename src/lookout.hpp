@@ -46,6 +46,7 @@ private:
 	std::string m_configDir;
 	std::vector<std::string> m_startupProblems;
 	std::filesystem::path m_userDir;
+	std::filesystem::path m_cacheDir;
 	std::vector<Query::SGameProblem> m_gameProblems;
 	Games::CFolderWatcher m_watcher;
 	Net::CQueryEngine m_engine;

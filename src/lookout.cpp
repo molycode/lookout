@@ -122,7 +122,7 @@ bool CLookout::RunWindow()
 	m_browser.SetGameProblems(m_gameProblems);
 
 	Ui::SAboutInfo const about{ LKT_VERSION, m_configDir, m_logsDir };
-	bool const isReady{ m_application.Initialize(about, m_browser.GetSettings().window, m_userDir) && m_browser.Start(m_application.MakeWakeCallback()) };
+	bool const isReady{ m_application.Initialize(about, m_browser.GetSettings().window, m_userDir, m_cacheDir) && m_browser.Start(m_application.MakeWakeCallback()) };
 
 	if (isReady)
 	{
@@ -258,7 +258,7 @@ bool CLookout::RunDownload(std::span<std::string const> keys)
 		}
 	} };
 
-	bool success{ downloads.Initialize(m_userDir, Download::GetLookoutGamesSource(LKT_VERSION), [&mutex, &wake, &hasResults]()
+	bool success{ downloads.Initialize(m_userDir, m_cacheDir, Download::GetLookoutGamesSource(LKT_VERSION), [&mutex, &wake, &hasResults]()
 	{
 		{
 			std::lock_guard const lock{ mutex };
@@ -401,6 +401,17 @@ void CLookout::PrepareDirectories()
 	else
 	{
 		m_startupProblems.emplace_back(std::format("Cannot locate the log directory, logging to the terminal only: {}", Config::ToString(stateHome.error())));
+	}
+
+	std::expected<std::filesystem::path, Config::EXdgError> const cacheHome{ Config::GetCacheHome() };
+
+	if (cacheHome.has_value())
+	{
+		m_cacheDir = *cacheHome / AppDirName;
+	}
+	else
+	{
+		m_startupProblems.emplace_back(std::format("Cannot locate the cache directory, so game icons are not kept: {}", Config::ToString(cacheHome.error())));
 	}
 }
 

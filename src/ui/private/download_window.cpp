@@ -146,11 +146,12 @@ bool GameButton(char const* id, std::string_view glyph, std::string_view tooltip
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, std::filesystem::path const& userDir, std::string_view version, std::function<void()> wake)
+void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, std::filesystem::path const& userDir, std::filesystem::path const& cacheDir, std::string_view version,
+	std::function<void()> wake)
 {
 	m_pRenderer = pRenderer;
 	m_isReady = !userDir.empty()
-		&& m_downloads.Initialize(userDir, Download::GetLookoutGamesSource(version), std::move(wake));
+		&& m_downloads.Initialize(userDir, cacheDir, Download::GetLookoutGamesSource(version), std::move(wake));
 
 	if (!userDir.empty() && !m_isReady)
 	{

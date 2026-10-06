@@ -45,7 +45,7 @@ public:
 
 	// requestReload has the games read again once no popup is open; wake brings the window back for downloads.
 	void Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutInfo const& about, std::filesystem::path const& userDir,
-		std::function<void()> requestReload, std::function<void()> wake);
+		std::filesystem::path const& cacheDir, std::function<void()> requestReload, std::function<void()> wake);
 	void Terminate();
 	void Draw(Browser::CBrowser& browser);
 	void OnCatalogChanged(std::span<std::string const> oldKeys);

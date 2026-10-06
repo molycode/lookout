@@ -56,4 +56,10 @@ std::expected<std::filesystem::path, EXdgError> GetDataHome()
 {
 	return ResolveBaseDir("XDG_DATA_HOME", ".local/share");
 }
+
+//////////////////////////////////////////////////////////////////////////
+std::expected<std::filesystem::path, EXdgError> GetCacheHome()
+{
+	return ResolveBaseDir("XDG_CACHE_HOME", ".cache");
+}
 } // namespace Lkt::Config

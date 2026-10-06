@@ -9,4 +9,5 @@ namespace Lkt::Config
 std::expected<std::filesystem::path, EXdgError> GetConfigHome();
 std::expected<std::filesystem::path, EXdgError> GetStateHome();
 std::expected<std::filesystem::path, EXdgError> GetDataHome();
+std::expected<std::filesystem::path, EXdgError> GetCacheHome();
 } // namespace Lkt::Config

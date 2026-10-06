@@ -30,7 +30,7 @@ public:
 	CGameDownloads();
 	~CGameDownloads();
 
-	bool Initialize(std::filesystem::path const& userDir, SDownloadSource source, std::function<void()> onResults);
+	bool Initialize(std::filesystem::path const& userDir, std::filesystem::path const& cacheDir, SDownloadSource source, std::function<void()> onResults);
 	void Terminate();
 
 	void ReadIndex();
@@ -63,6 +63,7 @@ private:
 
 	std::filesystem::path m_userDir;
 	std::filesystem::path m_downloadedDir;
+	std::filesystem::path m_iconDir;
 	SDownloadSource m_source;
 	Net::CHttpsFetcher m_fetcher;
 	std::unique_ptr<SGameIndex> m_pIndex;

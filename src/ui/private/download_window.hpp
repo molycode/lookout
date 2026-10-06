@@ -25,7 +25,8 @@ public:
 	~CDownloadWindow() = default;
 
 	// Without a data folder there is nowhere to download to, and it stays closed.
-	void Initialize(SDL_Renderer* pRenderer, std::filesystem::path const& userDir, std::string_view version, std::function<void()> wake);
+	void Initialize(SDL_Renderer* pRenderer, std::filesystem::path const& userDir, std::filesystem::path const& cacheDir, std::string_view version,
+		std::function<void()> wake);
 	void Terminate();
 
 	void Open();

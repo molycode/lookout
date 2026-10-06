@@ -145,7 +145,7 @@ protected:
 		source.origin.caFile = (std::filesystem::path{ LKT_FIXTURES_DIR } / "tls" / "ca.pem").string();
 		source.origin.address = Query::SServerAddress{ Loopback, m_server.GetPort() };
 		source.repository = "/repo";
-		ASSERT_TRUE(m_downloads.Initialize(m_dir, std::move(source), [this]()
+		ASSERT_TRUE(m_downloads.Initialize(m_dir, GetCacheDir(), std::move(source), [this]()
 		{
 			{
 				std::lock_guard const lock{ m_mutex };
@@ -193,6 +193,27 @@ protected:
 
 		RunUntil([this, &sha256]() { return !m_downloads.GetIcon(sha256).empty(); });
 		EXPECT_FALSE(m_downloads.GetIcon(sha256).empty()) << key;
+	}
+
+	std::filesystem::path GetCacheDir() const
+	{
+		return m_dir / "cache";
+	}
+
+	std::filesystem::path GetCachedIconPath(std::string_view key) const
+	{
+		return GetCacheDir() / "icons" / std::format("{}.png", GetOffer(key).iconSha256);
+	}
+
+	void WriteFile(std::filesystem::path const& path, std::string_view bytes) const
+	{
+		std::error_code error{};
+
+		std::filesystem::create_directories(path.parent_path(), error);
+
+		std::ofstream file{ path, std::ios::binary };
+
+		file << bytes;
 	}
 
 	bool IsIconHeld(std::string_view key) const
@@ -651,6 +672,85 @@ TEST_F(CGameDownloadsTest, IconBeyondTheCapIsFetchedWhenAskedForAgain)
 	RunUntilIconHeld("sixth");
 
 	EXPECT_TRUE(std::ranges::all_of(keys, [this](std::string_view key) { return IsIconHeld(key); }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, FetchedIconIsKeptInTheCache)
+{
+	Start();
+	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
+	RunUntilIconHeld("kingpin");
+
+	EXPECT_EQ(ReadText(GetCachedIconPath("kingpin")), m_files.at("games/kingpin/icon.png"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, CachedIconIsNotFetched)
+{
+	Start();
+	ReadIndex();
+	WriteFile(GetCachedIconPath("kingpin"), m_files.at("games/kingpin/icon.png"));
+	m_downloads.RequestIcon("kingpin");
+
+	EXPECT_TRUE(IsIconHeld("kingpin"));
+	EXPECT_EQ(m_server.GetNumRequests(), 1u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, CachedIconThatDiffersIsFetchedAgain)
+{
+	std::string icon{ m_files.at("games/kingpin/icon.png") };
+
+	icon[0] ^= 1;
+	Start();
+	ReadIndex();
+	WriteFile(GetCachedIconPath("kingpin"), icon);
+	m_downloads.RequestIcon("kingpin");
+	RunUntilIconHeld("kingpin");
+
+	EXPECT_EQ(m_server.GetNumRequests(), 2u);
+	EXPECT_EQ(ReadText(GetCachedIconPath("kingpin")), m_files.at("games/kingpin/icon.png"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, CachedIconThatDiffersIsFetchedPastTheCap)
+{
+	std::array<std::string_view, 5> const keys{ "second", "third", "fourth", "fifth", "kingpin" };
+	JsonValue index = MakeIndex();
+	std::string icon{ m_files.at("games/kingpin/icon.png") };
+
+	for (std::string_view const key : keys | std::views::take(4))
+	{
+		AddGame(index, std::string{ key });
+	}
+
+	icon[0] ^= 1;
+	Serve(index);
+	Start();
+	ReadIndex();
+	WriteFile(GetCachedIconPath("kingpin"), icon);
+
+	for (std::string_view const key : keys)
+	{
+		m_downloads.RequestIcon(key);
+	}
+
+	ReadIndex();
+
+	EXPECT_EQ(m_server.GetNumRequests(), 7u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, IconThatCannotBeCachedIsStillHeld)
+{
+	WriteFile(GetCacheDir(), "not a folder");
+	Start();
+	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
+	RunUntilIconHeld("kingpin");
+
+	EXPECT_TRUE(m_downloads.GetProblems().empty());
 }
 
 //////////////////////////////////////////////////////////////////////////

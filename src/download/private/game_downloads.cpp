@@ -1,6 +1,7 @@
 #include "download/game_downloads.hpp"
 #include "downloaded_files.hpp"
 #include "game_index.hpp"
+#include "icon_cache.hpp"
 #include "loggers.hpp"
 #include "read_index.hpp"
 #include "sha256.hpp"
@@ -11,6 +12,7 @@
 #include <algorithm>
 #include <expected>
 #include <format>
+#include <optional>
 #include <ranges>
 #include <set>
 #include <string_view>
@@ -24,6 +26,7 @@ constexpr size_t MaxIndexSize{ 1024 * 1024 };
 constexpr std::string_view IndexBranch{ "main" };
 constexpr std::string_view IndexFile{ "index.json" };
 constexpr std::string_view IconFile{ "icon.png" };
+constexpr std::string_view IconFolder{ "icons" };
 // The window asks again every frame for the icons on screen, so a few keep the connection busy; more would hold up
 // a reading or a download behind icons that may have scrolled away.
 constexpr size_t MaxPendingIcons{ 4 };
@@ -84,10 +87,13 @@ CGameDownloads::CGameDownloads() = default;
 CGameDownloads::~CGameDownloads() = default;
 
 //////////////////////////////////////////////////////////////////////////
-bool CGameDownloads::Initialize(std::filesystem::path const& userDir, SDownloadSource source, std::function<void()> onResults)
+// Without a cache folder, icons are kept for the run only.
+bool CGameDownloads::Initialize(std::filesystem::path const& userDir, std::filesystem::path const& cacheDir, SDownloadSource source,
+	std::function<void()> onResults)
 {
 	m_userDir = userDir;
 	m_downloadedDir = Games::GetDownloadedDir(userDir);
+	m_iconDir = cacheDir.empty() ? std::filesystem::path{} : cacheDir / IconFolder;
 	m_source = std::move(source);
 
 	bool const isReady{ !m_downloadedDir.empty() && m_fetcher.Initialize(m_source.origin, std::move(onResults)) };
@@ -319,10 +325,26 @@ void CGameDownloads::RequestIcon(std::string_view key)
 	SIndexFile const* const pIcon{ (pGame != nullptr) ? FindIcon(*pGame) : nullptr };
 	bool const isKnown{ pIcon != nullptr && (m_iconsByHash.contains(pIcon->sha256) || m_failedIconHashes.contains(pIcon->sha256)
 		|| std::ranges::contains(m_pendingIconHashes | std::views::values, pIcon->sha256)) };
+	std::expected<std::optional<std::string>, std::string> cached{ std::optional<std::string>{} };
 
-	if (pIcon != nullptr && !isKnown && m_pendingIconHashes.size() < MaxPendingIcons)
+	if (pIcon != nullptr && !isKnown && !m_iconDir.empty())
+	{
+		cached = ReadCachedIcon(m_iconDir, *pIcon);
+	}
+
+	if (cached.has_value() && cached->has_value())
+	{
+		m_iconsByHash.emplace(pIcon->sha256, std::move(**cached));
+	}
+	// Past the cap when the kept file cannot be used, so that is reported once rather than every frame.
+	else if (pIcon != nullptr && !isKnown && (!cached.has_value() || m_pendingIconHashes.size() < MaxPendingIcons))
 	{
 		std::string path{ MakePath(m_pIndex->commit, std::format("games/{}/{}", key, IconFile)) };
+
+		if (!cached.has_value())
+		{
+			gLog.Warning("Cannot read a kept icon, so it is fetched again: {}", cached.error());
+		}
 
 		m_fetcher.Fetch({ Net::SFetchRequest{ path, pIcon->size } });
 		m_pendingIconHashes.emplace(std::move(path), pIcon->sha256);
@@ -335,6 +357,13 @@ void CGameDownloads::TakeIcon(Net::SFetchResult result, std::string_view sha256)
 {
 	if (result.body.has_value() && HashSha256(*result.body) == sha256)
 	{
+		std::expected<void, std::string> const cached{ m_iconDir.empty() ? std::expected<void, std::string>{} : CacheIcon(m_iconDir, sha256, *result.body) };
+
+		if (!cached.has_value())
+		{
+			gLog.Warning("Cannot keep an icon for later, so it is fetched again next time: {}", cached.error());
+		}
+
 		m_iconsByHash.insert_or_assign(std::string{ sha256 }, std::move(*result.body));
 	}
 	else
