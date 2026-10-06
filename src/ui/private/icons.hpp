@@ -20,6 +20,7 @@
 #define LKT_ICON_CHECK "\xef\x80\x8c"
 #define LKT_ICON_DOWNLOAD "\xef\x80\x99"
 #define LKT_ICON_CIRCLE_UP "\xef\x8d\x9b"
+#define LKT_ICON_ARROW_RIGHT "\xef\x81\xa1"
 #define LKT_ICON_PEN "\xef\x8c\x84"
 #define LKT_ICON_QUESTION "\xef\x81\x99"
 #define LKT_ICON_ROTATE_LEFT "\xef\x83\xa2"

@@ -8,12 +8,17 @@
 #include "widgets.hpp"
 #include "browser/text_compare.hpp"
 #include "download/lookout_games.hpp"
+#include "query/game_catalog.hpp"
+#include "query/protocol_definition.hpp"
+#include "query/protocol_origin.hpp"
 #include <imgui.h>
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
 #include <cfloat>
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <utility>
 
 namespace Lkt::Ui
@@ -28,6 +33,8 @@ constexpr char const* RemoveAllPopupId{ "Remove all games###removeAll" };
 constexpr std::array<Download::EOfferState, 2> Downloadable{ Download::EOfferState::NotInstalled, Download::EOfferState::UpdateAvailable };
 constexpr std::array<Download::EOfferState, 3> Removable{ Download::EOfferState::Installed, Download::EOfferState::UpdateAvailable,
 	Download::EOfferState::Withdrawn };
+constexpr std::array<Download::EOfferState, 3> WithProtocol{ Download::EOfferState::NotInstalled, Download::EOfferState::Installed,
+	Download::EOfferState::UpdateAvailable };
 
 //////////////////////////////////////////////////////////////////////////
 std::string_view Describe(Download::EOfferState state)
@@ -51,6 +58,38 @@ std::string_view Describe(Download::EOfferState state)
 		case Download::EOfferState::Withdrawn:
 			text = "No longer offered";
 			break;
+	}
+
+	return text;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::string_view DescribeOffer(Download::SGameOffer const& offer, std::array<char, 128>& buffer)
+{
+	std::string_view const state{ Describe(offer.state) };
+	Query::SProtocolDefinition const* const pProtocol{ Query::FindProtocol(offer.protocol) };
+	std::optional<uint64_t> const installed{ (pProtocol != nullptr) ? pProtocol->downloadedVersion : std::nullopt };
+	std::string_view text{ state };
+
+	if (!offer.protocol.empty() && std::ranges::contains(WithProtocol, offer.state))
+	{
+		if (pProtocol != nullptr && pProtocol->origin != Query::EProtocolOrigin::Downloaded)
+		{
+			text = FormatTo(buffer, "{} · your own {} in use", state, offer.protocol);
+		}
+		else if (offer.state == Download::EOfferState::UpdateAvailable && installed.has_value() && offer.protocolVersion.has_value()
+			&& *installed != *offer.protocolVersion)
+		{
+			text = FormatTo(buffer, "{} · {} {} " LKT_ICON_ARROW_RIGHT " {}", state, offer.protocol, *installed, *offer.protocolVersion);
+		}
+		else if (offer.protocolVersion.has_value())
+		{
+			text = FormatTo(buffer, "{} · {} {}", state, offer.protocol, *offer.protocolVersion);
+		}
+		else
+		{
+			text = FormatTo(buffer, "{} · {}", state, offer.protocol);
+		}
 	}
 
 	return text;
@@ -254,7 +293,8 @@ void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<st
 	ImVec2 const icon{ start.x + padding.x, start.y + padding.y };
 	ImVec2 const text{ icon.x + iconSize + style.ItemInnerSpacing.x, icon.y };
 	float const buttonsX{ start.x + size.x - padding.x - numButtons * lineHeight - std::max(numButtons - 1.0f, 0.0f) * style.ItemInnerSpacing.x };
-	std::string_view const stateText{ isDownloading ? std::string_view{ "Downloading…" } : Describe(state) };
+	std::array<char, 128> stateBuffer{};
+	std::string_view const stateText{ isDownloading ? std::string_view{ "Downloading…" } : DescribeOffer(offer, stateBuffer) };
 	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
 	std::array<char, 128> buffer{};
 

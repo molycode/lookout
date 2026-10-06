@@ -21,4 +21,5 @@ SGameDefinition const* FindGame(std::string_view key);
 
 std::span<SProtocolDefinition const> GetProtocolCatalog();
 SProtocolDefinition const& GetProtocol(EProtocol protocol);
+SProtocolDefinition const* FindProtocol(std::string_view name);
 } // namespace Lkt::Query

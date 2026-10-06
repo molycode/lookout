@@ -80,4 +80,12 @@ SProtocolDefinition const& GetProtocol(EProtocol protocol)
 
 	return gProtocols[index];
 }
+
+//////////////////////////////////////////////////////////////////////////
+SProtocolDefinition const* FindProtocol(std::string_view name)
+{
+	auto const it{ std::ranges::find(gProtocols, name, &SProtocolDefinition::name) };
+
+	return (it != gProtocols.end()) ? &*it : nullptr;
+}
 } // namespace Lkt::Query

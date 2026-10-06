@@ -37,5 +37,20 @@ TEST(GameCatalog, UnknownKeyFindsNothing)
 {
 	EXPECT_EQ(FindGame("doom"), nullptr);
 }
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameCatalog, FindsProtocolByName)
+{
+	SProtocolDefinition const* const pProtocol{ FindProtocol("quake2") };
+
+	ASSERT_NE(pProtocol, nullptr);
+	EXPECT_EQ(pProtocol->name, "quake2");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameCatalog, UnknownNameFindsNoProtocol)
+{
+	EXPECT_EQ(FindProtocol("doom"), nullptr);
+}
 } // namespace
 } // namespace Lkt::Query
