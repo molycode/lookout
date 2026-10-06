@@ -162,13 +162,7 @@ void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, std::filesystem::path 
 void CDownloadWindow::Terminate()
 {
 	m_downloads.Terminate();
-
-	for (auto& [hash, levels] : m_icons)
-	{
-		DestroyIconLevels(levels);
-	}
-
-	m_icons.clear();
+	DestroyIcons();
 	m_isReady = false;
 }
 
@@ -217,6 +211,11 @@ void CDownloadWindow::Draw()
 		}
 
 		ImGui::End();
+	}
+	else if (!m_icons.empty())
+	{
+		// A frame after closing, since the frame that closed the window still drew them.
+		DestroyIcons();
 	}
 }
 
@@ -485,6 +484,17 @@ std::span<SIconLevel const> CDownloadWindow::FindIcon(Download::SGameOffer const
 	}
 
 	return (icon != m_icons.end()) ? std::span<SIconLevel const>{ icon->second } : std::span<SIconLevel const>{};
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CDownloadWindow::DestroyIcons()
+{
+	for (auto& [hash, levels] : m_icons)
+	{
+		DestroyIconLevels(levels);
+	}
+
+	m_icons.clear();
 }
 
 //////////////////////////////////////////////////////////////////////////

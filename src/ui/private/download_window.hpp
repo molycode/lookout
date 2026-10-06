@@ -43,6 +43,7 @@ private:
 	void DrawInstalledCount() const;
 	void DrawRemoveAllPrompt();
 	std::span<SIconLevel const> FindIcon(Download::SGameOffer const& offer);
+	void DestroyIcons();
 	bool CanDownload() const;
 	bool HasAny(bool (*pIsChosen)(Download::SGameOffer const&)) const;
 	std::vector<std::string> Collect(bool (*pIsChosen)(Download::SGameOffer const&)) const;
