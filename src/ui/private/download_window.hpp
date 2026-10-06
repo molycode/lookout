@@ -44,8 +44,8 @@ private:
 	void DrawRemoveAllPrompt();
 	std::span<SIconLevel const> FindIcon(Download::SGameOffer const& offer);
 	bool CanDownload() const;
-	bool HasAny(std::span<Download::EOfferState const> states) const;
-	std::vector<std::string> Collect(std::span<Download::EOfferState const> states) const;
+	bool HasAny(bool (*pIsChosen)(Download::SGameOffer const&)) const;
+	std::vector<std::string> Collect(bool (*pIsChosen)(Download::SGameOffer const&)) const;
 
 	Download::CGameDownloads m_downloads;
 	std::map<std::string, std::vector<SIconLevel>, std::less<>> m_icons;

@@ -31,8 +31,8 @@ constexpr float PromptWidthEm{ 22.0f };
 constexpr float ProgressBarHeightEm{ 0.4f };
 constexpr char const* RemoveAllPopupId{ "Remove all games###removeAll" };
 constexpr std::array<Download::EOfferState, 2> Downloadable{ Download::EOfferState::NotInstalled, Download::EOfferState::UpdateAvailable };
-constexpr std::array<Download::EOfferState, 3> Removable{ Download::EOfferState::Installed, Download::EOfferState::UpdateAvailable,
-	Download::EOfferState::Withdrawn };
+constexpr std::array<Download::EOfferState, 3> InstalledStates{ Download::EOfferState::Installed, Download::EOfferState::UpdateAvailable,
+	Download::EOfferState::NeedsNewerLookout };
 constexpr std::array<Download::EOfferState, 3> WithProtocol{ Download::EOfferState::NotInstalled, Download::EOfferState::Installed,
 	Download::EOfferState::UpdateAvailable };
 
@@ -61,6 +61,18 @@ std::string_view Describe(Download::EOfferState state)
 	}
 
 	return text;
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool IsDownloadable(Download::SGameOffer const& offer)
+{
+	return std::ranges::contains(Downloadable, offer.state);
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool IsRemovable(Download::SGameOffer const& offer)
+{
+	return offer.isDownloaded;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -283,7 +295,7 @@ void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<st
 	bool const isDownloading{ std::ranges::contains(m_downloads.GetDownloadKeys(), offer.key) };
 	bool const canGet{ state == Download::EOfferState::NotInstalled };
 	bool const canUpdate{ state == Download::EOfferState::UpdateAvailable };
-	bool const canRemove{ std::ranges::contains(Removable, state) };
+	bool const canRemove{ IsRemovable(offer) };
 	float const numButtons{ static_cast<float>(static_cast<int>(canGet) + static_cast<int>(canUpdate) + static_cast<int>(canRemove)) };
 	float const lineHeight{ ImGui::GetTextLineHeight() };
 	ImVec2 const padding{ style.FramePadding };
@@ -339,14 +351,14 @@ void CDownloadWindow::DrawButtons()
 {
 	bool const isIdle{ m_downloads.GetPhase() == Download::EDownloadPhase::Idle };
 
-	if (Button("Download all", CanDownload() && HasAny(Downloadable), "Every game not installed or with an update"))
+	if (Button("Download all", CanDownload() && HasAny(&IsDownloadable), "Every game not installed or with an update"))
 	{
-		m_downloads.Download(Collect(Downloadable));
+		m_downloads.Download(Collect(&IsDownloadable));
 	}
 
 	ImGui::SameLine();
 
-	if (Button("Remove all", isIdle && HasAny(Removable), "Every downloaded game; your own changes to them stay"))
+	if (Button("Remove all", isIdle && HasAny(&IsRemovable), "Every downloaded game; your own changes to them stay"))
 	{
 		ImGui::OpenPopup(RemoveAllPopupId);
 	}
@@ -363,7 +375,7 @@ void CDownloadWindow::DrawInstalledCount() const
 	std::span<Download::SGameOffer const> const offers{ m_downloads.GetOffers() };
 	size_t const numInstalled{ static_cast<size_t>(std::ranges::count_if(offers, [](Download::SGameOffer const& offer)
 	{
-		return offer.state == Download::EOfferState::Installed || offer.state == Download::EOfferState::UpdateAvailable;
+		return offer.isDownloaded && std::ranges::contains(InstalledStates, offer.state);
 	})) };
 	size_t const numOffered{ static_cast<size_t>(std::ranges::count_if(offers, [](Download::SGameOffer const& offer)
 	{
@@ -400,7 +412,7 @@ void CDownloadWindow::DrawRemoveAllPrompt()
 
 		if (isConfirmed)
 		{
-			m_downloads.Remove(Collect(Removable));
+			m_downloads.Remove(Collect(&IsRemovable));
 		}
 
 		if (shouldClose)
@@ -443,22 +455,19 @@ bool CDownloadWindow::CanDownload() const
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool CDownloadWindow::HasAny(std::span<Download::EOfferState const> states) const
+bool CDownloadWindow::HasAny(bool (*pIsChosen)(Download::SGameOffer const&)) const
 {
-	return std::ranges::any_of(m_downloads.GetOffers(), [states](Download::SGameOffer const& offer)
-	{
-		return std::ranges::contains(states, offer.state);
-	});
+	return std::ranges::any_of(m_downloads.GetOffers(), pIsChosen);
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<std::string> CDownloadWindow::Collect(std::span<Download::EOfferState const> states) const
+std::vector<std::string> CDownloadWindow::Collect(bool (*pIsChosen)(Download::SGameOffer const&)) const
 {
 	std::vector<std::string> keys{};
 
 	for (Download::SGameOffer const& offer : m_downloads.GetOffers())
 	{
-		if (std::ranges::contains(states, offer.state))
+		if (pIsChosen(offer))
 		{
 			keys.emplace_back(offer.key);
 		}

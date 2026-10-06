@@ -437,14 +437,15 @@ void CGameDownloads::RefreshOffers()
 
 			SIndexFile const* const pIcon{ FindIcon(game) };
 
-			m_offers.emplace_back(game.key, game.name, state, (pIcon != nullptr) ? pIcon->sha256 : std::string{}, game.protocol, protocol.version);
+			m_offers.emplace_back(game.key, game.name, state, (pIcon != nullptr) ? pIcon->sha256 : std::string{}, game.protocol, protocol.version,
+				downloaded.contains(game.key));
 			downloaded.erase(game.key);
 		}
 	}
 
 	for (auto const& [key, name] : downloaded)
 	{
-		m_offers.emplace_back(key, name, (m_pIndex != nullptr) ? EOfferState::Withdrawn : EOfferState::Installed);
+		m_offers.emplace_back(key, name, (m_pIndex != nullptr) ? EOfferState::Withdrawn : EOfferState::Installed, std::string{}, std::string{}, std::nullopt, true);
 	}
 
 	std::ranges::sort(m_offers, {}, &SGameOffer::name);

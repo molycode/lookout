@@ -15,5 +15,6 @@ struct SGameOffer final
 	std::string iconSha256;
 	std::string protocol;
 	std::optional<uint64_t> protocolVersion{};
+	bool isDownloaded{ false };
 };
 } // namespace Lkt::Download

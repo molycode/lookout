@@ -408,6 +408,31 @@ TEST_F(CGameDownloadsTest, GameNoLongerOfferedIsWithdrawn)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, GameNotDownloadedIsNotOnDisk)
+{
+	Start();
+	ReadIndex();
+
+	EXPECT_FALSE(GetOffer("kingpin").isDownloaded);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, DownloadedGameThatNeedsANewerLookoutIsStillOnDisk)
+{
+	JsonValue index = MakeIndex();
+
+	Start();
+	ReadIndex();
+	Download("kingpin");
+	index["games"]["kingpin"]["format"] = 2;
+	Serve(index);
+	ReadIndex();
+
+	ASSERT_EQ(GetState("kingpin"), EOfferState::NeedsNewerLookout);
+	EXPECT_TRUE(GetOffer("kingpin").isDownloaded);
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CGameDownloadsTest, IndexThatIsNotJsonIsAProblem)
 {
 	m_server.SetReply("/repo/main/index.json", Fixtures::SHttpsReply{ .body = "{ \"index\": " });
