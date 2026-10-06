@@ -28,4 +28,14 @@ std::optional<std::array<uint32_t, 3>> ParseLookoutVersion(std::string_view text
 
 	return (isValid && pNext == pEnd) ? std::optional<std::array<uint32_t, 3>>{ numbers } : std::nullopt;
 }
+
+//////////////////////////////////////////////////////////////////////////
+// False when either is no version: an index that names none announces nothing.
+bool IsNewerLookout(std::string_view latest, std::string_view running)
+{
+	std::optional<std::array<uint32_t, 3>> const latestNumbers{ ParseLookoutVersion(latest) };
+	std::optional<std::array<uint32_t, 3>> const runningNumbers{ ParseLookoutVersion(running) };
+
+	return latestNumbers.has_value() && runningNumbers.has_value() && *latestNumbers > *runningNumbers;
+}
 } // namespace Lkt::Download

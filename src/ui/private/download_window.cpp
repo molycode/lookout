@@ -9,6 +9,7 @@
 #include "widgets.hpp"
 #include "browser/text_compare.hpp"
 #include "download/lookout_games.hpp"
+#include "download/lookout_release.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include "query/protocol_definition.hpp"
@@ -90,14 +91,19 @@ bool IsRemovable(Download::SGameOffer const& offer)
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::string_view DescribeOffer(Download::SGameOffer const& offer, std::array<char, 128>& buffer)
+// lookout-games offers nothing the latest Lookout cannot run, so that is the version a card names.
+std::string_view DescribeOffer(Download::SGameOffer const& offer, std::string_view newerLookout, std::array<char, 128>& buffer)
 {
 	std::string_view const state{ Describe(offer.state) };
 	Query::SProtocolDefinition const* const pProtocol{ Query::FindProtocol(offer.protocol) };
 	std::optional<uint64_t> const installed{ (pProtocol != nullptr) ? pProtocol->downloadedVersion : std::nullopt };
 	std::string_view text{ state };
 
-	if (!offer.protocol.empty() && std::ranges::contains(WithProtocol, offer.state))
+	if (offer.state == Download::EOfferState::NeedsNewerLookout && !newerLookout.empty())
+	{
+		text = FormatTo(buffer, "Needs Lookout {}", newerLookout);
+	}
+	else if (!offer.protocol.empty() && std::ranges::contains(WithProtocol, offer.state))
 	{
 		if (pProtocol != nullptr && pProtocol->origin != Query::EProtocolOrigin::Downloaded)
 		{
@@ -150,6 +156,7 @@ void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, std::filesystem::path 
 	std::function<void()> wake)
 {
 	m_pRenderer = pRenderer;
+	m_version = version;
 	m_isReady = !userDir.empty()
 		&& m_downloads.Initialize(userDir, cacheDir, Download::GetLookoutGamesSource(version), std::move(wake));
 
@@ -231,7 +238,14 @@ void CDownloadWindow::DrawStatus() const
 {
 	std::array<char, 64> buffer{};
 
+	std::string_view const newer{ GetNewerLookout() };
+
 	ImGui::TextDisabled("From github.com/molycode/lookout-games");
+
+	if (!newer.empty())
+	{
+		DrawNewerLookout(newer);
+	}
 
 	if (m_downloads.GetPhase() == Download::EDownloadPhase::ReadingIndex)
 	{
@@ -333,7 +347,7 @@ void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<st
 	ImVec2 const text{ icon.x + iconSize + style.ItemInnerSpacing.x, icon.y };
 	float const buttonsX{ start.x + size.x - padding.x - numButtons * lineHeight - std::max(numButtons - 1.0f, 0.0f) * style.ItemInnerSpacing.x };
 	std::array<char, 128> stateBuffer{};
-	std::string_view const stateText{ isDownloading ? std::string_view{ "Downloading…" } : DescribeOffer(offer, stateBuffer) };
+	std::string_view const stateText{ isDownloading ? std::string_view{ "Downloading…" } : DescribeOffer(offer, GetNewerLookout(), stateBuffer) };
 	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
 	Query::SGameDefinition const* const pInstalled{ offer.isDownloaded ? Query::FindGame(offer.key) : nullptr };
 	std::array<char, 128> buffer{};
@@ -354,7 +368,7 @@ void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<st
 
 	DrawEllipsised(offer.name, text, buttonsX - style.ItemInnerSpacing.x, colors.text);
 	DrawEllipsised(stateText, ImVec2{ text.x, text.y + ImGui::GetTextLineHeightWithSpacing() }, start.x + size.x - padding.x,
-		(isDownloading || canUpdate) ? colors.amber : colors.textDisabled);
+		(isDownloading || canUpdate || state == Download::EOfferState::NeedsNewerLookout) ? colors.amber : colors.textDisabled);
 	ImGui::SetCursorScreenPos(ImVec2{ buttonsX, text.y });
 	ImGui::BeginDisabled(m_downloads.GetPhase() != Download::EDownloadPhase::Idle);
 
@@ -496,6 +510,37 @@ void CDownloadWindow::DestroyIcons()
 	}
 
 	m_icons.clear();
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CDownloadWindow::DrawNewerLookout(std::string_view newer) const
+{
+	std::span<Download::SGameOffer const> const offers{ m_downloads.GetOffers() };
+	size_t const numNeeding{ static_cast<size_t>(std::ranges::count(offers, Download::EOfferState::NeedsNewerLookout, &Download::SGameOffer::state)) };
+	std::array<char, 96> text{};
+	std::array<char, 64> label{};
+	std::string_view const line{ (numNeeding > 0) ? FormatTo(text, "Lookout {} is out; {} {} it", newer, numNeeding, (numNeeding == 1) ? "game needs" : "games need")
+		: FormatTo(text, "Lookout {} is out", newer) };
+
+	ImGui::AlignTextToFramePadding();
+	ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColors().amber);
+	ImGui::TextUnformatted(line.data(), line.data() + line.size());
+	ImGui::PopStyleColor();
+	ImGui::SameLine();
+
+	if (Button(FormatTo(label, "Get Lookout {}", newer).data(), true, "Opens github.com/molycode/lookout/releases/latest in your browser")
+		&& !SDL_OpenURL(Download::LookoutReleaseUrl.data()))
+	{
+		gLog.Warning("Cannot open {}: {}", Download::LookoutReleaseUrl, SDL_GetError());
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::string_view CDownloadWindow::GetNewerLookout() const
+{
+	std::string_view const latest{ m_downloads.GetLookoutVersion() };
+
+	return Download::IsNewerLookout(latest, m_version) ? latest : std::string_view{};
 }
 
 //////////////////////////////////////////////////////////////////////////

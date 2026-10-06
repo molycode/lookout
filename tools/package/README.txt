@@ -30,7 +30,8 @@ updates and removes them. From a terminal, the same is
     lookout --download [game...]
 
 which downloads the games named, or every game missing or with an update. They are kept in
-~/.local/share/lookout/downloaded/.
+~/.local/share/lookout/downloaded/. When games need a newer Lookout, Download games names
+it and links to its release.
 
 Starting a game
 ---------------

@@ -29,5 +29,22 @@ TEST(LookoutRelease, TextThatIsNoVersionIsRefused)
 		EXPECT_EQ(ParseLookoutVersion(text), std::nullopt) << text;
 	}
 }
+//////////////////////////////////////////////////////////////////////////
+TEST(LookoutRelease, LaterReleaseIsNewer)
+{
+	EXPECT_TRUE(IsNewerLookout("1.4.0", "1.3.9"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(LookoutRelease, SameReleaseIsNotNewer)
+{
+	EXPECT_FALSE(IsNewerLookout("1.3.0", "1.3.0"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(LookoutRelease, NoVersionIsNotNewer)
+{
+	EXPECT_FALSE(IsNewerLookout("", "1.3.0"));
+}
 } // namespace
 } // namespace Lkt::Download

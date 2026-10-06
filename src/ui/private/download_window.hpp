@@ -38,6 +38,7 @@ public:
 private:
 
 	void DrawStatus() const;
+	void DrawNewerLookout(std::string_view newer) const;
 	void DrawGames();
 	void DrawGame(Download::SGameOffer const& offer, std::vector<std::string>& toDownload, std::vector<std::string>& toRemove);
 	void DrawButtons();
@@ -46,12 +47,14 @@ private:
 	std::span<SIconLevel const> FindIcon(Download::SGameOffer const& offer);
 	void DestroyIcons();
 	bool CanDownload() const;
+	std::string_view GetNewerLookout() const;
 	bool HasAny(bool (*pIsChosen)(Download::SGameOffer const&)) const;
 	std::vector<std::string> Collect(bool (*pIsChosen)(Download::SGameOffer const&)) const;
 
 	Download::CGameDownloads m_downloads;
 	std::map<std::string, std::vector<SIconLevel>, std::less<>> m_icons;
 	std::string m_search;
+	std::string m_version;
 	SDL_Renderer* m_pRenderer{ nullptr };
 	bool m_isReady{ false };
 	bool m_isOpen{ false };
