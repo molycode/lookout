@@ -2,6 +2,7 @@
 #include "file_dialog.hpp"
 #include "icons.hpp"
 #include "loggers.hpp"
+#include "protocol_note.hpp"
 #include "theme.hpp"
 #include "theme_colors.hpp"
 #include "widgets.hpp"
@@ -11,6 +12,7 @@
 #include "launch/quote_argument.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
+#include "query/protocol_definition.hpp"
 #include "query/utf8.hpp"
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -124,6 +126,7 @@ void CGameSettingsPopup::Draw(Browser::CBrowser& browser, std::string& message)
 		SyncEdits(browser);
 		DrawFound(browser);
 		DrawInstalls(browser);
+		DrawProtocol();
 		KeepWindowInside(*pViewport);
 		ImGui::EndPopup();
 	}
@@ -215,6 +218,16 @@ void CGameSettingsPopup::DrawFound(Browser::CBrowser const& browser) const
 		ImGui::TextUnformatted("None found");
 		ImGui::PopStyleColor();
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CGameSettingsPopup::DrawProtocol() const
+{
+	Query::SProtocolDefinition const& protocol{ Query::GetProtocol(Query::GetGame(m_game).protocol) };
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("Protocol");
+	DrawLauncherLabel(protocol.name, DescribeProtocol(protocol));
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -1,5 +1,6 @@
 #include "game_form_view.hpp"
 #include "icons.hpp"
+#include "protocol_note.hpp"
 #include "theme.hpp"
 #include "theme_colors.hpp"
 #include "widgets.hpp"
@@ -252,6 +253,15 @@ void DrawNote(SGameFormNode const& node)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Nothing for a name the catalog lacks: the field's problem says so.
+std::string DescribeProtocolNamed(std::string_view name)
+{
+	Query::SProtocolDefinition const* const pProtocol{ Query::FindProtocol(name) };
+
+	return (pProtocol != nullptr) ? DescribeProtocol(*pProtocol) : std::string{};
+}
+
+//////////////////////////////////////////////////////////////////////////
 void DrawProblem(SFieldProblem const* pProblem, std::string_view path, bool isWithin)
 {
 	if (isWithin ? IsProblemWithin(pProblem, path) : IsProblemAt(pProblem, path))
@@ -299,7 +309,8 @@ bool DrawScalar(SGameField const& field, SGameFormNode& node, SGameFormNode cons
 //////////////////////////////////////////////////////////////////////////
 // A value not among the names, such as a protocol that did not load, is shown as it is.
 template<typename TNames>
-bool DrawChoice(SGameField const& field, SGameFormNode& node, SGameFormNode const* pBase, TNames&& names, std::string_view path, SFieldProblem const* pProblem)
+bool DrawChoice(SGameField const& field, SGameFormNode& node, SGameFormNode const* pBase, TNames&& names, std::string_view path, SFieldProblem const* pProblem,
+	std::string_view choiceNote)
 {
 	bool isEdited{ false };
 
@@ -322,6 +333,12 @@ bool DrawChoice(SGameField const& field, SGameFormNode& node, SGameFormNode cons
 	DrawHelp(field.description, field.kind, {});
 	isEdited = DrawReset(node, pBase) || isEdited;
 	DrawNote(node);
+
+	if (!choiceNote.empty())
+	{
+		DrawUnder(choiceNote, GetThemeColors().textDisabled);
+	}
+
 	DrawProblem(pProblem, path, false);
 
 	return isEdited;
@@ -571,12 +588,12 @@ bool DrawField(SGameField const& field, SGameFormNode& parent, SGameFormNode con
 			isEdited = DrawScalar(field, Games::GetFormField(parent, field.name), pBase, path, pProblem);
 			break;
 		case EGameFieldKind::Choice:
-			isEdited = DrawChoice(field, Games::GetFormField(parent, field.name), pBase, field.choices, path, pProblem);
+			isEdited = DrawChoice(field, Games::GetFormField(parent, field.name), pBase, field.choices, path, pProblem, {});
 			break;
 		case EGameFieldKind::Protocol:
 			isEdited = DrawChoice(field, Games::GetFormField(parent, field.name), pBase,
 				Query::GetProtocolCatalog() | std::views::transform([](Query::SProtocolDefinition const& protocol) { return std::string_view{ protocol.name }; }),
-				path, pProblem);
+				path, pProblem, DescribeProtocolNamed(Games::GetFormField(parent, field.name).text));
 			break;
 		case EGameFieldKind::ProtocolOptions:
 			isEdited = DrawProtocolOptions(field, parent, pBaseParent, parentPath, pProblem);

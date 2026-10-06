@@ -45,6 +45,7 @@ private:
 	void SyncEdits(Browser::CBrowser const& browser);
 	void DrawFound(Browser::CBrowser const& browser) const;
 	void DrawInstalls(Browser::CBrowser& browser);
+	void DrawProtocol() const;
 	std::optional<uint32_t> DrawInstall(Browser::CBrowser& browser, SInstallEdit& edit, Config::SGameInstall const& install,
 		Browser::SInstallLauncher const& launcher);
 	void OpenDialog(EFileDialogPurpose purpose, uint32_t installId, std::string const& startFolder);
