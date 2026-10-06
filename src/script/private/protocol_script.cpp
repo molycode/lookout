@@ -69,6 +69,7 @@ std::expected<void, std::string> CProtocolScript::Initialize(std::string_view na
 			m_states = call.states;
 			m_masterTransport = call.masterTransport;
 			m_options = std::move(call.options);
+			m_version = call.version;
 		}
 		else
 		{
@@ -93,6 +94,7 @@ void CProtocolScript::Terminate()
 	}
 
 	m_options.clear();
+	m_version.reset();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -105,6 +107,12 @@ std::span<Query::SProtocolOption const> CProtocolScript::GetOptions() const
 EMasterTransport CProtocolScript::GetMasterTransport() const
 {
 	return m_masterTransport;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::optional<uint64_t> CProtocolScript::GetVersion() const
+{
+	return m_version;
 }
 
 //////////////////////////////////////////////////////////////////////////

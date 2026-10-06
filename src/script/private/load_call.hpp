@@ -2,6 +2,8 @@
 
 #include "query/protocol_option.hpp"
 #include "script/master_transport.hpp"
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -20,6 +22,8 @@ struct SLoadCall final
 	int serverFinish{ 0 };
 	int states{ 0 };
 	EMasterTransport masterTransport{ EMasterTransport::Udp };
+	int64_t api{ 0 };
+	std::optional<uint64_t> version;
 	std::vector<Query::SProtocolOption> options;
 	std::string unknownField;
 	std::string problem;

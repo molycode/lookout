@@ -8,6 +8,7 @@
 #include <expected>
 #include <format>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -41,7 +42,48 @@ TEST_F(CProtocolScriptTest, ScriptMustReturnATable)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CProtocolScriptTest, OtherApiIsRefused)
 {
-	EXPECT_EQ(LoadProblem(Load("protocol.api = 2")), "api must be 1, the script API this Lookout runs");
+	EXPECT_EQ(LoadProblem(Load("protocol.api = 3")), "api must be between 1 and 2, the script APIs this Lookout runs");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, VersionIsNotAFieldOfScriptApi1)
+{
+	EXPECT_EQ(LoadProblem(Load("protocol.version = 9041")), "version is not a field of script API 1");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, ScriptApi2NeedsAVersion)
+{
+	EXPECT_EQ(LoadProblem(Load("protocol.api = 2")), "version must be a whole number from 1");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, ZeroVersionIsRefused)
+{
+	EXPECT_EQ(LoadProblem(Load("protocol.api = 2 protocol.version = 0")), "version must be a whole number from 1");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, ScriptApi2CarriesItsVersion)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.api = 2 protocol.version = 9041")), "");
+
+	EXPECT_EQ(m_script.GetVersion(), 9041u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, ScriptApi1HasNoVersion)
+{
+	ASSERT_EQ(LoadProblem(Load("")), "");
+
+	EXPECT_EQ(m_script.GetVersion(), std::nullopt);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, UnknownFieldNamesTheScriptsApi)
+{
+	EXPECT_EQ(LoadProblem(Load("protocol.api = 2 protocol.version = 1 protocol.master.finish = function() end")),
+		"master.finish is not a field of script API 2");
 }
 
 //////////////////////////////////////////////////////////////////////////

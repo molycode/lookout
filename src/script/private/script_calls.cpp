@@ -22,7 +22,10 @@ namespace Lkt::Script
 namespace
 {
 constexpr lua_Integer Api{ ScriptApi };
-constexpr std::array<std::string_view, 4> ModuleFields{ "api", "options", "master", "server" };
+constexpr lua_Integer FirstApi{ 1 };
+constexpr lua_Integer VersionApi{ 2 };
+constexpr std::array<std::string_view, 4> FirstApiModuleFields{ "api", "options", "master", "server" };
+constexpr std::array<std::string_view, 5> ModuleFields{ "api", "version", "options", "master", "server" };
 constexpr std::array<std::string_view, 3> MasterFields{ "transport", "start", "receive" };
 constexpr std::array<std::string_view, 3> ServerFields{ "start", "receive", "finish" };
 constexpr std::array<std::string_view, 2> OptionFields{ "description", "required" };
@@ -167,7 +170,7 @@ void CheckModuleFields(lua_State* pState, int table, std::span<std::string_view 
 	}
 	else if (!call.unknownField.empty())
 	{
-		SetProblem(call.problem, std::format("{}{}{} is not a field of script API {}", path, path.empty() ? "" : ".", call.unknownField, Api));
+		SetProblem(call.problem, std::format("{}{}{} is not a field of script API {}", path, path.empty() ? "" : ".", call.unknownField, call.api));
 	}
 }
 
@@ -349,6 +352,24 @@ void ReadServer(lua_State* pState, int module, SLoadCall& call)
 }
 
 //////////////////////////////////////////////////////////////////////////
+void ReadVersion(lua_State* pState, int module, SLoadCall& call)
+{
+	lua_Integer version{ 0 };
+
+	if (call.api >= VersionApi)
+	{
+		if (ReadInteger(pState, module, "version", 1, std::numeric_limits<lua_Integer>::max(), version))
+		{
+			call.version = static_cast<uint64_t>(version);
+		}
+		else
+		{
+			SetProblem(call.problem, "version must be a whole number from 1");
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 void ReadModule(lua_State* pState, int module, SLoadCall& call)
 {
 	lua_Integer api{ 0 };
@@ -359,13 +380,19 @@ void ReadModule(lua_State* pState, int module, SLoadCall& call)
 	}
 	else
 	{
-		CheckModuleFields(pState, module, ModuleFields, {}, call);
-
-		if (!ReadInteger(pState, module, "api", Api, Api, api))
+		if (ReadInteger(pState, module, "api", FirstApi, Api, api))
 		{
-			SetProblem(call.problem, std::format("api must be {}, the script API this Lookout runs", Api));
+			call.api = static_cast<int64_t>(api);
+		}
+		else
+		{
+			SetProblem(call.problem, std::format("api must be between {} and {}, the script APIs this Lookout runs", FirstApi, Api));
 		}
 
+		std::span<std::string_view const> const fields{ (call.api >= VersionApi) ? std::span<std::string_view const>{ ModuleFields } : FirstApiModuleFields };
+
+		CheckModuleFields(pState, module, fields, {}, call);
+		ReadVersion(pState, module, call);
 		ReadMaster(pState, module, call);
 		ReadServer(pState, module, call);
 		ReadOptions(pState, module, call);

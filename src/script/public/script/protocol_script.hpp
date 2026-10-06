@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <expected>
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -36,6 +37,7 @@ public:
 
 	std::span<Query::SProtocolOption const> GetOptions() const;
 	EMasterTransport GetMasterTransport() const;
+	std::optional<uint64_t> GetVersion() const;
 
 	// The conversation names its kind and has no id yet; a successful Start gives it one.
 	std::expected<SScriptAction, std::string> Start(SConversation& conversation, std::map<std::string, std::string> const& options);
@@ -56,6 +58,7 @@ private:
 
 	lua_State* m_pState{ nullptr };
 	std::vector<Query::SProtocolOption> m_options;
+	std::optional<uint64_t> m_version;
 	std::chrono::steady_clock::time_point m_deadline{};
 	size_t m_numBytes{ 0 };
 	uint64_t m_lastConversationId{ 0 };
