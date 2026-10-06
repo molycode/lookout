@@ -17,8 +17,9 @@ from the download button above the game list (or `lookout --download`), into `~/
 `$XDG_DATA_HOME/lookout/downloaded/`), checking each file against the repository's index. Yours go in
 `~/.local/share/lookout/`, where a description under a downloaded game's key changes only what it names, so it survives
 the game's updates. In the app, click the pencil on a game to edit its description, or click the gamepad above the game
-list to add one; Lookout checks it as you type and reloads the games whenever that folder changes.
-`lookout --check <folder>` checks a lookout-games folder before a pull request.
+list to add one; Lookout checks it as you type and reloads the games whenever that folder changes. A protocol of yours
+replaces the downloaded one of its name; Download games, a game's editor and its settings name the protocol in use and
+the downloaded one's version. `lookout --check <folder>` checks a lookout-games folder before a pull request.
 
 ![Download games on a first start: every game in lookout-games, ready to download](docs/download-games.png)
 

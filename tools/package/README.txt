@@ -47,8 +47,10 @@ own. It keeps a description in
     ~/.local/share/lookout/games/<name>/game.json
 
 where a downloaded game's file holds only your changes, so updates of the game keep them.
-Protocol scripts of your own go in ~/.local/share/lookout/protocols/. Lookout reloads both
-folders when they change. To publish a game, see github.com/molycode/lookout-games.
+Protocol scripts of your own go in ~/.local/share/lookout/protocols/; one named like a
+downloaded protocol replaces it, and a game's settings (the gear) show which one is in use
+and the downloaded one's version. Lookout reloads both folders when they change. To publish
+a game, see github.com/molycode/lookout-games.
 
 Uninstall
 ---------
