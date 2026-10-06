@@ -26,6 +26,10 @@ constexpr std::string_view HexEntry{ "\\2D5E3A3C6D38" };
 constexpr std::string_view EchoChallenge{ "\xFF\xFF\xFF\xFF" "echo \"echoResponse getstatus oo3KyTWe6F7YBlNw8K4htAikGv1O1wIUJlf8ysTEUrxGloYr338BJL1IQG7PrTSf\"" };
 constexpr std::string_view EchoAnswer{ "\xFF\xFF\xFF\xFF" "echoResponse getstatus oo3KyTWe6F7YBlNw8K4htAikGv1O1wIUJlf8ysTEUrxGloYr338BJL1IQG7PrTSf" };
 std::map<std::string, std::string> const HexOptions{ { "masterQuery", "24 empty full" }, { "masterEntries", "hex" } };
+constexpr std::string_view InfoRequest{ "\xFF\xFF\xFF\xFFgetinfo lookout" };
+// The Boring Server: iortcw 1.51c, password protected, 128 slots of which 1 is private.
+constexpr std::string_view LockedStatus{ "rtcw/status-185.128.244.213_27960.bin" };
+constexpr std::string_view LockedInfo{ "rtcw/info-185.128.244.213_27960.bin" };
 
 //////////////////////////////////////////////////////////////////////////
 class CQuake3ProtocolTest : public testing::Test
@@ -74,6 +78,24 @@ protected:
 		EXPECT_TRUE(started.has_value()) << started.error_or("");
 
 		return started.has_value() ? started->send : std::vector<std::vector<std::byte>>{};
+	}
+
+	// A server conversation with the game's options, given each datagram in turn; the last action, or finish's.
+	std::expected<Script::SScriptAction, std::string> Converse(std::string_view game, std::vector<std::vector<std::byte>> const& datagrams,
+		bool isFinished = false)
+	{
+		Script::SConversation conversation{ Script::EConversationKind::Server, 0 };
+		std::expected<Script::SScriptAction, std::string> action{ m_script.Start(conversation, Fixtures::GetGameByKey(game).protocolOptions) };
+
+		for (std::vector<std::byte> const& datagram : datagrams)
+		{
+			action = action.has_value() ? m_script.Receive(conversation, datagram) : action;
+		}
+
+		action = (isFinished && action.has_value()) ? m_script.Finish(conversation) : action;
+		m_script.End(conversation);
+
+		return action;
 	}
 
 	Script::CProtocolScript m_script;
@@ -311,6 +333,72 @@ TEST_F(CQuake3ProtocolTest, StatusAfterTheChallengeIsTheReply)
 
 	ASSERT_TRUE(reply.has_value());
 	EXPECT_FALSE(FindRule(reply.value(), "sv_hostname").empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, StatusWithoutAnInfoRuleAsksForInfo)
+{
+	std::expected<Script::SScriptAction, std::string> const action{ Converse("rtcw", { LoadFixture(LockedStatus) }) };
+
+	ASSERT_TRUE(action.has_value()) << action.error_or("");
+	EXPECT_FALSE(action->reply.has_value());
+	EXPECT_EQ(action->send, std::vector<std::vector<std::byte>>{ ToBytes(InfoRequest) });
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, InfoGivesTheRuleTheStatusLacked)
+{
+	std::expected<Script::SScriptAction, std::string> const action{ Converse("rtcw", { LoadFixture(LockedStatus), LoadFixture(LockedInfo) }) };
+
+	ASSERT_TRUE(action.has_value() && action->reply.has_value()) << action.error_or("");
+	EXPECT_EQ(FindRule(*action->reply, "g_needpass"), "1");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, StatusThatHasTheRuleAsksNoInfo)
+{
+	std::expected<Script::SScriptAction, std::string> const action{ Converse("rtcw", { ToBytes("\xFF\xFF\xFF\xFFstatusResponse\n\\sv_hostname\\x\\g_needpass\\1\n") }) };
+
+	ASSERT_TRUE(action.has_value() && action->reply.has_value()) << action.error_or("");
+	EXPECT_TRUE(action->send.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, SecondStatusWhileWaitingForTheInfoIsIgnored)
+{
+	std::expected<Script::SScriptAction, std::string> const action{ Converse("rtcw", { LoadFixture(LockedStatus), LoadFixture(LockedStatus) }) };
+
+	ASSERT_TRUE(action.has_value()) << action.error_or("");
+	EXPECT_FALSE(action->reply.has_value());
+	EXPECT_TRUE(action->send.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, UnansweredInfoFinishesWithTheStatus)
+{
+	std::expected<Script::SScriptAction, std::string> const action{ Converse("rtcw", { LoadFixture(LockedStatus) }, true) };
+
+	ASSERT_TRUE(action.has_value() && action->reply.has_value()) << action.error_or("");
+	EXPECT_FALSE(FindRule(*action->reply, "sv_hostname").empty());
+	EXPECT_TRUE(FindRule(*action->reply, "g_needpass").empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, WithoutInfoRulesNoInfoIsAsked)
+{
+	std::expected<Script::SScriptAction, std::string> const action{ Converse("quake3", { LoadFixture(LockedStatus) }) };
+
+	ASSERT_TRUE(action.has_value() && action->reply.has_value()) << action.error_or("");
+	EXPECT_TRUE(action->send.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CQuake3ProtocolTest, PrivateSlotsAreNotCapacity)
+{
+	std::expected<SStatusReply, EParseError> const reply{ Fixtures::ReadStatusDatagram(m_script, LoadFixture(LockedStatus)) };
+
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_EQ(reply->maxPlayers, 127u);
 }
 
 //////////////////////////////////////////////////////////////////////////
