@@ -5,15 +5,18 @@
 #include "script/script_api.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <mutex>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -120,7 +123,19 @@ protected:
 		m_server.SetReply("/repo/main/index.json", Fixtures::SHttpsReply{ .body = index.dump() });
 	}
 
-	void Start(EIndexIcons icons = EIndexIcons::Skip)
+	// Kingpin again under key, with an icon of its own; Serve the index afterwards.
+	void AddGame(JsonValue& index, std::string const& key)
+	{
+		std::string const icon{ m_files.at("games/kingpin/icon.png") + key };
+		JsonValue game = index["games"]["kingpin"];
+
+		game["name"] = key;
+		game["files"]["icon.png"] = DescribeFile(icon);
+		index["games"][key] = std::move(game);
+		m_files[std::format("games/{}/icon.png", key)] = icon;
+	}
+
+	void Start()
 	{
 		SDownloadSource source{};
 
@@ -130,7 +145,7 @@ protected:
 		source.origin.caFile = (std::filesystem::path{ LKT_FIXTURES_DIR } / "tls" / "ca.pem").string();
 		source.origin.address = Query::SServerAddress{ Loopback, m_server.GetPort() };
 		source.repository = "/repo";
-		ASSERT_TRUE(m_downloads.Initialize(m_dir, std::move(source), icons, [this]()
+		ASSERT_TRUE(m_downloads.Initialize(m_dir, std::move(source), [this]()
 		{
 			{
 				std::lock_guard const lock{ m_mutex };
@@ -142,13 +157,13 @@ protected:
 		}));
 	}
 
-	// Takes results until nothing runs; true when the downloaded games changed meanwhile.
-	bool RunUntilIdle()
+	// Takes results until isDone; true when the downloaded games changed meanwhile.
+	bool RunUntil(std::function<bool()> const& isDone)
 	{
 		auto const deadline{ std::chrono::steady_clock::now() + Patience };
 		bool hasChanged{ m_downloads.Update() };
 
-		while (m_downloads.GetPhase() != EDownloadPhase::Idle && std::chrono::steady_clock::now() < deadline)
+		while (!isDone() && std::chrono::steady_clock::now() < deadline)
 		{
 			{
 				std::unique_lock lock{ m_mutex };
@@ -160,9 +175,29 @@ protected:
 			hasChanged = m_downloads.Update() || hasChanged;
 		}
 
+		return hasChanged;
+	}
+
+	bool RunUntilIdle()
+	{
+		bool const hasChanged{ RunUntil([this]() { return m_downloads.GetPhase() == EDownloadPhase::Idle; }) };
+
 		EXPECT_EQ(m_downloads.GetPhase(), EDownloadPhase::Idle);
 
 		return hasChanged;
+	}
+
+	void RunUntilIconHeld(std::string_view key)
+	{
+		std::string const sha256{ GetOffer(key).iconSha256 };
+
+		RunUntil([this, &sha256]() { return !m_downloads.GetIcon(sha256).empty(); });
+		EXPECT_FALSE(m_downloads.GetIcon(sha256).empty()) << key;
+	}
+
+	bool IsIconHeld(std::string_view key) const
+	{
+		return !m_downloads.GetIcon(GetOffer(key).iconSha256).empty();
 	}
 
 	void ReadIndex()
@@ -460,34 +495,18 @@ TEST_F(CGameDownloadsTest, KeyThatIsNoFolderNameRefusesTheIndex)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// The second reading is answered after the icon, so the icon has been taken by then.
-TEST_F(CGameDownloadsTest, IconOfAnOfferedGameIsFetched)
+TEST_F(CGameDownloadsTest, IconIsFetchedWhenAskedFor)
 {
-	Start(EIndexIcons::Fetch);
+	Start();
 	ReadIndex();
-	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
+	RunUntilIconHeld("kingpin");
 
-	ASSERT_EQ(m_downloads.GetOffers().size(), 1u);
-	EXPECT_EQ(m_downloads.GetIcon(m_downloads.GetOffers().front().iconSha256), m_files.at("games/kingpin/icon.png"));
+	EXPECT_EQ(m_downloads.GetIcon(GetOffer("kingpin").iconSha256), m_files.at("games/kingpin/icon.png"));
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameDownloadsTest, IconThatDiffersFromTheIndexIsNotKept)
-{
-	JsonValue const index = MakeIndex();
-
-	m_files["games/kingpin/icon.png"][0] ^= 1;
-	Serve(index);
-	Start(EIndexIcons::Fetch);
-	ReadIndex();
-	ReadIndex();
-
-	ASSERT_EQ(m_downloads.GetOffers().size(), 1u);
-	EXPECT_TRUE(m_downloads.GetIcon(m_downloads.GetOffers().front().iconSha256).empty());
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST_F(CGameDownloadsTest, IndexReadWithoutIconsFetchesNoIcon)
+TEST_F(CGameDownloadsTest, ReadingTheIndexFetchesNoIcon)
 {
 	Start();
 	ReadIndex();
@@ -497,26 +516,169 @@ TEST_F(CGameDownloadsTest, IndexReadWithoutIconsFetchesNoIcon)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameDownloadsTest, IconHeldIsNotFetchedAgain)
+// The fetcher answers in order, so a reading asked for after an icon is answered after it.
+TEST_F(CGameDownloadsTest, IconThatDiffersFromTheIndexIsNotKept)
 {
-	Start(EIndexIcons::Fetch);
+	JsonValue const index = MakeIndex();
+
+	m_files["games/kingpin/icon.png"][0] ^= 1;
+	Serve(index);
+	Start();
 	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
 	ReadIndex();
+
+	EXPECT_FALSE(IsIconHeld("kingpin"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+// An icon asked for later is answered later, so once it is held the earlier ones have been answered.
+TEST_F(CGameDownloadsTest, IconThatFailedIsNotAskedForAgain)
+{
+	JsonValue index = MakeIndex();
+
+	AddGame(index, "second");
+	AddGame(index, "third");
+	m_files["games/kingpin/icon.png"][0] ^= 1;
+	Serve(index);
+	Start();
 	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
+	m_downloads.RequestIcon("second");
+	RunUntilIconHeld("second");
+	m_downloads.RequestIcon("kingpin");
+	m_downloads.RequestIcon("third");
+	RunUntilIconHeld("third");
 
 	EXPECT_EQ(m_server.GetNumRequests(), 4u);
 }
 
 //////////////////////////////////////////////////////////////////////////
-// No Update runs between the reading and the download, so the icon is still pending when the download asks for it.
+TEST_F(CGameDownloadsTest, IconThatFailedIsAskedForAgainOnceTheIndexIsRead)
+{
+	JsonValue const index = MakeIndex();
+
+	m_files["games/kingpin/icon.png"][0] ^= 1;
+	Serve(index);
+	Start();
+	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
+	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
+	ReadIndex();
+
+	EXPECT_EQ(m_server.GetNumRequests(), 5u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, IconHeldIsNotFetchedAgain)
+{
+	Start();
+	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
+	RunUntilIconHeld("kingpin");
+	m_downloads.RequestIcon("kingpin");
+	ReadIndex();
+
+	EXPECT_EQ(m_server.GetNumRequests(), 3u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, IconPendingIsNotAskedForTwice)
+{
+	Start();
+	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
+	m_downloads.RequestIcon("kingpin");
+	ReadIndex();
+
+	EXPECT_EQ(m_server.GetNumRequests(), 3u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, AtMostFourIconsAreFetchedAtOnce)
+{
+	std::array<std::string_view, 6> const keys{ "kingpin", "second", "third", "fourth", "fifth", "sixth" };
+	JsonValue index = MakeIndex();
+
+	for (std::string_view const key : keys | std::views::drop(1))
+	{
+		AddGame(index, std::string{ key });
+	}
+
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	for (std::string_view const key : keys)
+	{
+		m_downloads.RequestIcon(key);
+	}
+
+	ReadIndex();
+
+	EXPECT_EQ(m_server.GetNumRequests(), 6u);
+	EXPECT_EQ(std::ranges::count_if(keys, [this](std::string_view key) { return IsIconHeld(key); }), 4);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, IconBeyondTheCapIsFetchedWhenAskedForAgain)
+{
+	std::array<std::string_view, 6> const keys{ "kingpin", "second", "third", "fourth", "fifth", "sixth" };
+	JsonValue index = MakeIndex();
+
+	for (std::string_view const key : keys | std::views::drop(1))
+	{
+		AddGame(index, std::string{ key });
+	}
+
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	for (std::string_view const key : keys)
+	{
+		m_downloads.RequestIcon(key);
+	}
+
+	RunUntilIconHeld("fourth");
+
+	for (std::string_view const key : keys)
+	{
+		m_downloads.RequestIcon(key);
+	}
+
+	RunUntilIconHeld("sixth");
+
+	EXPECT_TRUE(std::ranges::all_of(keys, [this](std::string_view key) { return IsIconHeld(key); }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+// No Update runs between the request and the download, so the icon is still pending when the download asks for it.
 TEST_F(CGameDownloadsTest, DownloadAskingForAPendingIconInstallsTheGame)
 {
-	Start(EIndexIcons::Fetch);
+	Start();
 	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
 
 	EXPECT_TRUE(Download("kingpin"));
 	EXPECT_EQ(GetState("kingpin"), EOfferState::Installed);
-	EXPECT_EQ(m_downloads.GetIcon(m_downloads.GetOffers().front().iconSha256), m_files.at("games/kingpin/icon.png"));
+	EXPECT_TRUE(IsIconHeld("kingpin"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, IconAskedForDuringItsGamesDownloadIsHeld)
+{
+	std::vector<std::string> const keys{ "kingpin" };
+
+	Start();
+	ReadIndex();
+	m_downloads.Download(keys);
+	m_downloads.RequestIcon("kingpin");
+	RunUntilIdle();
+
+	EXPECT_EQ(GetState("kingpin"), EOfferState::Installed);
+	EXPECT_TRUE(IsIconHeld("kingpin"));
 }
 } // namespace
 } // namespace Lkt::Download

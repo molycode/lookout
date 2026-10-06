@@ -148,7 +148,7 @@ void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, std::filesystem::path 
 {
 	m_pRenderer = pRenderer;
 	m_isReady = !userDir.empty()
-		&& m_downloads.Initialize(userDir, Download::GetLookoutGamesSource(version), Download::EIndexIcons::Fetch, std::move(wake));
+		&& m_downloads.Initialize(userDir, Download::GetLookoutGamesSource(version), std::move(wake));
 
 	if (!userDir.empty() && !m_isReady)
 	{
@@ -457,6 +457,8 @@ std::span<SIconLevel const> CDownloadWindow::FindIcon(Download::SGameOffer const
 
 	if (icon == m_icons.end() && !offer.iconSha256.empty())
 	{
+		m_downloads.RequestIcon(offer.key);
+
 		std::string_view const png{ m_downloads.GetIcon(offer.iconSha256) };
 
 		if (!png.empty())

@@ -24,6 +24,9 @@ constexpr size_t MaxIndexSize{ 1024 * 1024 };
 constexpr std::string_view IndexBranch{ "main" };
 constexpr std::string_view IndexFile{ "index.json" };
 constexpr std::string_view IconFile{ "icon.png" };
+// The window asks again every frame for the icons on screen, so a few keep the connection busy; more would hold up
+// a reading or a download behind icons that may have scrolled away.
+constexpr size_t MaxPendingIcons{ 4 };
 
 //////////////////////////////////////////////////////////////////////////
 bool IsSupported(SIndexGame const& game, SIndexProtocol const& protocol)
@@ -81,12 +84,11 @@ CGameDownloads::CGameDownloads() = default;
 CGameDownloads::~CGameDownloads() = default;
 
 //////////////////////////////////////////////////////////////////////////
-bool CGameDownloads::Initialize(std::filesystem::path const& userDir, SDownloadSource source, EIndexIcons icons, std::function<void()> onResults)
+bool CGameDownloads::Initialize(std::filesystem::path const& userDir, SDownloadSource source, std::function<void()> onResults)
 {
 	m_userDir = userDir;
 	m_downloadedDir = Games::GetDownloadedDir(userDir);
 	m_source = std::move(source);
-	m_indexIcons = icons;
 
 	bool const isReady{ !m_downloadedDir.empty() && m_fetcher.Initialize(m_source.origin, std::move(onResults)) };
 
@@ -104,6 +106,7 @@ void CGameDownloads::Terminate()
 	m_fetched.clear();
 	m_pendingIconHashes.clear();
 	m_iconsByHash.clear();
+	m_failedIconHashes.clear();
 	m_phase = EDownloadPhase::Idle;
 }
 
@@ -199,7 +202,8 @@ bool CGameDownloads::Update()
 	{
 		auto const pendingIcon{ m_pendingIconHashes.find(result.path) };
 
-		// A download may ask for a pending icon's path too; the fetcher answers in order, so the first answer is the icon's.
+		// A download and an icon may ask for the same path, in either order; the same path is the same file, so either
+		// answer serves both.
 		if (pendingIcon != m_pendingIconHashes.end())
 		{
 			std::string const sha256{ std::move(pendingIcon->second) };
@@ -280,9 +284,11 @@ size_t CGameDownloads::GetNumToFetch() const
 }
 
 //////////////////////////////////////////////////////////////////////////
+// The fetcher answers in order, so every icon asked for before this reading has been answered by now.
 void CGameDownloads::TakeIndex(Net::SFetchResult result)
 {
 	m_phase = EDownloadPhase::Idle;
+	m_failedIconHashes.clear();
 
 	if (result.body.has_value())
 	{
@@ -291,11 +297,6 @@ void CGameDownloads::TakeIndex(Net::SFetchResult result)
 		if (index.has_value())
 		{
 			m_pIndex = std::make_unique<SGameIndex>(std::move(*index));
-
-			if (m_indexIcons == EIndexIcons::Fetch)
-			{
-				RequestIcons();
-			}
 		}
 		else
 		{
@@ -311,26 +312,20 @@ void CGameDownloads::TakeIndex(Net::SFetchResult result)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CGameDownloads::RequestIcons()
+// A failed icon is not asked for again until the index is read again: the window asks every frame.
+void CGameDownloads::RequestIcon(std::string_view key)
 {
-	std::vector<Net::SFetchRequest> requests{};
+	SIndexGame const* const pGame{ (m_pIndex != nullptr) ? FindGame(*m_pIndex, key) : nullptr };
+	SIndexFile const* const pIcon{ (pGame != nullptr) ? FindIcon(*pGame) : nullptr };
+	bool const isKnown{ pIcon != nullptr && (m_iconsByHash.contains(pIcon->sha256) || m_failedIconHashes.contains(pIcon->sha256)
+		|| std::ranges::contains(m_pendingIconHashes | std::views::values, pIcon->sha256)) };
 
-	for (SIndexGame const& game : m_pIndex->games)
+	if (pIcon != nullptr && !isKnown && m_pendingIconHashes.size() < MaxPendingIcons)
 	{
-		SIndexFile const* const pIcon{ FindIcon(game) };
+		std::string path{ MakePath(m_pIndex->commit, std::format("games/{}/{}", key, IconFile)) };
 
-		if (pIcon != nullptr && !m_iconsByHash.contains(pIcon->sha256) && !std::ranges::contains(m_pendingIconHashes | std::views::values, pIcon->sha256))
-		{
-			std::string path{ MakePath(m_pIndex->commit, std::format("games/{}/{}", game.key, IconFile)) };
-
-			requests.emplace_back(path, pIcon->size);
-			m_pendingIconHashes.emplace(std::move(path), pIcon->sha256);
-		}
-	}
-
-	if (!requests.empty())
-	{
-		m_fetcher.Fetch(std::move(requests));
+		m_fetcher.Fetch({ Net::SFetchRequest{ path, pIcon->size } });
+		m_pendingIconHashes.emplace(std::move(path), pIcon->sha256);
 	}
 }
 
@@ -344,6 +339,7 @@ void CGameDownloads::TakeIcon(Net::SFetchResult result, std::string_view sha256)
 	}
 	else
 	{
+		m_failedIconHashes.emplace(sha256);
 		gLog.Warning("Cannot show the icon {}: {}", result.path,
 			result.body.has_value() ? std::string_view{ "it differs from what the index says it is" } : std::string_view{ result.body.error() });
 	}

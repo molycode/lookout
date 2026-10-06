@@ -258,7 +258,7 @@ bool CLookout::RunDownload(std::span<std::string const> keys)
 		}
 	} };
 
-	bool success{ downloads.Initialize(m_userDir, Download::GetLookoutGamesSource(LKT_VERSION), Download::EIndexIcons::Skip, [&mutex, &wake, &hasResults]()
+	bool success{ downloads.Initialize(m_userDir, Download::GetLookoutGamesSource(LKT_VERSION), [&mutex, &wake, &hasResults]()
 	{
 		{
 			std::lock_guard const lock{ mutex };
