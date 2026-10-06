@@ -50,6 +50,8 @@ GAMES = {
 }
 # Elite Force's masters write each address as twelve hex digits.
 HEX_ENTRIES = {"eliteforce"}
+# Games whose description sets infoRules: their servers give some rules only in getinfo.
+INFO_GAMES = {"rtcw"}
 
 HEADER = b"\xff\xff\xff\xff"
 NAME_KEYS = ("hostname", "sv_hostname")
@@ -143,8 +145,8 @@ def query_masters(family, masters, args):
 	return list(packets_by_master.values())
 
 
-def query_status(family, servers):
-	request = HEADER + {"quake2": b"status\n", "quakeworld": b"status 23\n"}.get(family, b"getstatus")
+def query_status(family, servers, request=None):
+	request = request or HEADER + {"quake2": b"status\n", "quakeworld": b"status 23\n"}.get(family, b"getstatus")
 	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	pending = list(servers)
 	sent = {}
@@ -180,7 +182,7 @@ def query_status(family, servers):
 	return replies
 
 
-def describe(packet):
+def describe(packet, family):
 	# QuakeWorld's reply has its info on the header's line: "\xff\xff\xff\xffn\\hostname\\...".
 	lines = packet.decode("latin-1").split("\n")
 
@@ -196,6 +198,12 @@ def describe(packet):
 	players = [line for line in lines[2:] if line.strip(" \t\r\0")]
 	name = next((info[key] for key in NAME_KEYS if key in info), "")
 	maximum = next((info[key] for key in MAX_KEYS if key in info), "?")
+	private = info.get("sv_privateclients", "0")
+
+	# A Quake III engine keeps sv_privateClients of its slots for those who know sv_privatePassword.
+	if family == "quake3" and maximum.isdigit():
+		maximum = str(max(int(maximum) - (int(private) if private.isdigit() else 0), 0))
+
 	plain = re.sub(r"\^[^\^]", "", "".join(ch for ch in name if ord(ch) >= 32))
 	return f"{len(players)}/{maximum} {info.get('mapname', info.get('map', '?'))} {plain}"
 
@@ -529,7 +537,7 @@ def main():
 
 	for server in servers:
 		if server in replies:
-			print(f"{server[0]}:{server[1]} {describe(replies[server])}")
+			print(f"{server[0]}:{server[1]} {describe(replies[server], family)}")
 
 	print(f"{len(replies)} of {len(servers)} servers answered", file=sys.stderr)
 
@@ -541,10 +549,14 @@ def main():
 			for index, packet in enumerate(packets):
 				(target / f"master-{host}-{index}.bin").write_bytes(packet)
 
-		chosen = sorted(replies.items(), key=lambda item: -int(describe(item[1]).split("/")[0]))
+		chosen = sorted(replies.items(), key=lambda item: -int(describe(item[1], family).split("/")[0]))[:options.count]
 
-		for (address, port), packet in chosen[:options.count]:
+		for (address, port), packet in chosen:
 			(target / f"status-{address}_{port}.bin").write_bytes(packet)
+
+		if options.game in INFO_GAMES:
+			for (address, port), packet in query_status(family, [server for server, _ in chosen], HEADER + b"getinfo lookout").items():
+				(target / f"info-{address}_{port}.bin").write_bytes(packet)
 
 
 if __name__ == "__main__":
