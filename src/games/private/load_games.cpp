@@ -9,6 +9,7 @@
 #include "script/protocol_script.hpp"
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <format>
 #include <map>
@@ -145,7 +146,25 @@ std::map<std::string, std::filesystem::path> ListGameFolders(std::filesystem::pa
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::unique_ptr<Script::CProtocolScript> LoadScript(std::string_view name, std::string_view source, std::string_view shownAs,
+	std::vector<Query::SGameProblem>& problems)
+{
+	auto pScript{ std::make_unique<Script::CProtocolScript>() };
+	std::expected<void, std::string> const loaded{ pScript->Initialize(name, source) };
+
+	if (!loaded.has_value())
+	{
+		problems.emplace_back(Query::SGameProblem{ std::format("{}: {}", shownAs, loaded.error()), {} });
+		pScript->Terminate();
+		pScript.reset();
+	}
+
+	return pScript;
+}
+
+//////////////////////////////////////////////////////////////////////////
 // A user script replaces the downloaded one of its name; when it cannot be loaded, the downloaded one stays.
+// The downloaded one loads either way, for its version and its problems.
 void LoadProtocols(std::map<std::string, std::string> const& downloaded, std::string_view layer, std::map<std::string, std::string> const& user,
 	SGameContent& content, Scripts& scripts)
 {
@@ -163,47 +182,33 @@ void LoadProtocols(std::map<std::string, std::string> const& downloaded, std::st
 
 	for (std::string const& name : names)
 	{
-		auto pScript{ std::make_unique<Script::CProtocolScript>() };
+		std::string const fileName{ std::format("protocols/{}{}", name, ProtocolExtension) };
 		auto const userSource{ user.find(name) };
 		auto const downloadedSource{ downloaded.find(name) };
-		std::string_view source{};
-		bool isLoaded{ false };
+		bool const hasDownloaded{ downloadedSource != downloaded.end() };
+		std::unique_ptr<Script::CProtocolScript> pUser{ (userSource != user.end())
+			? LoadScript(name, userSource->second, fileName, content.problems) : nullptr };
+		std::unique_ptr<Script::CProtocolScript> pDownloaded{ hasDownloaded
+			? LoadScript(name, downloadedSource->second, Shown(layer, fileName), content.problems) : nullptr };
+		bool const isUserInUse{ pUser != nullptr };
+		std::optional<uint64_t> const downloadedVersion{ (pDownloaded != nullptr) ? pDownloaded->GetVersion() : std::nullopt };
 
-		if (userSource != user.end())
+		if (isUserInUse && pDownloaded != nullptr)
 		{
-			std::expected<void, std::string> const loaded{ pScript->Initialize(name, userSource->second) };
-
-			isLoaded = loaded.has_value();
-			source = userSource->second;
-
-			if (!isLoaded)
-			{
-				content.problems.emplace_back(Query::SGameProblem{ std::format("protocols/{}{}: {}", name, ProtocolExtension, loaded.error()), {} });
-				pScript->Terminate();
-			}
+			pDownloaded->Terminate();
+			pDownloaded.reset();
 		}
 
-		if (!isLoaded && downloadedSource != downloaded.end())
-		{
-			std::expected<void, std::string> const loaded{ pScript->Initialize(name, downloadedSource->second) };
+		std::unique_ptr<Script::CProtocolScript> pScript{ isUserInUse ? std::move(pUser) : std::move(pDownloaded) };
 
-			isLoaded = loaded.has_value();
-			source = downloadedSource->second;
-
-			if (!isLoaded)
-			{
-				content.problems.emplace_back(Query::SGameProblem{
-					std::format("{}: {}", Shown(layer, std::format("protocols/{}{}", name, ProtocolExtension)), loaded.error()), {} });
-				pScript->Terminate();
-			}
-		}
-
-		if (isLoaded)
+		if (pScript != nullptr)
 		{
 			std::span<Query::SProtocolOption const> const options{ pScript->GetOptions() };
+			Query::EProtocolOrigin const userOrigin{ hasDownloaded ? Query::EProtocolOrigin::UserOverDownloaded : Query::EProtocolOrigin::User };
 
-			content.protocols.emplace_back(Query::SProtocolDefinition{ name, std::string{ source },
-				std::vector<Query::SProtocolOption>{ options.begin(), options.end() } });
+			content.protocols.emplace_back(Query::SProtocolDefinition{ name, isUserInUse ? userSource->second : downloadedSource->second,
+				std::vector<Query::SProtocolOption>{ options.begin(), options.end() }, isUserInUse ? userOrigin : Query::EProtocolOrigin::Downloaded,
+				downloadedVersion });
 			scripts.emplace_back(std::move(pScript));
 		}
 	}

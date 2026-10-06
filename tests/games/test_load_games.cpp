@@ -1,8 +1,10 @@
 #include "fixtures.hpp"
+#include "script/script_fixture.hpp"
 #include "games/load_games.hpp"
 #include "query/game_definition.hpp"
 #include "query/game_problem.hpp"
 #include "query/protocol_definition.hpp"
+#include "query/protocol_origin.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <cstdlib>
@@ -169,6 +171,7 @@ TEST_F(CLoadGamesTest, UserProtocolReplacesTheDownloadedOne)
 	EXPECT_TRUE(content.problems.empty());
 	ASSERT_NE(pProtocol, nullptr);
 	EXPECT_EQ(pProtocol->source, source);
+	EXPECT_EQ(pProtocol->origin, Query::EProtocolOrigin::UserOverDownloaded);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -184,6 +187,7 @@ TEST_F(CLoadGamesTest, BrokenUserProtocolKeepsTheDownloadedOne)
 	EXPECT_TRUE(content.problems.front().key.empty());
 	ASSERT_NE(pProtocol, nullptr);
 	EXPECT_EQ(pProtocol->source, Fixtures::GetProtocolByName("quake2").source);
+	EXPECT_EQ(pProtocol->origin, Query::EProtocolOrigin::Downloaded);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -200,6 +204,58 @@ TEST_F(CLoadGamesTest, UserProtocolIsAdded)
 	EXPECT_TRUE(content.problems.empty());
 	EXPECT_NE(FindProtocol(content, "mine"), nullptr);
 	EXPECT_NE(FindGame(content, "mygame"), nullptr);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, ProtocolOnlyTheUserHasIsTheirOwn)
+{
+	WriteFile("protocols/mine.lua", Fixtures::MakeScript(""));
+
+	SGameContent const content{ LoadGames(LKT_LOOKOUT_GAMES_DIR, m_dir) };
+	Query::SProtocolDefinition const* const pProtocol{ FindProtocol(content, "mine") };
+
+	ASSERT_NE(pProtocol, nullptr);
+	EXPECT_EQ(pProtocol->origin, Query::EProtocolOrigin::User);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, DownloadedProtocolKnowsItsVersion)
+{
+	WriteFile("downloaded/protocols/mine.lua", Fixtures::MakeScript("protocol.api = 2 protocol.version = 9041"));
+
+	SGameContent const content{ LoadGames(m_dir / "downloaded", m_dir) };
+	Query::SProtocolDefinition const* const pProtocol{ FindProtocol(content, "mine") };
+
+	ASSERT_NE(pProtocol, nullptr);
+	EXPECT_EQ(pProtocol->downloadedVersion, 9041u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, UserProtocolOverADownloadedOneKnowsTheDownloadedVersion)
+{
+	std::string const source{ Fixtures::MakeScript("-- mine") };
+
+	WriteFile("downloaded/protocols/mine.lua", Fixtures::MakeScript("protocol.api = 2 protocol.version = 9041"));
+	WriteFile("protocols/mine.lua", source);
+
+	SGameContent const content{ LoadGames(m_dir / "downloaded", m_dir) };
+	Query::SProtocolDefinition const* const pProtocol{ FindProtocol(content, "mine") };
+
+	ASSERT_NE(pProtocol, nullptr);
+	ASSERT_EQ(pProtocol->source, source);
+	EXPECT_EQ(pProtocol->downloadedVersion, 9041u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, BrokenDownloadedProtocolUnderAUserOneIsAProblem)
+{
+	WriteFile("downloaded/protocols/mine.lua", "return 1");
+	WriteFile("protocols/mine.lua", Fixtures::MakeScript(""));
+
+	SGameContent const content{ LoadGames(m_dir / "downloaded", m_dir) };
+
+	ASSERT_EQ(content.problems.size(), 1u);
+	EXPECT_TRUE(content.problems.front().text.starts_with("downloaded/protocols/mine.lua: ")) << content.problems.front().text;
 }
 
 //////////////////////////////////////////////////////////////////////////

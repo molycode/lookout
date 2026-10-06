@@ -44,13 +44,17 @@ size_t ToIndex(Query::EGame game)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Whatever positions the two catalogs give the game and its protocol.
-bool IsUnchanged(Query::SGameDefinition old, Query::SProtocolDefinition const& oldProtocol, Query::SGameDefinition const& game)
+// Whatever positions the two catalogs give the game and its protocol, and wherever the protocol comes from.
+bool IsUnchanged(Query::SGameDefinition old, Query::SProtocolDefinition oldProtocol, Query::SGameDefinition const& game)
 {
+	Query::SProtocolDefinition const& protocol{ Query::GetProtocol(game.protocol) };
+
 	old.game = game.game;
 	old.protocol = game.protocol;
+	oldProtocol.origin = protocol.origin;
+	oldProtocol.downloadedVersion = protocol.downloadedVersion;
 
-	return old == game && oldProtocol == Query::GetProtocol(game.protocol);
+	return old == game && oldProtocol == protocol;
 }
 
 //////////////////////////////////////////////////////////////////////////

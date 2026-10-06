@@ -8,6 +8,7 @@
 #include "query/game_definition.hpp"
 #include "query/master_endpoint.hpp"
 #include "query/protocol_definition.hpp"
+#include "query/protocol_origin.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <algorithm>
@@ -480,6 +481,17 @@ protected:
 		return games;
 	}
 
+	std::vector<Query::SProtocolDefinition> ChangeProtocolOrigin(std::string_view key) const
+	{
+		std::vector<Query::SProtocolDefinition> protocols{ m_protocols };
+		Query::SProtocolDefinition& protocol{ protocols[static_cast<size_t>(std::ranges::find(m_games, key, &Query::SGameDefinition::key)->protocol)] };
+
+		protocol.origin = Query::EProtocolOrigin::UserOverDownloaded;
+		protocol.downloadedVersion = 9041;
+
+		return protocols;
+	}
+
 	bool WaitUntilOnline()
 	{
 		return m_waiter.WaitUntil(m_browser, [this]()
@@ -508,6 +520,32 @@ TEST_F(CBrowserCatalogTest, UnchangedGameKeepsItsList)
 
 	ASSERT_NE(pRow, nullptr);
 	EXPECT_EQ(pRow->state, EServerState::Online);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenOnlyWhereItsProtocolComesFromChanges)
+{
+	ASSERT_TRUE(StartWithServer());
+	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(WaitUntilOnline());
+
+	m_browser.ReplaceCatalog(ChangeProtocolOrigin("kingpin"), m_games);
+
+	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
+
+	ASSERT_NE(pRow, nullptr);
+	EXPECT_EQ(pRow->state, EServerState::Online);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, ProtocolOriginChangeReachesTheCatalog)
+{
+	Query::EProtocol const protocol{ std::ranges::find(m_games, "kingpin", &Query::SGameDefinition::key)->protocol };
+
+	ASSERT_TRUE(StartWithServer());
+
+	EXPECT_TRUE(m_browser.ReplaceCatalog(ChangeProtocolOrigin("kingpin"), m_games));
+	EXPECT_EQ(Query::GetProtocol(protocol).origin, Query::EProtocolOrigin::UserOverDownloaded);
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -1,6 +1,9 @@
 #pragma once
 
 #include "query/protocol_option.hpp"
+#include "query/protocol_origin.hpp"
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -12,6 +15,8 @@ struct SProtocolDefinition final
 	std::string name;
 	std::string source;
 	std::vector<SProtocolOption> options;
+	EProtocolOrigin origin{ EProtocolOrigin::Downloaded };
+	std::optional<uint64_t> downloadedVersion{};
 
 	bool operator==(SProtocolDefinition const&) const = default;
 };
