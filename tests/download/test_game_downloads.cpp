@@ -742,6 +742,46 @@ TEST_F(CGameDownloadsTest, CachedIconThatDiffersIsFetchedPastTheCap)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, DownloadTakesAHeldIcon)
+{
+	Start();
+	ReadIndex();
+	m_downloads.RequestIcon("kingpin");
+	RunUntilIconHeld("kingpin");
+
+	EXPECT_TRUE(Download("kingpin"));
+	EXPECT_EQ(m_server.GetNumRequests(), 5u);
+	EXPECT_EQ(ReadText(m_dir / "downloaded/games/kingpin/icon.png"), m_files.at("games/kingpin/icon.png"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, DownloadTakesACachedIcon)
+{
+	Start();
+	ReadIndex();
+	WriteFile(GetCachedIconPath("kingpin"), m_files.at("games/kingpin/icon.png"));
+
+	EXPECT_TRUE(Download("kingpin"));
+	EXPECT_EQ(m_server.GetNumRequests(), 4u);
+	EXPECT_EQ(ReadText(m_dir / "downloaded/games/kingpin/icon.png"), m_files.at("games/kingpin/icon.png"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, DownloadFetchesAnIconWhoseCachedCopyDiffers)
+{
+	std::string icon{ m_files.at("games/kingpin/icon.png") };
+
+	icon[0] ^= 1;
+	Start();
+	ReadIndex();
+	WriteFile(GetCachedIconPath("kingpin"), icon);
+
+	EXPECT_TRUE(Download("kingpin"));
+	EXPECT_EQ(GetState("kingpin"), EOfferState::Installed);
+	EXPECT_EQ(ReadText(m_dir / "downloaded/games/kingpin/icon.png"), m_files.at("games/kingpin/icon.png"));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CGameDownloadsTest, IndexReadingKeepsOnlyTheIconsItNames)
 {
 	std::filesystem::path const iconDir{ GetCacheDir() / "icons" };

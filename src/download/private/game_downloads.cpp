@@ -151,7 +151,17 @@ void CGameDownloads::Download(std::span<std::string const> keys)
 
 			for (SIndexFile const& file : pGame->files)
 			{
-				requests.emplace_back(MakePath(m_pIndex->commit, std::format("games/{}/{}", key, file.name)), file.size);
+				std::string path{ MakePath(m_pIndex->commit, std::format("games/{}/{}", key, file.name)) };
+				std::optional<std::string> held{ (file.name == IconFile) ? FindHeldIcon(file) : std::nullopt };
+
+				if (held.has_value())
+				{
+					m_fetched.insert_or_assign(path, Net::SFetchResult{ path, std::move(*held) });
+				}
+				else
+				{
+					requests.emplace_back(std::move(path), file.size);
+				}
 			}
 
 			if (!IsProtocolCurrent(m_downloadedDir, *pProtocol) && protocols.insert(pProtocol->name).second)
@@ -161,7 +171,7 @@ void CGameDownloads::Download(std::span<std::string const> keys)
 		}
 	}
 
-	m_numToFetch = requests.size();
+	m_numToFetch = requests.size() + m_fetched.size();
 
 	if (!requests.empty())
 	{
@@ -399,6 +409,30 @@ void CGameDownloads::TakeIcon(Net::SFetchResult result, std::string_view sha256)
 		gLog.Warning("Cannot show the icon {}: {}", result.path,
 			result.body.has_value() ? std::string_view{ "it differs from what the index says it is" } : std::string_view{ result.body.error() });
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// What the window has shown is not fetched again for the download; installing still checks it against the index.
+std::optional<std::string> CGameDownloads::FindHeldIcon(SIndexFile const& icon) const
+{
+	auto const held{ m_iconsByHash.find(icon.sha256) };
+	std::optional<std::string> png{ (held != m_iconsByHash.end()) ? std::optional<std::string>{ held->second } : std::nullopt };
+
+	if (!png.has_value() && !m_iconDir.empty())
+	{
+		std::expected<std::optional<std::string>, std::string> cached{ ReadCachedIcon(m_iconDir, icon) };
+
+		if (cached.has_value())
+		{
+			png = std::move(*cached);
+		}
+		else
+		{
+			gLog.Warning("Cannot read a kept icon, so the download fetches it: {}", cached.error());
+		}
+	}
+
+	return png;
 }
 
 //////////////////////////////////////////////////////////////////////////

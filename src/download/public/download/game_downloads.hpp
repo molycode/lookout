@@ -11,6 +11,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <span>
 #include <string>
@@ -20,6 +21,7 @@
 namespace Lkt::Download
 {
 struct SGameIndex;
+struct SIndexFile;
 
 // Lists, downloads, updates and removes the games of a lookout-games repository in the downloaded folder of userDir,
 // which nothing else writes. Used from one thread: the callback only says that Update has something to take.
@@ -57,6 +59,7 @@ private:
 	void TakeIndex(Net::SFetchResult result);
 	void PruneIcons() const;
 	void TakeIcon(Net::SFetchResult result, std::string_view sha256);
+	std::optional<std::string> FindHeldIcon(SIndexFile const& icon) const;
 	void InstallFetched();
 	void RefreshOffers();
 	std::string MakePath(std::string_view reference, std::string_view file) const;
