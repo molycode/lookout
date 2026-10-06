@@ -19,7 +19,13 @@ namespace
 constexpr size_t MemoryLimit{ 16u << 20 };
 // Large copies run in C between instruction checks, so a large allocation checks the deadline as well.
 constexpr size_t LargeAllocation{ 64u << 10 };
-constexpr std::chrono::milliseconds CallTimeLimit{ 10 };
+// Parsing a 16 KiB read of a master's list takes about 2 ms optimised; slow machines need the room.
+#if defined(LKT_SANITIZER_ENABLED)
+// A sanitizer slows the Lua VM up to twelvefold.
+constexpr std::chrono::milliseconds CallTimeLimit{ 500 };
+#else
+constexpr std::chrono::milliseconds CallTimeLimit{ 50 };
+#endif // LKT_SANITIZER_ENABLED
 constexpr int InstructionsPerCheck{ 1000 };
 
 constexpr std::array<std::string_view, 2> KindNames{ "master", "server" };

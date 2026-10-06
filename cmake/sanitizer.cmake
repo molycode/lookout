@@ -9,6 +9,7 @@ if(NOT LKT_SANITIZER STREQUAL "none")
 
 	add_compile_options(-fsanitize=${LKT_SANITIZER} -fno-omit-frame-pointer)
 	add_link_options(-fsanitize=${LKT_SANITIZER})
+	add_compile_definitions(LKT_SANITIZER_ENABLED)
 
 	message(STATUS "Sanitizer enabled: ${LKT_SANITIZER}")
 endif()
