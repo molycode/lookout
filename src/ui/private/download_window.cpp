@@ -1,5 +1,6 @@
 #include "download_window.hpp"
 #include "format_to.hpp"
+#include "game_icons.hpp"
 #include "icon_textures.hpp"
 #include "icons.hpp"
 #include "loggers.hpp"
@@ -9,6 +10,7 @@
 #include "browser/text_compare.hpp"
 #include "download/lookout_games.hpp"
 #include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
 #include "query/protocol_definition.hpp"
 #include "query/protocol_origin.hpp"
 #include <imgui.h>
@@ -333,13 +335,23 @@ void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<st
 	std::array<char, 128> stateBuffer{};
 	std::string_view const stateText{ isDownloading ? std::string_view{ "Downloading…" } : DescribeOffer(offer, stateBuffer) };
 	ImDrawList* const pDrawList{ ImGui::GetWindowDrawList() };
+	Query::SGameDefinition const* const pInstalled{ offer.isDownloaded ? Query::FindGame(offer.key) : nullptr };
 	std::array<char, 128> buffer{};
 
 	ImGui::PushID(offer.key.c_str());
 	ImGui::BeginGroup();
 	ImGui::Dummy(size);
 	pDrawList->AddRectFilled(start, ImVec2{ start.x + size.x, start.y + size.y }, ImGui::GetColorU32(ImGuiCol_FrameBg), ImGui::GetFontSize() * CardRoundingEm);
-	DrawIcon(pDrawList, FindIcon(offer), icon, iconSize);
+
+	if (pInstalled != nullptr)
+	{
+		gGameIcons.Draw(pDrawList, pInstalled->game, icon, iconSize);
+	}
+	else
+	{
+		DrawIcon(pDrawList, FindIcon(offer), icon, iconSize);
+	}
+
 	DrawEllipsised(offer.name, text, buttonsX - style.ItemInnerSpacing.x, colors.text);
 	DrawEllipsised(stateText, ImVec2{ text.x, text.y + ImGui::GetTextLineHeightWithSpacing() }, start.x + size.x - padding.x,
 		(isDownloading || canUpdate) ? colors.amber : colors.textDisabled);
