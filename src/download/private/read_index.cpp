@@ -1,4 +1,5 @@
 #include "read_index.hpp"
+#include "download/lookout_release.hpp"
 #include "games/game_files.hpp"
 #include "json/json.hpp"
 #include "json/syntax_error.hpp"
@@ -159,12 +160,17 @@ void ReadProtocol(std::string const& name, JsonValue const& json, SIndexProtocol
 void ReadContent(JsonValue const& root, SGameIndex& index, std::string& problem)
 {
 	JsonValue::const_iterator const commit{ root.find("commit") };
+	JsonValue::const_iterator const lookoutVersion{ root.find("lookoutVersion") };
 	JsonValue::const_iterator const games{ root.find("games") };
 	JsonValue::const_iterator const protocols{ root.find("protocols") };
 
 	if (commit == root.cend() || !commit->is_string() || !IsLowerHex(commit->get_ref<std::string const&>(), CommitLength))
 	{
 		Fail(problem, "commit", "must be a commit's 40 lower-case hex digits");
+	}
+	else if (lookoutVersion != root.cend() && (!lookoutVersion->is_string() || !ParseLookoutVersion(lookoutVersion->get_ref<std::string const&>()).has_value()))
+	{
+		Fail(problem, "lookoutVersion", "must be a version such as 1.4.0");
 	}
 	else if (games == root.cend() || !games->is_object())
 	{
@@ -177,6 +183,7 @@ void ReadContent(JsonValue const& root, SGameIndex& index, std::string& problem)
 	else
 	{
 		index.commit = commit->get<std::string>();
+		index.lookoutVersion = (lookoutVersion != root.cend()) ? lookoutVersion->get<std::string>() : std::string{};
 
 		for (auto const& item : protocols->items())
 		{

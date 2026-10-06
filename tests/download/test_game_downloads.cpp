@@ -323,6 +323,19 @@ TEST_F(CGameDownloadsTest, ProtocolVersionBelowOneRefusesTheIndex)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, LookoutVersionComesFromTheIndex)
+{
+	JsonValue index = MakeIndex();
+
+	index["lookoutVersion"] = "9.0.41";
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(m_downloads.GetLookoutVersion(), "9.0.41");
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CGameDownloadsTest, DownloadInstallsTheGameAndItsProtocol)
 {
 	Start();

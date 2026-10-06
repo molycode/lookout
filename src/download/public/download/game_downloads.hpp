@@ -51,6 +51,7 @@ public:
 	std::span<std::string const> GetDownloadKeys() const;
 	// What went wrong in the last reading, download or removal, each naming its game or file.
 	std::span<std::string const> GetProblems() const;
+	std::string_view GetLookoutVersion() const;
 	size_t GetNumFetched() const;
 	size_t GetNumToFetch() const;
 

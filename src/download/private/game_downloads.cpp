@@ -288,6 +288,13 @@ std::span<std::string const> CGameDownloads::GetProblems() const
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Lookout's latest release as the index names it; empty before an index is read or when it names none.
+std::string_view CGameDownloads::GetLookoutVersion() const
+{
+	return (m_pIndex != nullptr) ? std::string_view{ m_pIndex->lookoutVersion } : std::string_view{};
+}
+
+//////////////////////////////////////////////////////////////////////////
 size_t CGameDownloads::GetNumFetched() const
 {
 	return m_fetched.size();
