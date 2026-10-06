@@ -2,6 +2,7 @@
 #include "sha256.hpp"
 #include "download/game_downloads.hpp"
 #include "json/json.hpp"
+#include "script/script_api.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <chrono>
@@ -275,6 +276,32 @@ TEST_F(CGameDownloadsTest, NewerFormatNeedsANewerLookout)
 	ReadIndex();
 
 	EXPECT_EQ(GetState("kingpin"), EOfferState::NeedsNewerLookout);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, NewerScriptApiNeedsANewerLookout)
+{
+	JsonValue index = MakeIndex();
+
+	index["protocols"]["quake2"]["api"] = Script::ScriptApi + 1;
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(GetState("kingpin"), EOfferState::NeedsNewerLookout);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ScriptApiThisLookoutRunsIsOffered)
+{
+	JsonValue index = MakeIndex();
+
+	index["protocols"]["quake2"]["api"] = Script::ScriptApi;
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(GetState("kingpin"), EOfferState::NotInstalled);
 }
 
 //////////////////////////////////////////////////////////////////////////
