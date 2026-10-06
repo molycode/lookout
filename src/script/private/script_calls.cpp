@@ -584,6 +584,7 @@ void ReadStatusReply(lua_State* pState, int table, Query::SStatusReply& reply, s
 	constexpr lua_Integer MaxPort{ std::numeric_limits<uint16_t>::max() };
 	std::optional<lua_Integer> numMalformed{};
 	std::optional<lua_Integer> joinPort{};
+	std::optional<lua_Integer> maxPlayers{};
 
 	if (PushField(pState, table, "rules") == LUA_TTABLE)
 	{
@@ -623,6 +624,15 @@ void ReadStatusReply(lua_State* pState, int table, Query::SStatusReply& reply, s
 	else
 	{
 		SetProblem(problem, std::format("reply.joinPort must be an integer from 1 to {}", MaxPort));
+	}
+
+	if (ReadOptionalInteger(pState, table, "maxPlayers", 0, MaxCount, maxPlayers))
+	{
+		reply.maxPlayers = maxPlayers.transform([](lua_Integer count) { return static_cast<uint32_t>(count); });
+	}
+	else
+	{
+		SetProblem(problem, std::format("reply.maxPlayers must be an integer from 0 to {}", MaxCount));
 	}
 }
 

@@ -559,6 +559,30 @@ TEST_F(CProtocolScriptTest, JoinPortOutOfRangeFailsTheScript)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, ReplyCarriesItsMaxPlayers)
+{
+	ASSERT_EQ(LoadProblem(Load("protocol.server.receive = function() return { reply = { rules = {}, players = {}, maxPlayers = 9041 } } end")), "");
+
+	std::expected<Script::SScriptAction, std::string> const action{ Receive(EConversationKind::Server, "x") };
+
+	ASSERT_TRUE(action.has_value() && action->reply.has_value()) << action.error_or("");
+	EXPECT_EQ(action->reply->maxPlayers, 9041u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CProtocolScriptTest, MaxPlayersOutOfRangeFailsTheScript)
+{
+	for (std::string_view const count : { "-1", "4294967296", "'12'" })
+	{
+		ASSERT_EQ(LoadProblem(Load(std::format("protocol.server.receive = function() return {{ reply = {{ rules = {{}}, players = {{}}, maxPlayers = {} }} }} end",
+			count))), "");
+
+		EXPECT_EQ(Failure(Receive(EConversationKind::Server, "x")), "server.receive: reply.maxPlayers must be an integer from 0 to 4294967295") << count;
+		m_script.Terminate();
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CProtocolScriptTest, PlayerFieldsKeepTheirOrder)
 {
 	ASSERT_EQ(LoadProblem(Load(R"lua(protocol.server.receive = function()

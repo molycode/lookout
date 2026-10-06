@@ -62,7 +62,7 @@ SServerSummary Summarize(SGameDefinition const& game, SStatusReply const& reply)
 	summary.mode = FindMode(reply, game.modes);
 	summary.numPlayers = (game.keys.numPlayers.empty() ? std::nullopt : TryParseCount(FindRule(reply, game.keys.numPlayers)))
 		.value_or(static_cast<uint32_t>(reply.players.size()));
-	summary.maxPlayers = ParseCount(FindRule(reply, game.keys.maxPlayers));
+	summary.maxPlayers = reply.maxPlayers.value_or(ParseCount(FindRule(reply, game.keys.maxPlayers)));
 	// Only the lowest bit means a player password: games use the others for things like spectator passwords.
 	summary.hasPassword = (ParseCount(FindRule(reply, game.keys.password)) & 1u) != 0;
 	summary.isForeign = std::ranges::any_of(game.foreignServers, [&reply](SKeyMatch const& match) { return FindRule(reply, match.key) == match.value; });

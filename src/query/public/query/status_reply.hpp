@@ -15,6 +15,7 @@ struct SStatusReply final
 	std::vector<SPlayer> players;
 	uint32_t numMalformedPlayerLines{ 0 };
 	std::optional<uint16_t> joinPort;
+	std::optional<uint32_t> maxPlayers{};
 };
 
 // An empty view when the server does not publish the rule.

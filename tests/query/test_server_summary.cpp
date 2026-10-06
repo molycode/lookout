@@ -100,6 +100,16 @@ TEST(ServerSummary, CountsThePlayers)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(ServerSummary, ReplysMaxPlayersWinsOverTheRule)
+{
+	SStatusReply reply{ MakeReply({ { "sv_maxclients", "12" } }) };
+
+	reply.maxPlayers = 9041;
+
+	EXPECT_EQ(Summarize(Fixtures::GetGameByKey("quake3"), reply).maxPlayers, 9041u);
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(ServerSummary, ReadsMaxPlayers)
 {
 	EXPECT_EQ(SummarizeFixture("rtcw", RtcwFixture).maxPlayers, 64u);
