@@ -435,7 +435,7 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 			}
 		}
 
-		ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed, ImGui::GetTextLineHeight());
+		ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoHeaderLabel, ImGui::GetTextLineHeight());
 		ImGui::TableHeadersRow();
 
 		for (size_t index{ 0 }; index < node.children.size(); ++index)
