@@ -47,6 +47,7 @@ private:
 
 	std::string m_key;
 	std::string m_name;
+	std::string m_openedText;
 	std::string m_downloadedText;
 	std::string m_savedAs;
 	std::string m_unreadable;

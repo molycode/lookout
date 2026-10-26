@@ -127,15 +127,22 @@ bool CGameEditor::HasUnsavedChanges() const
 
 //////////////////////////////////////////////////////////////////////////
 // Unedited, the editor shows the files as they now are; edited, it keeps the edits, which a save puts on top of them.
+// Edits are checked again either way: the protocols they name may have changed.
 void CGameEditor::OnCatalogChanged(std::filesystem::path const& userDir)
 {
-	if (m_isOpen && !m_isNew && HasUnsavedChanges())
-	{
-		m_note = "This game's files changed while you edited it. Saving keeps your changes on top of them.";
-	}
-	else if (m_isOpen && !m_isNew)
+	if (m_isOpen && !m_isNew && !HasUnsavedChanges())
 	{
 		Load(m_key, userDir);
+	}
+	else if (m_isOpen)
+	{
+		if (!m_isNew && Games::ReadGameText(userDir, m_key).text != m_openedText)
+		{
+			m_note = "This game's files changed while you edited it. Saving keeps your changes on top of them.";
+		}
+
+		m_scriptSignature.clear();
+		Check();
 	}
 }
 
@@ -248,6 +255,7 @@ void CGameEditor::Load(std::string_view key, std::filesystem::path const& userDi
 	m_key = key;
 	m_name = (pGame != nullptr) ? pGame->name : m_key;
 	m_source = Games::FindGameSource(userDir, key);
+	m_openedText = opened.text;
 	m_downloadedText = opened.downloaded;
 	m_savedAs = opened.downloaded.empty() ? std::format("Saved as {}", file) : std::format("Saved as your changes to the download, in {}", file);
 	m_unreadable = !opened.problem.empty() ? opened.problem : (form.has_value() ? std::string{} : std::format("games/{}/game.json: {}", key, form.error()));
@@ -271,6 +279,7 @@ void CGameEditor::LoadNew()
 	m_key.clear();
 	m_name.clear();
 	m_source = Games::EGameSource::None;
+	m_openedText.clear();
 	m_downloadedText.clear();
 	m_savedAs.clear();
 	m_unreadable.clear();
