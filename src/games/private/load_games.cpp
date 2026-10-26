@@ -364,4 +364,36 @@ SGameContent LoadGames(std::filesystem::path const& downloadedDir, std::filesyst
 
 	return content;
 }
+
+//////////////////////////////////////////////////////////////////////////
+// As LoadGames reads it, for a protocol that arrives while the games it would be read with are still in use.
+std::expected<Query::SProtocolDefinition, std::string> LoadDownloadedProtocol(std::filesystem::path const& downloadedDir, std::string_view name)
+{
+	std::string const fileName{ std::format("{}{}", name, ProtocolExtension) };
+	std::string const shownAs{ Shown(NameLayer(downloadedDir), std::format("protocols/{}", fileName)) };
+	std::expected<std::optional<std::string>, std::string> const source{ IsValidKey(name) ? ReadUserFile(downloadedDir / "protocols" / fileName, shownAs)
+		: std::unexpected{ std::format("{}: {}", shownAs, KeyRule) } };
+	std::vector<Query::SGameProblem> problems{};
+	std::unique_ptr<Script::CProtocolScript> pScript{ (source.has_value() && source->has_value()) ? LoadScript(name, **source, shownAs, problems) : nullptr };
+	std::expected<Query::SProtocolDefinition, std::string> protocol{ std::unexpected{ source.has_value() ? std::string{} : source.error() } };
+
+	if (pScript != nullptr)
+	{
+		std::span<Query::SProtocolOption const> const options{ pScript->GetOptions() };
+
+		protocol = Query::SProtocolDefinition{ std::string{ name }, **source, std::vector<Query::SProtocolOption>{ options.begin(), options.end() },
+			Query::EProtocolOrigin::Downloaded, pScript->GetVersion() };
+		pScript->Terminate();
+	}
+	else if (source.has_value() && source->has_value())
+	{
+		protocol = std::unexpected{ problems.front().text };
+	}
+	else if (source.has_value())
+	{
+		protocol = std::unexpected{ std::format("{}: {}", shownAs, std::make_error_code(std::errc::no_such_file_or_directory).message()) };
+	}
+
+	return protocol;
+}
 } // namespace Lkt::Games
