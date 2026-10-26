@@ -17,6 +17,7 @@
 #include "launch/launch_error.hpp"
 #include "launch/launch_option.hpp"
 #include "net/clock.hpp"
+#include "net/master_failed.hpp"
 #include "net/query_engine.hpp"
 #include "query/game.hpp"
 #include "query/game_definition.hpp"
@@ -83,6 +84,7 @@ public:
 	std::optional<Net::Clock::time_point> GetNextAutoRefresh() const;
 	SServerEntry const* FindEntry(uint64_t key) const;
 	SGameStatus const& GetStatus(Query::EGame game) const;
+	std::span<Net::SMasterFailed const> GetFailedMasters(Query::EGame game) const;
 	std::span<Query::SGameProblem const> GetGameProblems() const;
 	bool IsFavourite(Query::SServerAddress const& address) const;
 	std::span<Launch::SLaunchOption const> GetLaunchOptions(Query::EGame game) const;

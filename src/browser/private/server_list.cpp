@@ -57,7 +57,7 @@ void CServerList::BeginRefresh(uint32_t refreshId)
 {
 	m_acceptedRefreshId = refreshId;
 	m_sweepRefreshId = refreshId;
-	m_numMastersFailed = 0;
+	m_failedMasters.clear();
 
 	for (SServerEntry& entry : m_entries)
 	{
@@ -105,7 +105,7 @@ bool CServerList::Apply(Query::SGameDefinition const& game, Net::SQueryEvent&& e
 			{
 				if (typed.refreshId == m_sweepRefreshId)
 				{
-					++m_numMastersFailed;
+					m_failedMasters.insert(std::ranges::upper_bound(m_failedMasters, typed.index, {}, &Net::SMasterFailed::index), std::move(typed));
 				}
 			}
 			else if constexpr (std::is_same_v<TEvent, Net::SServerAnswered>)
@@ -152,9 +152,9 @@ uint32_t CServerList::GetNumAnswered() const
 }
 
 //////////////////////////////////////////////////////////////////////////
-uint32_t CServerList::GetNumMastersFailed() const
+std::span<Net::SMasterFailed const> CServerList::GetFailedMasters() const
 {
-	return m_numMastersFailed;
+	return m_failedMasters;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -248,7 +248,7 @@ void CServerList::ApplyFailure(Net::SServerFailed const& failure)
 // When every master failed, nothing was listed again, so dropping the unlisted would empty the table offline.
 void CServerList::FinishSweep(Query::SGameDefinition const& game)
 {
-	if (m_numMastersFailed < game.masters.size())
+	if (m_failedMasters.size() < game.masters.size())
 	{
 		std::erase_if(m_entries, [](SServerEntry const& entry) { return entry.isStale; });
 		RebuildIndex();

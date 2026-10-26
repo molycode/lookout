@@ -631,6 +631,12 @@ SGameStatus const& CBrowser::GetStatus(Query::EGame game) const
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::span<Net::SMasterFailed const> CBrowser::GetFailedMasters(Query::EGame game) const
+{
+	return m_lists[ToIndex(game)]->GetFailedMasters();
+}
+
+//////////////////////////////////////////////////////////////////////////
 std::span<Query::SGameProblem const> CBrowser::GetGameProblems() const
 {
 	return m_gameProblems;
@@ -744,7 +750,6 @@ void CBrowser::Recount(Query::EGame game)
 
 	status.numListed = static_cast<uint32_t>(entries.size());
 	status.numAnswered = list.GetNumAnswered();
-	status.numMastersFailed = list.GetNumMastersFailed();
 	status.numPlayers = 0;
 
 	for (SServerEntry const& entry : entries)

@@ -4,9 +4,14 @@
 #include "theme.hpp"
 #include "theme_colors.hpp"
 #include "browser/browser.hpp"
+#include "net/master_failed.hpp"
 #include "query/game.hpp"
+#include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
+#include "query/master_endpoint.hpp"
 #include <imgui.h>
 #include <array>
+#include <span>
 
 namespace Lkt::Ui
 {
@@ -19,7 +24,9 @@ void DrawStatusBar(Browser::CBrowser const& browser, std::string_view message)
 
 	if (hasGame)
 	{
-		Browser::SGameStatus const& status{ browser.GetStatus(browser.GetSelectedGame()) };
+		Query::SGameDefinition const& game{ Query::GetGame(browser.GetSelectedGame()) };
+		Browser::SGameStatus const& status{ browser.GetStatus(game.game) };
+		std::span<Net::SMasterFailed const> const failedMasters{ browser.GetFailedMasters(game.game) };
 		std::string_view const summary{ status.hasRefreshed
 			? FormatTo(buffer, "{} of {} servers answered · {} {}", status.numAnswered, status.numListed, status.numPlayers,
 				(status.numPlayers == 1) ? "player" : "players")
@@ -29,15 +36,30 @@ void DrawStatusBar(Browser::CBrowser const& browser, std::string_view message)
 		ImGui::TextUnformatted(summary.data(), summary.data() + summary.size());
 		ImGui::PopStyleColor();
 
-		if (status.numMastersFailed > 0)
+		if (!failedMasters.empty())
 		{
-			std::string_view const failed{ FormatTo(buffer, LKT_ICON_WARNING " {} {} failed", status.numMastersFailed,
-				(status.numMastersFailed == 1) ? "master" : "masters") };
+			std::string_view const failed{ FormatTo(buffer, LKT_ICON_WARNING " {} {} failed", failedMasters.size(),
+				(failedMasters.size() == 1) ? "master" : "masters") };
 
 			ImGui::SameLine();
 			ImGui::PushStyleColor(ImGuiCol_Text, colors.amber);
 			ImGui::TextUnformatted(failed.data(), failed.data() + failed.size());
 			ImGui::PopStyleColor();
+
+			if (ImGui::BeginItemTooltip())
+			{
+				std::array<char, 256> line{};
+
+				for (Net::SMasterFailed const& failure : failedMasters)
+				{
+					Query::SMasterEndpoint const& master{ game.masters[failure.index] };
+					std::string_view const text{ FormatTo(line, "{}:{} {}", master.host, master.port, failure.reason) };
+
+					ImGui::TextUnformatted(text.data(), text.data() + text.size());
+				}
+
+				ImGui::EndTooltip();
+			}
 		}
 	}
 

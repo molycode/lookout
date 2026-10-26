@@ -1,6 +1,7 @@
 #pragma once
 
 #include "browser/server_entry.hpp"
+#include "net/master_failed.hpp"
 #include "net/query_event.hpp"
 #include "net/server_answered.hpp"
 #include "net/server_failed.hpp"
@@ -35,7 +36,7 @@ public:
 	std::span<SServerEntry const> GetEntries() const;
 	SServerEntry const* Find(Query::SServerAddress const& address) const;
 	uint32_t GetNumAnswered() const;
-	uint32_t GetNumMastersFailed() const;
+	std::span<Net::SMasterFailed const> GetFailedMasters() const;
 
 private:
 
@@ -50,7 +51,7 @@ private:
 	std::unordered_map<uint64_t, size_t> m_indexByKey;
 	uint32_t m_acceptedRefreshId{ 0 };
 	uint32_t m_sweepRefreshId{ 0 };
-	uint32_t m_numMastersFailed{ 0 };
+	std::vector<Net::SMasterFailed> m_failedMasters;
 };
 } // namespace Browser
 } // namespace Lkt

@@ -192,7 +192,7 @@ TEST(ServerList, FinishKeepsEverythingWhenEveryMasterFailed)
 
 	list.Apply(quake3, Net::SRefreshFinished{ quake3.game, 7 });
 
-	EXPECT_EQ(list.GetNumMastersFailed(), quake3.masters.size());
+	EXPECT_EQ(list.GetFailedMasters().size(), quake3.masters.size());
 	EXPECT_TRUE(IsFresh(list, First));
 	EXPECT_TRUE(IsFresh(list, Second));
 }
@@ -215,6 +215,48 @@ TEST(ServerList, FinishStillSweepsWhenOnlySomeMastersFailed)
 
 	EXPECT_EQ(list.GetEntries().size(), 1u);
 	EXPECT_TRUE(IsFresh(list, First));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerList, KeepsWhichMastersFailed)
+{
+	CServerList list{};
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
+
+	Prepare(list, 7);
+	list.Apply(quake3, Net::SMasterFailed{ quake3.game, 1, std::string{ quake3.masters[1].host }, "did not answer", 7 });
+
+	ASSERT_EQ(list.GetFailedMasters().size(), 1u);
+	EXPECT_EQ(list.GetFailedMasters()[0].index, 1u);
+	EXPECT_EQ(list.GetFailedMasters()[0].reason, "did not answer");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerList, FailedMastersKeepTheGamesOrder)
+{
+	CServerList list{};
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
+
+	Prepare(list, 7);
+	list.Apply(quake3, Net::SMasterFailed{ quake3.game, 2, std::string{ quake3.masters[2].host }, "did not answer", 7 });
+	list.Apply(quake3, Net::SMasterFailed{ quake3.game, 0, std::string{ quake3.masters[0].host }, "refused the query", 7 });
+
+	ASSERT_EQ(list.GetFailedMasters().size(), 2u);
+	EXPECT_EQ(list.GetFailedMasters()[0].index, 0u);
+	EXPECT_EQ(list.GetFailedMasters()[1].index, 2u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerList, NewRefreshForgetsFailedMasters)
+{
+	CServerList list{};
+	Query::SGameDefinition const& quake3{ Fixtures::GetGameByKey("quake3") };
+
+	Prepare(list, 7);
+	list.Apply(quake3, Net::SMasterFailed{ quake3.game, 0, std::string{ quake3.masters[0].host }, "did not answer", 7 });
+	list.BeginRefresh(8);
+
+	EXPECT_TRUE(list.GetFailedMasters().empty());
 }
 
 //////////////////////////////////////////////////////////////////////////
