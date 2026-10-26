@@ -24,6 +24,21 @@ bool IsWithin(std::filesystem::path const& path, std::filesystem::path const& ba
 
 	return baseEnd == base.end();
 }
+
+//////////////////////////////////////////////////////////////////////////
+// The folder itself when it exists, else its nearest ancestor that does.
+std::filesystem::path FindNearestFolder(std::filesystem::path const& folder)
+{
+	std::error_code error{};
+	std::filesystem::path nearest{ folder };
+
+	while (nearest.has_relative_path() && !std::filesystem::is_directory(nearest, error))
+	{
+		nearest = nearest.parent_path();
+	}
+
+	return nearest;
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
@@ -84,9 +99,10 @@ void CFolderWatcher::Terminate()
 bool CFolderWatcher::Rearm()
 {
 	std::error_code error{};
+	std::filesystem::path const nearest{ FindNearestFolder(m_userDir) };
 	bool hasNewFolder{ false };
 
-	if (std::filesystem::is_directory(m_userDir, error))
+	if (nearest == m_userDir)
 	{
 		hasNewFolder = AddWatch(m_userDir) || hasNewFolder;
 		hasNewFolder = AddWatch(m_userDir / "protocols") || hasNewFolder;
@@ -102,14 +118,9 @@ bool CFolderWatcher::Rearm()
 	}
 	else
 	{
-		std::filesystem::path ancestor{ m_userDir.parent_path() };
-
-		while (ancestor.has_relative_path() && !std::filesystem::is_directory(ancestor, error))
-		{
-			ancestor = ancestor.parent_path();
-		}
-
-		AddWatch(ancestor);
+		AddWatch(nearest);
+		// A folder made toward the user folder between the look and the watch sends no event, so the look is repeated.
+		hasNewFolder = FindNearestFolder(m_userDir) != nearest && Rearm();
 	}
 
 	return hasNewFolder;
