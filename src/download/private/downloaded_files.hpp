@@ -6,6 +6,7 @@
 #include <expected>
 #include <filesystem>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,7 @@ namespace Lkt::Download
 {
 // How the downloaded copy of a game compares with the index: its files and its protocol's, by checksum.
 EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SIndexGame const& game, SIndexProtocol const& protocol);
+EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SIndexProtocol const& protocol);
 bool IsProtocolCurrent(std::filesystem::path const& downloadedDir, SIndexProtocol const& protocol);
 
 // Keys of the games in the folder, and the name each one's game.json gives, or its key.
@@ -23,6 +25,7 @@ std::expected<void, std::string> InstallGame(std::filesystem::path const& downlo
 	std::map<std::string, std::string> const& files);
 std::expected<void, std::string> InstallProtocol(std::filesystem::path const& downloadedDir, std::string const& name, std::string const& source);
 std::expected<void, std::string> RemoveGame(std::filesystem::path const& downloadedDir, std::string const& key);
-// Removes each downloaded protocol that neither a downloaded game nor one of the user's games names any more.
-std::vector<std::string> RemoveUnusedProtocols(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir);
+// Removes each downloaded protocol that is not in use and that neither a downloaded game nor one of the user's games names any more.
+std::vector<std::string> RemoveUnusedProtocols(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir,
+	std::set<std::string> inUse);
 } // namespace Lkt::Download

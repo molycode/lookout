@@ -3,6 +3,7 @@
 #include "download/download_phase.hpp"
 #include "download/download_source.hpp"
 #include "download/game_offer.hpp"
+#include "download/protocol_offer.hpp"
 #include "net/fetch_result.hpp"
 #include "net/https_fetcher.hpp"
 #include <tge/non_copyable.hpp>
@@ -38,6 +39,7 @@ public:
 	void ReadIndex();
 	// Each game with its protocol, at the commit the index names; the index must have been read.
 	void Download(std::span<std::string const> keys);
+	void DownloadProtocol(std::string_view name);
 	void Remove(std::span<std::string const> keys);
 	void RequestIcon(std::string_view key);
 
@@ -47,6 +49,7 @@ public:
 	EDownloadPhase GetPhase() const;
 	bool HasIndex() const;
 	std::span<SGameOffer const> GetOffers() const;
+	std::span<SProtocolOffer const> GetProtocolOffers() const;
 	std::string_view GetIcon(std::string_view sha256) const;
 	std::span<std::string const> GetDownloadKeys() const;
 	// What went wrong in the last reading, download or removal, each naming its game or file.
@@ -73,6 +76,9 @@ private:
 	Net::CHttpsFetcher m_fetcher;
 	std::unique_ptr<SGameIndex> m_pIndex;
 	std::vector<SGameOffer> m_offers;
+	std::vector<SProtocolOffer> m_protocolOffers;
+	std::map<std::string, std::string, std::less<>> m_protocolProblems;
+	std::set<std::string> m_keptProtocols;
 	std::vector<std::string> m_problems;
 	std::vector<std::string> m_downloadKeys;
 	std::map<std::string, Net::SFetchResult> m_fetched;

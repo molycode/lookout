@@ -237,6 +237,23 @@ protected:
 		return RunUntilIdle();
 	}
 
+	bool DownloadProtocol(std::string_view name)
+	{
+		m_downloads.DownloadProtocol(name);
+
+		return RunUntilIdle();
+	}
+
+	SProtocolOffer GetProtocolOffer(std::string_view name) const
+	{
+		std::span<SProtocolOffer const> const offers{ m_downloads.GetProtocolOffers() };
+		auto const it{ std::ranges::find(offers, name, &SProtocolOffer::name) };
+
+		EXPECT_NE(it, offers.end()) << name;
+
+		return (it != offers.end()) ? *it : SProtocolOffer{};
+	}
+
 	SGameOffer GetOffer(std::string_view key) const
 	{
 		std::span<SGameOffer const> const offers{ m_downloads.GetOffers() };
@@ -489,6 +506,113 @@ TEST_F(CGameDownloadsTest, RemoveKeepsAProtocolAUserGamesMasterNames)
 	m_downloads.Remove(keys);
 
 	EXPECT_TRUE(std::filesystem::exists(m_dir / "downloaded/protocols/quake2.lua"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolsAreOfferedFromTheIndex)
+{
+	Start();
+	ReadIndex();
+
+	std::span<SProtocolOffer const> const offers{ m_downloads.GetProtocolOffers() };
+
+	ASSERT_EQ(offers.size(), 1u);
+	EXPECT_EQ(offers.front().name, "quake2");
+	EXPECT_EQ(offers.front().state, EOfferState::NotInstalled);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolOfANewerScriptApiNeedsANewerLookout)
+{
+	JsonValue index = MakeIndex();
+
+	index["protocols"]["quake2"]["api"] = Script::ScriptApi + 1;
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(GetProtocolOffer("quake2").state, EOfferState::NeedsNewerLookout);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolOnDiskThatDiffersOffersAnUpdate)
+{
+	WriteFile(m_dir / "downloaded/protocols/quake2.lua", "return {}");
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(GetProtocolOffer("quake2").state, EOfferState::UpdateAvailable);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolIsDownloadedAlone)
+{
+	Start();
+	ReadIndex();
+	DownloadProtocol("quake2");
+
+	EXPECT_EQ(ReadText(m_dir / "downloaded/protocols/quake2.lua"), m_files.at("protocols/quake2.lua"));
+	EXPECT_EQ(GetProtocolOffer("quake2").state, EOfferState::Installed);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolDownloadedAloneOutlastsARemoval)
+{
+	std::vector<std::string> const keys{ "kingpin" };
+
+	Start();
+	ReadIndex();
+	DownloadProtocol("quake2");
+	Download("kingpin");
+	m_downloads.Remove(keys);
+
+	EXPECT_TRUE(std::filesystem::exists(m_dir / "downloaded/protocols/quake2.lua"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolThatDiffersFromTheIndexIsNotInstalled)
+{
+	JsonValue const index = MakeIndex();
+
+	m_files["protocols/quake2.lua"][0] ^= 1;
+	Serve(index);
+	Start();
+	ReadIndex();
+	DownloadProtocol("quake2");
+
+	EXPECT_FALSE(std::filesystem::exists(m_dir / "downloaded/protocols/quake2.lua"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolThatCannotBeInstalledSaysWhy)
+{
+	JsonValue const index = MakeIndex();
+
+	m_files["protocols/quake2.lua"][0] ^= 1;
+	Serve(index);
+	Start();
+	ReadIndex();
+	DownloadProtocol("quake2");
+
+	EXPECT_EQ(GetProtocolOffer("quake2").problem, "quake2.lua differs from what the index says it is");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ProtocolInstalledOnASecondTryHasNoProblem)
+{
+	JsonValue const index = MakeIndex();
+	std::string const source{ m_files.at("protocols/quake2.lua") };
+
+	m_files["protocols/quake2.lua"][0] ^= 1;
+	Serve(index);
+	Start();
+	ReadIndex();
+	DownloadProtocol("quake2");
+	m_files["protocols/quake2.lua"] = source;
+	Serve(index);
+	DownloadProtocol("quake2");
+
+	EXPECT_EQ(GetProtocolOffer("quake2").problem, "");
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -32,9 +32,15 @@ constexpr std::string_view IconFolder{ "icons" };
 constexpr size_t MaxPendingIcons{ 4 };
 
 //////////////////////////////////////////////////////////////////////////
+bool IsSupported(SIndexProtocol const& protocol)
+{
+	return protocol.api <= Script::ScriptApi;
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool IsSupported(SIndexGame const& game, SIndexProtocol const& protocol)
 {
-	return game.format <= Games::GameFormat && protocol.api <= Script::ScriptApi;
+	return game.format <= Games::GameFormat && IsSupported(protocol);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -109,6 +115,9 @@ void CGameDownloads::Terminate()
 	m_fetcher.Terminate();
 	m_pIndex.reset();
 	m_offers.clear();
+	m_protocolOffers.clear();
+	m_protocolProblems.clear();
+	m_keptProtocols.clear();
 	m_fetched.clear();
 	m_pendingIconHashes.clear();
 	m_iconsByHash.clear();
@@ -181,6 +190,32 @@ void CGameDownloads::Download(std::span<std::string const> keys)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// No game may name it yet, so it is kept for the run: a removal before its game is saved would take it.
+void CGameDownloads::DownloadProtocol(std::string_view name)
+{
+	TGE_ASSERT(m_pIndex != nullptr && m_phase == EDownloadPhase::Idle, "A protocol is downloaded once the index is read and nothing else runs");
+
+	SIndexProtocol const* const pProtocol{ FindProtocol(*m_pIndex, name) };
+
+	m_problems.clear();
+	m_downloadKeys.clear();
+	m_fetched.clear();
+	m_numToFetch = 0;
+
+	if (pProtocol != nullptr && IsSupported(*pProtocol))
+	{
+		m_keptProtocols.insert(pProtocol->name);
+
+		if (!IsProtocolCurrent(m_downloadedDir, *pProtocol))
+		{
+			m_numToFetch = 1;
+			m_phase = EDownloadPhase::Downloading;
+			m_fetcher.Fetch({ Net::SFetchRequest{ MakePath(m_pIndex->commit, std::format("protocols/{}", pProtocol->file.name)), pProtocol->file.size } });
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 void CGameDownloads::Remove(std::span<std::string const> keys)
 {
 	TGE_ASSERT(m_phase == EDownloadPhase::Idle, "Games are removed while nothing else runs");
@@ -197,7 +232,7 @@ void CGameDownloads::Remove(std::span<std::string const> keys)
 		}
 	}
 
-	for (std::string& problem : RemoveUnusedProtocols(m_downloadedDir, m_userDir))
+	for (std::string& problem : RemoveUnusedProtocols(m_downloadedDir, m_userDir, m_keptProtocols))
 	{
 		AddProblem(std::move(problem));
 	}
@@ -265,6 +300,13 @@ bool CGameDownloads::HasIndex() const
 std::span<SGameOffer const> CGameDownloads::GetOffers() const
 {
 	return m_offers;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// lookout-games' protocols, each with what went wrong the last time it was fetched; none before an index is read.
+std::span<SProtocolOffer const> CGameDownloads::GetProtocolOffers() const
+{
+	return m_protocolOffers;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -461,11 +503,18 @@ void CGameDownloads::InstallFetched()
 			installed = verified.has_value() ? InstallProtocol(m_downloadedDir, protocol.name, **verified)
 				: std::expected<void, std::string>{ std::unexpected{ verified.error() } };
 			m_hasChanged = m_hasChanged || installed.has_value();
+			m_protocolProblems.erase(protocol.name);
+
+			if (installed.has_value() && m_downloadKeys.empty())
+			{
+				gLog.Info("Downloaded the protocol {} from {}", protocol.name, m_source.origin.host);
+			}
 		}
 
 		if (!installed.has_value())
 		{
 			failedProtocols.insert(protocol.name);
+			m_protocolProblems.emplace(protocol.name, installed.error());
 			AddProblem(std::format("The protocol {}: {}", protocol.name, installed.error()));
 		}
 	}
@@ -506,8 +555,12 @@ void CGameDownloads::InstallFetched()
 		}
 	}
 
-	gLog.Info("Downloaded {} of {} {} from {}", numInstalled, m_downloadKeys.size(), (m_downloadKeys.size() == 1) ? "game" : "games",
-		m_source.origin.host);
+	if (!m_downloadKeys.empty())
+	{
+		gLog.Info("Downloaded {} of {} {} from {}", numInstalled, m_downloadKeys.size(), (m_downloadKeys.size() == 1) ? "game" : "games",
+			m_source.origin.host);
+	}
+
 	m_hasChanged = m_hasChanged || numInstalled > 0;
 	m_fetched.clear();
 	m_downloadKeys.clear();
@@ -520,9 +573,18 @@ void CGameDownloads::RefreshOffers()
 	std::map<std::string, std::string> downloaded{ m_downloadedDir.empty() ? std::map<std::string, std::string>{} : ListDownloadedGames(m_downloadedDir) };
 
 	m_offers.clear();
+	m_protocolOffers.clear();
 
 	if (m_pIndex != nullptr)
 	{
+		for (SIndexProtocol const& protocol : m_pIndex->protocols)
+		{
+			auto const problem{ m_protocolProblems.find(protocol.name) };
+
+			m_protocolOffers.emplace_back(protocol.name, IsSupported(protocol) ? FindInstalledState(m_downloadedDir, protocol) : EOfferState::NeedsNewerLookout,
+				(problem != m_protocolProblems.end()) ? problem->second : std::string{});
+		}
+
 		for (SIndexGame const& game : m_pIndex->games)
 		{
 			SIndexProtocol const& protocol{ *FindProtocol(*m_pIndex, game.protocol) };

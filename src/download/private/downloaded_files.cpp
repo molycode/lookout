@@ -118,6 +118,24 @@ EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SInde
 }
 
 //////////////////////////////////////////////////////////////////////////
+EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SIndexProtocol const& protocol)
+{
+	std::error_code error{};
+	EOfferState state{ EOfferState::NotInstalled };
+
+	if (IsProtocolCurrent(downloadedDir, protocol))
+	{
+		state = EOfferState::Installed;
+	}
+	else if (std::filesystem::exists(downloadedDir / "protocols" / protocol.file.name, error))
+	{
+		state = EOfferState::UpdateAvailable;
+	}
+
+	return state;
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool IsProtocolCurrent(std::filesystem::path const& downloadedDir, SIndexProtocol const& protocol)
 {
 	return HasContent(downloadedDir / "protocols" / protocol.file.name, protocol.file);
@@ -235,23 +253,23 @@ std::expected<void, std::string> RemoveGame(std::filesystem::path const& downloa
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<std::string> RemoveUnusedProtocols(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir)
+std::vector<std::string> RemoveUnusedProtocols(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir,
+	std::set<std::string> inUse)
 {
-	std::set<std::string> named{};
 	std::vector<std::string> problems{};
 
-	AddNamedProtocols(downloadedDir / "games", named);
+	AddNamedProtocols(downloadedDir / "games", inUse);
 
 	if (!userDir.empty())
 	{
-		AddNamedProtocols(userDir / "games", named);
+		AddNamedProtocols(userDir / "games", inUse);
 	}
 
 	for (std::filesystem::path const& path : ListEntries(downloadedDir / "protocols"))
 	{
 		std::error_code error{};
 
-		if (path.extension() == ProtocolExtension && !named.contains(path.stem().string()))
+		if (path.extension() == ProtocolExtension && !inUse.contains(path.stem().string()))
 		{
 			std::filesystem::remove(path, error);
 		}
