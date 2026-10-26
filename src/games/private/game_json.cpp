@@ -1,6 +1,7 @@
 #include "game_json.hpp"
 #include "games/game_fields.hpp"
 #include "games/game_format.hpp"
+#include "games/read_game_fields.hpp"
 #include "json/json.hpp"
 #include "json/syntax_error.hpp"
 #include <algorithm>
@@ -913,6 +914,8 @@ std::span<SGameField const> GetGameFields()
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Without the conversations, which only the protocols and their options can change, so an editor need not run them on
+// every keystroke.
 std::expected<Query::SGameDefinition, SFieldProblem> ReadGameFields(std::string_view text, std::span<Query::SProtocolDefinition const> protocols)
 {
 	JsonValue const root = JsonValue::parse(text, nullptr, AllowExceptions, IgnoreComments);

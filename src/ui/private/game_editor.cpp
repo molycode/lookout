@@ -10,6 +10,7 @@
 #include "games/game_files.hpp"
 #include "games/game_form.hpp"
 #include "games/game_source.hpp"
+#include "games/read_game_fields.hpp"
 #include "launch/file_url.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
@@ -363,7 +364,7 @@ void CGameEditor::Check()
 {
 	std::span<Query::SProtocolDefinition const> const protocols{ m_protocols.GetDefinitions() };
 	std::string const text{ Games::WriteGameForm(m_form) };
-	std::expected<void, Games::SFieldProblem> const fields{ Games::CheckGameFields(text, protocols) };
+	std::expected<Query::SGameDefinition, Games::SFieldProblem> const fields{ Games::ReadGameFields(text, protocols) };
 	std::string const signature{ MakeScriptSignature(m_form) };
 
 	if (fields.has_value() && signature != m_scriptSignature)
