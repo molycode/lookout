@@ -1,5 +1,6 @@
 #include "conversation_driver.hpp"
 #include "fixtures.hpp"
+#include "net/gamespy1_emulator.hpp"
 #include "query/protocol_definition.hpp"
 #include "query/server_address.hpp"
 #include "query/status_reply.hpp"
@@ -21,6 +22,7 @@ namespace Lkt::Query
 {
 namespace
 {
+using Fixtures::Gamespy1Challenge;
 using Fixtures::LoadFixture;
 using Fixtures::ToBytes;
 
@@ -31,9 +33,6 @@ constexpr size_t EngineReadSize{ 16u << 10 };
 constexpr std::array<std::pair<std::string_view, std::string_view>, 6> Games{ {
 	{ "ut99", "ut" }, { "unreal", "unreal" }, { "mohaa", "mohaa" }, { "bf1942", "bfield1942" }, { "rune", "rune" }, { "deusex", "deusex" }
 } };
-constexpr std::string_view Challenge{ "\\basic\\\\secure\\WVNJYU" };
-// gsmsalg of WVNJYU under the gspylite key, as tools/query.py computes it and both masters accept.
-constexpr std::string_view ChallengeAnswer{ "\\gamename\\gspylite\\location\\0\\validate\\FL2fKXOg\\final\\\\list\\\\gamename\\ut\\final\\" };
 
 //////////////////////////////////////////////////////////////////////////
 std::map<std::string, std::string> MakeOptions(std::string_view masterGame)
@@ -116,17 +115,17 @@ TEST_F(CGamespy1ProtocolTest, AsksServersForStatus)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CGamespy1ProtocolTest, AnswersTheMastersChallenge)
 {
-	std::expected<Script::SScriptAction, std::string> const action{ Fixtures::ReceiveOnce(m_script, Script::EConversationKind::Master, MakeOptions("ut"), ToBytes(Challenge)) };
+	std::expected<Script::SScriptAction, std::string> const action{ Fixtures::ReceiveOnce(m_script, Script::EConversationKind::Master, MakeOptions("ut"), ToBytes(Gamespy1Challenge)) };
 
 	ASSERT_TRUE(action.has_value()) << action.error_or("");
-	EXPECT_EQ(action->send, std::vector<std::vector<std::byte>>{ ToBytes(ChallengeAnswer) });
+	EXPECT_EQ(action->send, std::vector<std::vector<std::byte>>{ ToBytes(Fixtures::MakeGamespy1ListRequest("ut")) });
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CGamespy1ProtocolTest, WaitsForTheWholeChallenge)
 {
 	std::expected<Script::SScriptAction, std::string> const action{ Fixtures::ReceiveOnce(m_script, Script::EConversationKind::Master, MakeOptions("ut"),
-		ToBytes(Challenge.substr(0, Challenge.size() - 1))) };
+		ToBytes(Gamespy1Challenge.substr(0, Gamespy1Challenge.size() - 1))) };
 
 	ASSERT_TRUE(action.has_value()) << action.error_or("");
 	EXPECT_TRUE(action->send.empty());
@@ -170,7 +169,7 @@ TEST_F(CGamespy1ProtocolTest, MarkerCutShortWaitsForTheRest)
 	Script::SConversation conversation{ Script::EConversationKind::Master, 0 };
 
 	ASSERT_TRUE(m_script.Start(conversation, MakeOptions("ut")).has_value());
-	ASSERT_TRUE(m_script.Receive(conversation, ToBytes(Challenge)).has_value());
+	ASSERT_TRUE(m_script.Receive(conversation, ToBytes(Gamespy1Challenge)).has_value());
 
 	std::expected<Script::SScriptAction, std::string> const action{ m_script.Receive(conversation, ToBytes("\\fin")) };
 
@@ -185,7 +184,7 @@ TEST_F(CGamespy1ProtocolTest, EntryListsTheQueryPort)
 {
 	std::vector<SServerAddress> servers{};
 
-	ASSERT_TRUE(ReadMaster("ut", ToBytes(std::string{ Challenge } + "\\ip\\208.102.42.157:7778\\final\\"), 1024, servers).has_value());
+	ASSERT_TRUE(ReadMaster("ut", ToBytes(std::string{ Gamespy1Challenge } + "\\ip\\208.102.42.157:7778\\final\\"), 1024, servers).has_value());
 	ASSERT_EQ(servers.size(), 1u);
 	EXPECT_EQ(servers[0], (SServerAddress{ 0xD0662A9D, 7778 }));
 }
@@ -195,7 +194,7 @@ TEST_F(CGamespy1ProtocolTest, StreamEndingBeforeTheFinalMarkerIsTruncated)
 {
 	std::vector<SServerAddress> servers{};
 
-	EXPECT_EQ(ReadMaster("ut", ToBytes(std::string{ Challenge } + "\\ip\\208.102.42.157:7778"), 1024, servers), std::unexpected{ EParseError::Truncated });
+	EXPECT_EQ(ReadMaster("ut", ToBytes(std::string{ Gamespy1Challenge } + "\\ip\\208.102.42.157:7778"), 1024, servers), std::unexpected{ EParseError::Truncated });
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -203,7 +202,7 @@ TEST_F(CGamespy1ProtocolTest, RejectsAnAddressWithThreeParts)
 {
 	std::vector<SServerAddress> servers{};
 
-	EXPECT_EQ(ReadMaster("ut", ToBytes(std::string{ Challenge } + "\\ip\\208.102.42:7778\\final\\"), 1024, servers), std::unexpected{ EParseError::Malformed });
+	EXPECT_EQ(ReadMaster("ut", ToBytes(std::string{ Gamespy1Challenge } + "\\ip\\208.102.42:7778\\final\\"), 1024, servers), std::unexpected{ EParseError::Malformed });
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -211,7 +210,7 @@ TEST_F(CGamespy1ProtocolTest, RefusalIsMalformed)
 {
 	std::vector<SServerAddress> servers{};
 
-	EXPECT_EQ(ReadMaster("ut", ToBytes(std::string{ Challenge } + "\\fatal\\1\\error\\Validation error\\final\\"), 1024, servers), std::unexpected{ EParseError::Malformed });
+	EXPECT_EQ(ReadMaster("ut", ToBytes(std::string{ Gamespy1Challenge } + "\\fatal\\1\\error\\Validation error\\final\\"), 1024, servers), std::unexpected{ EParseError::Malformed });
 }
 
 //////////////////////////////////////////////////////////////////////////
