@@ -467,7 +467,7 @@ bool DrawMasterSettings(SGameFormNode& row, std::string_view rowPath, SFieldProb
 	SFormContext const& context)
 {
 	SGameFormNode& protocol{ Games::GetFormField(row, ProtocolField) };
-	std::string const inherited{ inheritedProtocol.empty() ? std::string{ "The game's" } : std::format("The game's ({})", inheritedProtocol) };
+	std::string const inherited{ DescribeMasterListing(inheritedProtocol, {}, {}) };
 	bool isEdited{ false };
 
 	ImGui::PushID(ProtocolField.data(), ProtocolField.data() + ProtocolField.size());
