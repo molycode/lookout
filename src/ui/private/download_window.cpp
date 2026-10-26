@@ -9,6 +9,7 @@
 #include "widgets.hpp"
 #include "browser/text_compare.hpp"
 #include "download/game_downloads.hpp"
+#include "download/latest_release.hpp"
 #include "download/lookout_release.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
@@ -151,10 +152,12 @@ bool GameButton(char const* id, std::string_view glyph, std::string_view tooltip
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, Download::CGameDownloads* pDownloads, std::string_view version)
+void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, Download::CGameDownloads* pDownloads, Download::CLatestRelease const* pLatestRelease,
+	std::string_view version)
 {
 	m_pRenderer = pRenderer;
 	m_pDownloads = pDownloads;
+	m_pLatestRelease = pLatestRelease;
 	m_version = version;
 }
 
@@ -163,6 +166,7 @@ void CDownloadWindow::Terminate()
 {
 	DestroyIcons();
 	m_pDownloads = nullptr;
+	m_pLatestRelease = nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -523,7 +527,7 @@ void CDownloadWindow::DrawNewerLookout(std::string_view newer) const
 //////////////////////////////////////////////////////////////////////////
 std::string_view CDownloadWindow::GetNewerLookout() const
 {
-	std::string_view const latest{ m_pDownloads->GetLookoutVersion() };
+	std::string_view const latest{ m_pLatestRelease->GetVersion() };
 
 	return Download::IsNewerLookout(latest, m_version) ? latest : std::string_view{};
 }

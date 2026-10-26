@@ -188,7 +188,7 @@ void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutI
 		gLog.Warning("Games cannot be downloaded: the download could not be set up");
 	}
 
-	m_downloadWindow.Initialize(SDL_GetRenderer(pWindow), m_canDownload ? &m_downloads : nullptr, about.version);
+	m_downloadWindow.Initialize(SDL_GetRenderer(pWindow), m_canDownload ? &m_downloads : nullptr, &m_latestRelease, about.version);
 	m_gameSettings.Initialize(pWindow);
 	m_aboutDialog.Initialize(pWindow, about);
 	m_detailsEm = static_cast<float>(detailsWidth) / BaseFontSize;

@@ -15,6 +15,7 @@ namespace Lkt
 namespace Download
 {
 class CGameDownloads;
+class CLatestRelease;
 struct SGameOffer;
 } // namespace Download
 
@@ -30,7 +31,7 @@ public:
 	~CDownloadWindow() = default;
 
 	// Without downloads there is nowhere to download to, and it stays closed.
-	void Initialize(SDL_Renderer* pRenderer, Download::CGameDownloads* pDownloads, std::string_view version);
+	void Initialize(SDL_Renderer* pRenderer, Download::CGameDownloads* pDownloads, Download::CLatestRelease const* pLatestRelease, std::string_view version);
 	void Terminate();
 
 	void Open();
@@ -54,6 +55,7 @@ private:
 	std::vector<std::string> Collect(bool (*pIsChosen)(Download::SGameOffer const&)) const;
 
 	Download::CGameDownloads* m_pDownloads{ nullptr };
+	Download::CLatestRelease const* m_pLatestRelease{ nullptr };
 	std::map<std::string, std::vector<SIconLevel>, std::less<>> m_icons;
 	std::string m_search;
 	std::string m_version;

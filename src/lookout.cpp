@@ -5,6 +5,7 @@
 #include "browser/server_list.hpp"
 #include "config/xdg_paths.hpp"
 #include "download/game_downloads.hpp"
+#include "download/latest_release.hpp"
 #include "download/lookout_games.hpp"
 #include "download/lookout_release.hpp"
 #include "games/game_files.hpp"
@@ -238,11 +239,22 @@ bool CLookout::RunDownload(std::span<std::string const> keys)
 	std::condition_variable wake{};
 	bool hasResults{ false };
 	Download::CGameDownloads downloads{};
+	Download::CLatestRelease latestRelease{};
+	auto const onResults{ [&mutex, &wake, &hasResults]()
+	{
+		{
+			std::lock_guard const lock{ mutex };
+
+			hasResults = true;
+		}
+
+		wake.notify_one();
+	} };
 	auto const waitUntilIdle{ [&]()
 	{
 		auto lastUpdate{ std::chrono::steady_clock::now() };
 
-		while (downloads.GetPhase() != Download::EDownloadPhase::Idle)
+		while (downloads.GetPhase() != Download::EDownloadPhase::Idle || latestRelease.IsChecking())
 		{
 			{
 				std::unique_lock lock{ mutex };
@@ -255,31 +267,29 @@ bool CLookout::RunDownload(std::span<std::string const> keys)
 
 			auto const now{ std::chrono::steady_clock::now() };
 
+			latestRelease.Update(now);
 			Tge::gRuntime->Update(std::chrono::duration<float>{ now - lastUpdate }.count());
 			lastUpdate = now;
 		}
 	} };
 
-	bool success{ downloads.Initialize(m_userDir, m_cacheDir, Download::GetLookoutGamesSource(LKT_VERSION), [&mutex, &wake, &hasResults]()
+	bool success{ downloads.Initialize(m_userDir, m_cacheDir, Download::GetLookoutGamesSource(LKT_VERSION), onResults) };
+
+	if (!latestRelease.Initialize(Download::GetLookoutReleaseOrigin(LKT_VERSION), onResults))
 	{
-		{
-			std::lock_guard const lock{ mutex };
-
-			hasResults = true;
-		}
-
-		wake.notify_one();
-	}) };
+		gLog.Warning("Lookout cannot ask whether a newer version is out: the check could not be set up");
+	}
 
 	if (success)
 	{
+		latestRelease.Update(std::chrono::steady_clock::now());
 		downloads.ReadIndex();
 		waitUntilIdle();
 		success = downloads.HasIndex();
 
-		if (Download::IsNewerLookout(downloads.GetLookoutVersion(), LKT_VERSION))
+		if (Download::IsNewerLookout(latestRelease.GetVersion(), LKT_VERSION))
 		{
-			gLog.Warning("Lookout {} is out: {}", downloads.GetLookoutVersion(), Download::LookoutReleaseUrl);
+			gLog.Warning("Lookout {} is out: {}", latestRelease.GetVersion(), Download::LookoutReleaseUrl);
 		}
 	}
 	else
@@ -329,6 +339,7 @@ bool CLookout::RunDownload(std::span<std::string const> keys)
 		std::println("Every game is installed and up to date");
 	}
 
+	latestRelease.Terminate();
 	downloads.Terminate();
 
 	return success;

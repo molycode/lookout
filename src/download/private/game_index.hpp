@@ -11,7 +11,6 @@ namespace Lkt::Download
 struct SGameIndex final
 {
 	std::string commit;
-	std::string lookoutVersion;
 	std::vector<SIndexGame> games;
 	std::vector<SIndexProtocol> protocols;
 };
