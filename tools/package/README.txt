@@ -48,6 +48,10 @@ own. It keeps a description in
     ~/.local/share/lookout/games/<name>/game.json
 
 where a downloaded game's file holds only your changes, so updates of the game keep them.
+The editor tests each master as you open and edit it: a check with the number of servers
+it listed, or a cross with the reason. A master's gear sets the protocol it lists with, its
+options and a port offset, for masters that speak another protocol than the game's; a
+protocol from lookout-games that is not installed yet is downloaded when you choose it.
 Protocol scripts of your own go in ~/.local/share/lookout/protocols/; one named like a
 downloaded protocol replaces it, and a game's settings (the gear) show which one is in use
 and the downloaded one's version. Lookout reloads both folders when they change. To publish
