@@ -1,4 +1,5 @@
 #include "catalog_fixture.hpp"
+#include "channels.hpp"
 #include "fixtures.hpp"
 #include "net/collect_events.hpp"
 #include "net/event_collector.hpp"
@@ -6,6 +7,7 @@
 #include "net/loopback_stream_server.hpp"
 #include "net/query_engine.hpp"
 #include "net/socket_table.hpp"
+#include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <chrono>
 #include <cstddef>
@@ -19,7 +21,9 @@ namespace Lkt::Net
 namespace
 {
 using namespace std::chrono_literals;
+using Fixtures::NetChannel;
 using Fixtures::ToBytes;
+using Tge::Testing::CExpectedLog;
 
 constexpr std::chrono::milliseconds Patience{ 10s };
 constexpr size_t OddWriteSize{ 3 };
@@ -91,15 +95,20 @@ protected:
 		return AddGame(std::move(game));
 	}
 
-	// One refresh of the game, run to its end.
-	bool Run(Query::EGame game)
+	bool Run(Query::EGame game, uint32_t numRefreshes = 1)
 	{
 		bool isFinished{ false };
 
 		if (m_engine.Initialize(m_collector.MakeCallback()))
 		{
-			m_engine.Refresh(game, {});
-			isFinished = m_collector.WaitForFinish(m_engine, game, Patience);
+			isFinished = true;
+
+			for (uint32_t refresh{ 0 }; refresh < numRefreshes && isFinished; ++refresh)
+			{
+				m_engine.Refresh(game, {});
+				isFinished = m_collector.WaitForFinish(m_engine, game, Patience);
+			}
+
 			m_engine.Terminate();
 		}
 
@@ -195,6 +204,22 @@ TEST_F(CStreamMasterTest, RefusedMasterFails)
 
 	ASSERT_EQ(failures.size(), 1u);
 	EXPECT_EQ(failures[0].reason, "refused the query");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CStreamMasterTest, MasterThatKeepsFailingIsWarnedOnce)
+{
+	ASSERT_TRUE(m_master.Start(MakeStream({})));
+
+	uint16_t const closedPort{ m_master.GetAddress().port };
+
+	m_master.Stop();
+
+	Query::EGame const game{ AddStreamGame(closedPort) };
+	CExpectedLog const expected{ NetChannel, 1, 0 };
+
+	ASSERT_TRUE(Run(game, 2));
+	EXPECT_EQ(GetMasterFailures().size(), 2u);
 }
 
 //////////////////////////////////////////////////////////////////////////

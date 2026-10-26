@@ -418,9 +418,17 @@ void CQueryPump::UpdateMasters(Clock::time_point now)
 	{
 		CloseMaster(ToConversationKey(outcome.master));
 
-		if (!outcome.failure.empty())
+		if (outcome.failure.empty())
 		{
-			gLog.Warning("{}: master {} {}", Query::GetGame(outcome.master.game).name, outcome.host, outcome.failure);
+			m_masterWarnings.RecordAnswer(outcome.master);
+		}
+		else
+		{
+			if (m_masterWarnings.RecordFailure(outcome.master, outcome.failure))
+			{
+				gLog.Warning("{}: master {} {}", Query::GetGame(outcome.master.game).name, outcome.host, outcome.failure);
+			}
+
 			Emit(SMasterFailed{ outcome.master.game, std::string{ outcome.host }, outcome.failure });
 		}
 	}

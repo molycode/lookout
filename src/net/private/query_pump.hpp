@@ -9,6 +9,7 @@
 #include "master_outcome.hpp"
 #include "master_query.hpp"
 #include "master_tracker.hpp"
+#include "master_warnings.hpp"
 #include "refresh_state.hpp"
 #include "request_scheduler.hpp"
 #include "server_request.hpp"
@@ -102,6 +103,7 @@ private:
 	std::vector<std::unique_ptr<SDnsLookup>> m_lookups;
 	CRequestScheduler m_scheduler;
 	CMasterTracker m_masters;
+	CMasterWarnings m_masterWarnings;
 	std::vector<SRefreshState> m_refreshes;
 	std::vector<Script::CProtocolScript> m_scripts;
 	std::unordered_map<uint64_t, SConversationRecord> m_serverConversations;
