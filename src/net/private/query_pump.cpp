@@ -1053,44 +1053,66 @@ void CQueryPump::ReportRefresh(Query::EGame game) const
 		gLog.Warning("{}: no server answered ({} listed)", name, stats.numListed);
 	}
 
-	if (stats.numBadReplies > 0)
+	if (stats.numBadReplies == 1)
+	{
+		gLog.Warning("{}: the status reply from {} was unreadable ({})", name, Query::FormatAddress(stats.firstBadReply), Query::ToString(stats.firstBadReplyError));
+	}
+	else if (stats.numBadReplies > 1)
 	{
 		gLog.Warning("{}: {} status replies were unreadable, first from {} ({})", name, stats.numBadReplies, Query::FormatAddress(stats.firstBadReply), Query::ToString(stats.firstBadReplyError));
 	}
 
-	if (stats.numScriptFailures > 0)
+	if (stats.numScriptFailures == 1)
+	{
+		gLog.Warning("{}: the protocol script failed: {}", name, stats.firstScriptFailure);
+	}
+	else if (stats.numScriptFailures > 1)
 	{
 		gLog.Warning("{}: the protocol script failed {} times, first: {}", name, stats.numScriptFailures, stats.firstScriptFailure);
 	}
 
 	if (stats.numMalformedPlayerLines > 0)
 	{
-		gLog.Warning("{}: {} player lines were unreadable", name, stats.numMalformedPlayerLines);
+		gLog.Warning("{}: {} player {} unreadable", name, stats.numMalformedPlayerLines, (stats.numMalformedPlayerLines == 1) ? "line was" : "lines were");
 	}
 
-	if (stats.numUnqueryable > 0)
+	if (stats.numUnqueryable == 1)
+	{
+		gLog.Warning("{}: a master listed {}, which no public server can have; it was not asked", name, Query::FormatAddress(stats.firstUnqueryable));
+	}
+	else if (stats.numUnqueryable > 1)
 	{
 		gLog.Warning("{}: masters listed {} addresses no public server can have, first {}; they were not asked", name, stats.numUnqueryable, Query::FormatAddress(stats.firstUnqueryable));
 	}
 
 	if (stats.numBadMasterDatagrams > 0)
 	{
-		gLog.Warning("{}: {} master datagrams were unreadable ({}); their complete entries were kept", name, stats.numBadMasterDatagrams, Query::ToString(stats.firstBadMasterDatagramError));
+		gLog.Warning("{}: {} master {} unreadable ({}); {} complete entries were kept", name, stats.numBadMasterDatagrams,
+			(stats.numBadMasterDatagrams == 1) ? "datagram was" : "datagrams were", Query::ToString(stats.firstBadMasterDatagramError),
+			(stats.numBadMasterDatagrams == 1) ? "its" : "their");
 	}
 
-	if (stats.numOverCap > 0)
+	if (stats.numOverCap == 1)
+	{
+		gLog.Warning("{}: {} sent more than one server may; it was cut short", name, Query::FormatAddress(stats.firstOverCap));
+	}
+	else if (stats.numOverCap > 1)
 	{
 		gLog.Warning("{}: {} servers sent more than one server may; each was cut short, first {}", name, stats.numOverCap, Query::FormatAddress(stats.firstOverCap));
 	}
 
-	if (stats.numSendFailures > 0)
+	if (stats.numSendFailures == 1)
+	{
+		gLog.Warning("{}: the status request to {} could not be sent: {}", name, Query::FormatAddress(stats.firstSendFailure), std::strerror(stats.firstSendError));
+	}
+	else if (stats.numSendFailures > 1)
 	{
 		gLog.Warning("{}: {} status requests could not be sent, first to {}: {}", name, stats.numSendFailures, Query::FormatAddress(stats.firstSendFailure), std::strerror(stats.firstSendError));
 	}
 
 	if (stats.numReceiveErrors > 0)
 	{
-		gLog.Warning("{}: receiving failed {} times: {}", name, stats.numReceiveErrors, std::strerror(stats.firstReceiveError));
+		gLog.Warning("{}: receiving failed {} {}: {}", name, stats.numReceiveErrors, (stats.numReceiveErrors == 1) ? "time" : "times", std::strerror(stats.firstReceiveError));
 	}
 }
 
