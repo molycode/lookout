@@ -476,6 +476,22 @@ TEST_F(CGameDownloadsTest, RemoveKeepsAProtocolAUserGameNames)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, RemoveKeepsAProtocolAUserGamesMasterNames)
+{
+	std::vector<std::string> const keys{ "kingpin" };
+
+	std::filesystem::create_directories(m_dir / "games/mygame");
+	std::ofstream{ m_dir / "games/mygame/game.json" } << R"json({ "format": 2, "protocol": "gamespy1",
+		"masters": [ { "host": "master.example.org", "port": 27900, "protocol": "quake2" } ] })json";
+	Start();
+	ReadIndex();
+	Download("kingpin");
+	m_downloads.Remove(keys);
+
+	EXPECT_TRUE(std::filesystem::exists(m_dir / "downloaded/protocols/quake2.lua"));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CGameDownloadsTest, GameNoLongerOfferedIsWithdrawn)
 {
 	JsonValue index = MakeIndex();

@@ -65,15 +65,32 @@ std::string ReadString(JsonValue const& object, std::string_view field)
 }
 
 //////////////////////////////////////////////////////////////////////////
+void AddNamedProtocol(JsonValue const& object, std::set<std::string>& names)
+{
+	std::string protocol{ ReadString(object, "protocol") };
+
+	if (!protocol.empty())
+	{
+		names.insert(std::move(protocol));
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 void AddNamedProtocols(std::filesystem::path const& gamesFolder, std::set<std::string>& names)
 {
 	for (std::filesystem::path const& folder : ListEntries(gamesFolder))
 	{
-		std::string protocol{ ReadString(ReadGame(folder / "game.json"), "protocol") };
+		JsonValue const game = ReadGame(folder / "game.json");
+		JsonValue::const_iterator const masters{ game.is_object() ? game.find("masters") : game.cend() };
 
-		if (!protocol.empty())
+		AddNamedProtocol(game, names);
+
+		if (masters != game.cend() && masters->is_array())
 		{
-			names.insert(std::move(protocol));
+			for (JsonValue const& master : *masters)
+			{
+				AddNamedProtocol(master, names);
+			}
 		}
 	}
 }
