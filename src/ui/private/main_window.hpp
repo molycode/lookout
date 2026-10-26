@@ -8,6 +8,7 @@
 #include "password_prompt.hpp"
 #include "selection.hpp"
 #include "toolbar.hpp"
+#include "download/game_downloads.hpp"
 #include "query/game.hpp"
 #include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
@@ -72,6 +73,7 @@ private:
 	CGameSettingsPopup m_gameSettings;
 	CGameEditor m_gameEditor;
 	CDownloadWindow m_downloadWindow;
+	Download::CGameDownloads m_downloads;
 	std::filesystem::path m_userDir;
 	std::function<void()> m_requestReload;
 	std::vector<uint64_t> m_selectedKeys;
@@ -83,6 +85,7 @@ private:
 	bool m_isDetailsShown{ false };
 	bool m_hasStarted{ false };
 	bool m_isQuitRequested{ false };
+	bool m_canDownload{ false };
 };
 } // namespace Ui
 } // namespace Lkt

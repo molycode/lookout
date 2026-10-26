@@ -1,10 +1,7 @@
 #pragma once
 
 #include "icon_level.hpp"
-#include "download/game_downloads.hpp"
 #include <tge/non_copyable.hpp>
-#include <filesystem>
-#include <functional>
 #include <map>
 #include <span>
 #include <string>
@@ -13,7 +10,15 @@
 
 struct SDL_Renderer;
 
-namespace Lkt::Ui
+namespace Lkt
+{
+namespace Download
+{
+class CGameDownloads;
+struct SGameOffer;
+} // namespace Download
+
+namespace Ui
 {
 // Lists lookout-games' games with what is installed, and downloads, updates and removes them. A window, not a popup,
 // so the games it brings appear in the sidebar while it is still open.
@@ -24,14 +29,11 @@ public:
 	CDownloadWindow() = default;
 	~CDownloadWindow() = default;
 
-	// Without a data folder there is nowhere to download to, and it stays closed.
-	void Initialize(SDL_Renderer* pRenderer, std::filesystem::path const& userDir, std::filesystem::path const& cacheDir, std::string_view version,
-		std::function<void()> wake);
+	// Without downloads there is nowhere to download to, and it stays closed.
+	void Initialize(SDL_Renderer* pRenderer, Download::CGameDownloads* pDownloads, std::string_view version);
 	void Terminate();
 
 	void Open();
-	// Every frame, open or not: true when the downloaded games changed, so they are to be loaded again.
-	bool Update();
 	void Draw();
 	bool CanOpen() const;
 
@@ -51,14 +53,14 @@ private:
 	bool HasAny(bool (*pIsChosen)(Download::SGameOffer const&)) const;
 	std::vector<std::string> Collect(bool (*pIsChosen)(Download::SGameOffer const&)) const;
 
-	Download::CGameDownloads m_downloads;
+	Download::CGameDownloads* m_pDownloads{ nullptr };
 	std::map<std::string, std::vector<SIconLevel>, std::less<>> m_icons;
 	std::string m_search;
 	std::string m_version;
 	SDL_Renderer* m_pRenderer{ nullptr };
-	bool m_isReady{ false };
 	bool m_isOpen{ false };
 	bool m_shouldFocus{ false };
 	bool m_shouldFocusSearch{ false };
 };
-} // namespace Lkt::Ui
+} // namespace Ui
+} // namespace Lkt

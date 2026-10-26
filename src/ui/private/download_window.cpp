@@ -8,7 +8,7 @@
 #include "theme_colors.hpp"
 #include "widgets.hpp"
 #include "browser/text_compare.hpp"
-#include "download/lookout_games.hpp"
+#include "download/game_downloads.hpp"
 #include "download/lookout_release.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
@@ -22,7 +22,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <utility>
 
 namespace Lkt::Ui
 {
@@ -152,46 +151,32 @@ bool GameButton(char const* id, std::string_view glyph, std::string_view tooltip
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, std::filesystem::path const& userDir, std::filesystem::path const& cacheDir, std::string_view version,
-	std::function<void()> wake)
+void CDownloadWindow::Initialize(SDL_Renderer* pRenderer, Download::CGameDownloads* pDownloads, std::string_view version)
 {
 	m_pRenderer = pRenderer;
+	m_pDownloads = pDownloads;
 	m_version = version;
-	m_isReady = !userDir.empty()
-		&& m_downloads.Initialize(userDir, cacheDir, Download::GetLookoutGamesSource(version), std::move(wake));
-
-	if (!userDir.empty() && !m_isReady)
-	{
-		gLog.Warning("Games cannot be downloaded: the download could not be set up");
-	}
 }
 
 //////////////////////////////////////////////////////////////////////////
 void CDownloadWindow::Terminate()
 {
-	m_downloads.Terminate();
 	DestroyIcons();
-	m_isReady = false;
+	m_pDownloads = nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////////
 // The list is read anew on every opening, so it shows what lookout-games offers now.
 void CDownloadWindow::Open()
 {
-	if (m_isReady)
+	if (m_pDownloads != nullptr)
 	{
 		m_isOpen = true;
 		m_shouldFocus = true;
 		m_shouldFocusSearch = true;
 		m_search.clear();
-		m_downloads.ReadIndex();
+		m_pDownloads->ReadIndex();
 	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-bool CDownloadWindow::Update()
-{
-	return m_isReady && m_downloads.Update();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -230,7 +215,7 @@ void CDownloadWindow::Draw()
 //////////////////////////////////////////////////////////////////////////
 bool CDownloadWindow::CanOpen() const
 {
-	return m_isReady;
+	return m_pDownloads != nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -247,14 +232,14 @@ void CDownloadWindow::DrawStatus() const
 		DrawNewerLookout(newer);
 	}
 
-	if (m_downloads.GetPhase() == Download::EDownloadPhase::ReadingIndex)
+	if (m_pDownloads->GetPhase() == Download::EDownloadPhase::ReadingIndex)
 	{
 		ImGui::TextUnformatted("Reading the list of games…");
 	}
-	else if (m_downloads.GetPhase() == Download::EDownloadPhase::Downloading)
+	else if (m_pDownloads->GetPhase() == Download::EDownloadPhase::Downloading)
 	{
-		size_t const numFetched{ m_downloads.GetNumFetched() };
-		size_t const numToFetch{ m_downloads.GetNumToFetch() };
+		size_t const numFetched{ m_pDownloads->GetNumFetched() };
+		size_t const numToFetch{ m_pDownloads->GetNumToFetch() };
 		float const fraction{ (numToFetch != 0) ? static_cast<float>(numFetched) / static_cast<float>(numToFetch) : 0.0f };
 		std::string_view const progress{ FormatTo(buffer, "Downloading: {} of {} files…", numFetched, numToFetch) };
 
@@ -266,7 +251,7 @@ void CDownloadWindow::DrawStatus() const
 	ImGui::PushTextWrapPos(0.0f);
 	ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColors().error);
 
-	for (std::string const& problem : m_downloads.GetProblems())
+	for (std::string const& problem : m_pDownloads->GetProblems())
 	{
 		ImGui::TextUnformatted(problem.data(), problem.data() + problem.size());
 	}
@@ -284,7 +269,7 @@ void CDownloadWindow::DrawGames()
 
 	if (ImGui::BeginChild("##games", ImVec2{ 0.0f, -ImGui::GetFrameHeightWithSpacing() }))
 	{
-		std::span<Download::SGameOffer const> const offers{ m_downloads.GetOffers() };
+		std::span<Download::SGameOffer const> const offers{ m_pDownloads->GetOffers() };
 		std::vector<Download::SGameOffer const*> shown{};
 		ImGuiListClipper clipper{};
 
@@ -317,12 +302,12 @@ void CDownloadWindow::DrawGames()
 
 	if (!toDownload.empty())
 	{
-		m_downloads.Download(toDownload);
+		m_pDownloads->Download(toDownload);
 	}
 
 	if (!toRemove.empty())
 	{
-		m_downloads.Remove(toRemove);
+		m_pDownloads->Remove(toRemove);
 	}
 }
 
@@ -333,7 +318,7 @@ void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<st
 	SThemeColors const& colors{ GetThemeColors() };
 	ImGuiStyle const& style{ ImGui::GetStyle() };
 	Download::EOfferState const state{ offer.state };
-	bool const isDownloading{ std::ranges::contains(m_downloads.GetDownloadKeys(), offer.key) };
+	bool const isDownloading{ std::ranges::contains(m_pDownloads->GetDownloadKeys(), offer.key) };
 	bool const canGet{ state == Download::EOfferState::NotInstalled };
 	bool const canUpdate{ state == Download::EOfferState::UpdateAvailable };
 	bool const canRemove{ IsRemovable(offer) };
@@ -370,7 +355,7 @@ void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<st
 	DrawEllipsised(stateText, ImVec2{ text.x, text.y + ImGui::GetTextLineHeightWithSpacing() }, start.x + size.x - padding.x,
 		(isDownloading || canUpdate || state == Download::EOfferState::NeedsNewerLookout) ? colors.amber : colors.textDisabled);
 	ImGui::SetCursorScreenPos(ImVec2{ buttonsX, text.y });
-	ImGui::BeginDisabled(m_downloads.GetPhase() != Download::EDownloadPhase::Idle);
+	ImGui::BeginDisabled(m_pDownloads->GetPhase() != Download::EDownloadPhase::Idle);
 
 	if (canGet && GameButton("##get", LKT_ICON_DOWNLOAD, FormatTo(buffer, "Download {}", offer.name)))
 	{
@@ -400,11 +385,11 @@ void CDownloadWindow::DrawGame(Download::SGameOffer const& offer, std::vector<st
 //////////////////////////////////////////////////////////////////////////
 void CDownloadWindow::DrawButtons()
 {
-	bool const isIdle{ m_downloads.GetPhase() == Download::EDownloadPhase::Idle };
+	bool const isIdle{ m_pDownloads->GetPhase() == Download::EDownloadPhase::Idle };
 
 	if (Button("Download all", CanDownload() && HasAny(&IsDownloadable), "Every game not installed or with an update"))
 	{
-		m_downloads.Download(Collect(&IsDownloadable));
+		m_pDownloads->Download(Collect(&IsDownloadable));
 	}
 
 	ImGui::SameLine();
@@ -423,7 +408,7 @@ void CDownloadWindow::DrawButtons()
 // installed are known.
 void CDownloadWindow::DrawInstalledCount() const
 {
-	std::span<Download::SGameOffer const> const offers{ m_downloads.GetOffers() };
+	std::span<Download::SGameOffer const> const offers{ m_pDownloads->GetOffers() };
 	size_t const numInstalled{ static_cast<size_t>(std::ranges::count_if(offers, [](Download::SGameOffer const& offer)
 	{
 		return offer.isDownloaded && std::ranges::contains(InstalledStates, offer.state);
@@ -433,7 +418,7 @@ void CDownloadWindow::DrawInstalledCount() const
 		return offer.state != Download::EOfferState::Withdrawn;
 	})) };
 	std::array<char, 64> buffer{};
-	std::string_view const text{ m_downloads.HasIndex() ? FormatTo(buffer, "{} of {} games installed", numInstalled, numOffered)
+	std::string_view const text{ m_pDownloads->HasIndex() ? FormatTo(buffer, "{} of {} games installed", numInstalled, numOffered)
 		: FormatTo(buffer, "{} {} installed", numInstalled, (numInstalled == 1) ? "game" : "games") };
 	float const width{ ImGui::CalcTextSize(text.data(), text.data() + text.size()).x };
 
@@ -463,7 +448,7 @@ void CDownloadWindow::DrawRemoveAllPrompt()
 
 		if (isConfirmed)
 		{
-			m_downloads.Remove(Collect(&IsRemovable));
+			m_pDownloads->Remove(Collect(&IsRemovable));
 		}
 
 		if (shouldClose)
@@ -483,9 +468,9 @@ std::span<SIconLevel const> CDownloadWindow::FindIcon(Download::SGameOffer const
 
 	if (icon == m_icons.end() && !offer.iconSha256.empty())
 	{
-		m_downloads.RequestIcon(offer.key);
+		m_pDownloads->RequestIcon(offer.key);
 
-		std::string_view const png{ m_downloads.GetIcon(offer.iconSha256) };
+		std::string_view const png{ m_pDownloads->GetIcon(offer.iconSha256) };
 
 		if (!png.empty())
 		{
@@ -515,7 +500,7 @@ void CDownloadWindow::DestroyIcons()
 //////////////////////////////////////////////////////////////////////////
 void CDownloadWindow::DrawNewerLookout(std::string_view newer) const
 {
-	std::span<Download::SGameOffer const> const offers{ m_downloads.GetOffers() };
+	std::span<Download::SGameOffer const> const offers{ m_pDownloads->GetOffers() };
 	size_t const numNeeding{ static_cast<size_t>(std::ranges::count(offers, Download::EOfferState::NeedsNewerLookout, &Download::SGameOffer::state)) };
 	std::array<char, 96> text{};
 	std::array<char, 64> label{};
@@ -538,7 +523,7 @@ void CDownloadWindow::DrawNewerLookout(std::string_view newer) const
 //////////////////////////////////////////////////////////////////////////
 std::string_view CDownloadWindow::GetNewerLookout() const
 {
-	std::string_view const latest{ m_downloads.GetLookoutVersion() };
+	std::string_view const latest{ m_pDownloads->GetLookoutVersion() };
 
 	return Download::IsNewerLookout(latest, m_version) ? latest : std::string_view{};
 }
@@ -546,13 +531,13 @@ std::string_view CDownloadWindow::GetNewerLookout() const
 //////////////////////////////////////////////////////////////////////////
 bool CDownloadWindow::CanDownload() const
 {
-	return m_downloads.GetPhase() == Download::EDownloadPhase::Idle && m_downloads.HasIndex();
+	return m_pDownloads->GetPhase() == Download::EDownloadPhase::Idle && m_pDownloads->HasIndex();
 }
 
 //////////////////////////////////////////////////////////////////////////
 bool CDownloadWindow::HasAny(bool (*pIsChosen)(Download::SGameOffer const&)) const
 {
-	return std::ranges::any_of(m_downloads.GetOffers(), pIsChosen);
+	return std::ranges::any_of(m_pDownloads->GetOffers(), pIsChosen);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -560,7 +545,7 @@ std::vector<std::string> CDownloadWindow::Collect(bool (*pIsChosen)(Download::SG
 {
 	std::vector<std::string> keys{};
 
-	for (Download::SGameOffer const& offer : m_downloads.GetOffers())
+	for (Download::SGameOffer const& offer : m_pDownloads->GetOffers())
 	{
 		if (pIsChosen(offer))
 		{

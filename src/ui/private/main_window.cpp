@@ -8,6 +8,7 @@
 #include "status_bar.hpp"
 #include "theme.hpp"
 #include "browser/browser.hpp"
+#include "download/lookout_games.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <tge/module/runtime.hpp>
@@ -92,7 +93,14 @@ void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutI
 {
 	m_userDir = userDir;
 	m_requestReload = std::move(requestReload);
-	m_downloadWindow.Initialize(SDL_GetRenderer(pWindow), userDir, cacheDir, about.version, std::move(wake));
+	m_canDownload = !userDir.empty() && m_downloads.Initialize(userDir, cacheDir, Download::GetLookoutGamesSource(about.version), std::move(wake));
+
+	if (!userDir.empty() && !m_canDownload)
+	{
+		gLog.Warning("Games cannot be downloaded: the download could not be set up");
+	}
+
+	m_downloadWindow.Initialize(SDL_GetRenderer(pWindow), m_canDownload ? &m_downloads : nullptr, about.version);
 	m_gameSettings.Initialize(pWindow);
 	m_aboutDialog.Initialize(pWindow, about);
 	m_detailsEm = static_cast<float>(detailsWidth) / BaseFontSize;
@@ -124,6 +132,8 @@ void CMainWindow::OnCatalogChanged(std::span<std::string const> oldKeys)
 void CMainWindow::Terminate()
 {
 	m_downloadWindow.Terminate();
+	m_downloads.Terminate();
+	m_canDownload = false;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -137,7 +147,7 @@ void CMainWindow::RequestQuit()
 void CMainWindow::Draw(Browser::CBrowser& browser)
 {
 	SFrameIntents intents{};
-	bool const hasNewDownloads{ m_downloadWindow.Update() };
+	bool const hasNewDownloads{ m_canDownload && m_downloads.Update() };
 
 	intents.quit = std::exchange(m_isQuitRequested, false);
 
