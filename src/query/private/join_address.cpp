@@ -1,21 +1,9 @@
 #include "query/join_address.hpp"
 #include "query/game_definition.hpp"
-#include <limits>
+#include "query/server_address.hpp"
 
 namespace Lkt::Query
 {
-namespace
-{
-//////////////////////////////////////////////////////////////////////////
-std::optional<uint16_t> ShiftPort(uint16_t port, int64_t offset)
-{
-	int64_t const shifted{ static_cast<int64_t>(port) + offset };
-	bool const isPort{ shifted >= 1 && shifted <= std::numeric_limits<uint16_t>::max() };
-
-	return isPort ? std::optional<uint16_t>{ static_cast<uint16_t>(shifted) } : std::nullopt;
-}
-} // namespace
-
 //////////////////////////////////////////////////////////////////////////
 SServerAddress ToJoinAddress(SGameDefinition const& game, SServerAddress const& queryAddress, std::optional<uint16_t> replyJoinPort)
 {

@@ -2,6 +2,7 @@
 #include <array>
 #include <charconv>
 #include <format>
+#include <limits>
 
 namespace Lkt::Query
 {
@@ -84,6 +85,15 @@ bool IsQueryable(SServerAddress const& address)
 bool MayList(SServerAddress const& master, SServerAddress const& server)
 {
 	return server.port != 0 && (IsQueryable(server) || !IsQueryable(master));
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::optional<uint16_t> ShiftPort(uint16_t port, int64_t offset)
+{
+	int64_t const shifted{ static_cast<int64_t>(port) + offset };
+	bool const isPort{ shifted >= 1 && shifted <= std::numeric_limits<uint16_t>::max() };
+
+	return isPort ? std::optional<uint16_t>{ static_cast<uint16_t>(shifted) } : std::nullopt;
 }
 
 //////////////////////////////////////////////////////////////////////////

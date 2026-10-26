@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -31,6 +32,7 @@ bool IsQueryable(SServerAddress const& address);
 // A master on the user's own network may list servers there too, which is what makes a LAN master, or one on
 // loopback in a test, usable; a public master still cannot point the browser inward.
 bool MayList(SServerAddress const& master, SServerAddress const& server);
+std::optional<uint16_t> ShiftPort(uint16_t port, int64_t offset);
 
 constexpr uint64_t ToKey(SServerAddress const& address)
 {

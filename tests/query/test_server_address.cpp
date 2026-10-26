@@ -1,6 +1,7 @@
 #include "query/server_address.hpp"
 #include <gtest/gtest.h>
 #include <array>
+#include <optional>
 
 namespace Lkt::Query
 {
@@ -137,6 +138,22 @@ TEST(ServerAddress, PrivateMasterListsPrivateServers)
 TEST(ServerAddress, NoMasterListsPortZero)
 {
 	EXPECT_FALSE(MayList(SServerAddress{ 0x7F000001, 27950 }, SServerAddress{ 0x7F000001, 0 }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerAddress, ShiftMovesThePortWithinItsRange)
+{
+	EXPECT_EQ(ShiftPort(31500, 10), 31510);
+	EXPECT_EQ(ShiftPort(7778, -1), 7777);
+	EXPECT_EQ(ShiftPort(2, -1), 1);
+	EXPECT_EQ(ShiftPort(65534, 1), 65535);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(ServerAddress, ShiftPastEitherEndIsNoPort)
+{
+	EXPECT_EQ(ShiftPort(1, -1), std::nullopt);
+	EXPECT_EQ(ShiftPort(65535, 1), std::nullopt);
 }
 } // namespace
 } // namespace Lkt::Query
