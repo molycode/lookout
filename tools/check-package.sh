@@ -81,7 +81,14 @@ for uninstaller in "$HOME/.local/share/lookout/uninstall.sh" /tmp/pkg/uninstall.
 	# The downloaded games stay, as the settings do, and nothing else.
 	[ "$(ls -A "$HOME/.local/share/lookout")" = "downloaded" ] || fail "$uninstaller left $(ls -A "$HOME/.local/share/lookout")"
 done
-echo "PASS installs, downloads, lists $listed servers, uninstalls cleanly with either uninstaller"
+sh /tmp/pkg/install.sh > /tmp/out 2>&1 || fail "install.sh, before purging"
+sh /tmp/pkg/uninstall.sh --purge > /tmp/out 2>&1 || fail "uninstall.sh --purge"
+grep -q "is uninstalled" /tmp/out || fail "uninstall.sh --purge found nothing to remove"
+for leftover in "$HOME/.local/bin/lookout" "$HOME/.config/lookout" "$HOME/.local/state/lookout" "$HOME/.local/share/lookout" \
+	"$HOME/.cache/lookout"; do
+	[ ! -e "$leftover" ] || fail "uninstall.sh --purge left $leftover"
+done
+echo "PASS installs, downloads, lists $listed servers, uninstalls cleanly with either uninstaller, and purges"
 EOF
 
 cat > "$WORK/checks/gui.sh" <<'EOF'

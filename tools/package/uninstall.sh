@@ -1,8 +1,8 @@
 #!/bin/sh
 # Removes what install.sh put in place and the game icons Lookout keeps; settings, logs and the user's game descriptions
-# are kept.
+# are kept, unless --purge removes them too.
 #
-#   ./uninstall.sh      (from the package, or as ~/.local/share/lookout/uninstall.sh)
+#   ./uninstall.sh [--purge]      (from the package, or as ~/.local/share/lookout/uninstall.sh)
 
 set -eu
 
@@ -17,6 +17,15 @@ xdg_dir() {
 }
 
 [ -n "${HOME:-}" ] || die "HOME is not set"
+[ "$#" -le 1 ] || die "too many arguments - the only option is --purge"
+
+isPurge=false
+
+case "${1:-}" in
+	"") ;;
+	--purge) isPurge=true ;;
+	*) die "unknown option '$1' - the only one is --purge" ;;
+esac
 
 DATA_DIR=$(xdg_dir "${XDG_DATA_HOME:-}" .local/share)
 CONFIG_DIR=$(xdg_dir "${XDG_CONFIG_HOME:-}" .config)/lookout
@@ -35,10 +44,22 @@ for file in "$HOME/.local/bin/lookout" "$APPS_DIR/lookout.desktop" "$DATA_DIR/ic
 done
 
 rm -rf "$CACHE_DIR"
+
+if [ "$isPurge" = true ]; then
+	for folder in "$CONFIG_DIR" "$STATE_DIR" "$UNINSTALL_DIR"; do
+		if [ -e "$folder" ]; then
+			rm -rf "$folder"
+			isFound=true
+		fi
+	done
+fi
+
 rmdir "$UNINSTALL_DIR" 2>/dev/null || true
 
 # Still there, it holds the downloaded games or the user's own.
-if [ "$isFound" = true ] && [ -d "$UNINSTALL_DIR" ]; then
+if [ "$isFound" = true ] && [ "$isPurge" = true ]; then
+	echo "Lookout is uninstalled, with its settings, logs and games."
+elif [ "$isFound" = true ] && [ -d "$UNINSTALL_DIR" ]; then
 	echo "Lookout is uninstalled. Its settings in $CONFIG_DIR, logs in $STATE_DIR and game descriptions in $UNINSTALL_DIR are kept."
 elif [ "$isFound" = true ]; then
 	echo "Lookout is uninstalled. Its settings in $CONFIG_DIR and logs in $STATE_DIR are kept."

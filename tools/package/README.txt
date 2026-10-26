@@ -72,6 +72,10 @@ Either removes the program, its menu entry, its icon and the game icons it keeps
     Logs      ~/.local/state/lookout/logs/
     Games     ~/.local/share/lookout/ (downloaded/, and your own games/ and protocols/)
 
+To remove those too, add --purge:
+
+    ./uninstall.sh --purge
+
 These paths, and that of the uninstaller's copy, follow $XDG_CONFIG_HOME, $XDG_STATE_HOME,
 $XDG_DATA_HOME and $XDG_CACHE_HOME when those are set.
 
