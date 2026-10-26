@@ -7,7 +7,9 @@
 #include "query/server_address.hpp"
 #include <tge/threading/watch_id.hpp>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
+#include <unordered_set>
 
 namespace Lkt::Net
 {
@@ -21,6 +23,7 @@ struct SMasterConversation final
 	CUdpSocket datagramSocket;
 	CStreamSocket streamSocket;
 	std::optional<Tge::Threading::SWatchId> watch;
+	std::unordered_set<uint64_t> listed;
 	size_t numStreamBytes{ 0 };
 	bool isStream{ false };
 };

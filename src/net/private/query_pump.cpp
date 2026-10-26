@@ -453,11 +453,15 @@ void CQueryPump::UpdateMasters(Clock::time_point now)
 
 	for (SMasterOutcome const& outcome : m_masterOutcomes)
 	{
+		auto const conversation{ m_masterConversations.find(ToConversationKey(outcome.master)) };
+		size_t const numServers{ (conversation != m_masterConversations.end()) ? conversation->second.listed.size() : 0 };
+
 		CloseMaster(ToConversationKey(outcome.master));
 
 		if (outcome.failure.empty())
 		{
 			m_masterWarnings.RecordAnswer(outcome.master);
+			Emit(SMasterAnswered{ outcome.master.game, outcome.master.index, static_cast<uint32_t>(numServers) });
 		}
 		else
 		{
@@ -466,7 +470,7 @@ void CQueryPump::UpdateMasters(Clock::time_point now)
 				gLog.Warning("{}: master {} {}", GetGame(outcome.master.game).name, outcome.host, outcome.failure);
 			}
 
-			Emit(SMasterFailed{ outcome.master.game, std::string{ outcome.host }, outcome.failure });
+			Emit(SMasterFailed{ outcome.master.game, outcome.master.index, std::string{ outcome.host }, outcome.failure });
 		}
 	}
 
@@ -647,6 +651,12 @@ void CQueryPump::ReadMasterData(SMasterId const& master, SMasterConversation& co
 				stats.firstUnqueryable = (stats.numUnqueryable == 0) ? address : stats.firstUnqueryable;
 				++stats.numUnqueryable;
 			}
+		}
+
+		// A master may list a server again on a later page.
+		for (Query::SServerAddress const& address : m_listed)
+		{
+			conversation.listed.insert(Query::ToKey(address));
 		}
 
 		ListServers(master.game, m_listed);

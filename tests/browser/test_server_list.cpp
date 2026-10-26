@@ -185,9 +185,9 @@ TEST(ServerList, FinishKeepsEverythingWhenEveryMasterFailed)
 
 	Prepare(list, 7);
 
-	for (Query::SMasterEndpoint const& master : quake3.masters)
+	for (size_t index{ 0 }; index < quake3.masters.size(); ++index)
 	{
-		list.Apply(quake3, Net::SMasterFailed{ quake3.game, std::string{ master.host }, "no route", 7 });
+		list.Apply(quake3, Net::SMasterFailed{ quake3.game, index, std::string{ quake3.masters[index].host }, "no route", 7 });
 	}
 
 	list.Apply(quake3, Net::SRefreshFinished{ quake3.game, 7 });
@@ -208,7 +208,7 @@ TEST(ServerList, FinishStillSweepsWhenOnlySomeMastersFailed)
 
 	for (size_t index{ 1 }; index < quake3.masters.size(); ++index)
 	{
-		list.Apply(quake3, Net::SMasterFailed{ quake3.game, std::string{ quake3.masters[index].host }, "no route", 7 });
+		list.Apply(quake3, Net::SMasterFailed{ quake3.game, index, std::string{ quake3.masters[index].host }, "no route", 7 });
 	}
 
 	list.Apply(quake3, Net::SRefreshFinished{ quake3.game, 7 });

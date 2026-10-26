@@ -11,10 +11,12 @@
 #include "query/master_endpoint.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -32,17 +34,20 @@ constexpr std::chrono::milliseconds Patience{ 10s };
 constexpr int32_t GamespyPortOffset{ 10 };
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<std::byte> MakeQuake2List(Query::SServerAddress const& server)
+std::vector<std::byte> MakeQuake2List(std::span<Query::SServerAddress const> servers)
 {
 	std::vector<std::byte> list{ ToBytes("\xFF\xFF\xFF\xFFservers\n") };
 
-	for (int shift{ 24 }; shift >= 0; shift -= 8)
+	for (Query::SServerAddress const& server : servers)
 	{
-		list.emplace_back(static_cast<std::byte>(server.ipv4 >> shift));
-	}
+		for (int shift{ 24 }; shift >= 0; shift -= 8)
+		{
+			list.emplace_back(static_cast<std::byte>(server.ipv4 >> shift));
+		}
 
-	list.emplace_back(static_cast<std::byte>(server.port >> 8));
-	list.emplace_back(static_cast<std::byte>(server.port));
+		list.emplace_back(static_cast<std::byte>(server.port >> 8));
+		list.emplace_back(static_cast<std::byte>(server.port));
+	}
 
 	return list;
 }
@@ -86,6 +91,11 @@ protected:
 		return m_status.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin"));
 	}
 
+	bool StartQuake2Master(std::vector<Query::SServerAddress> const& listed)
+	{
+		return m_quake2Master.Start(MakeQuake2List(listed));
+	}
+
 	bool StartGamespyMaster(Query::SServerAddress const& listed)
 	{
 		std::array<Query::SServerAddress, 1> const servers{ listed };
@@ -114,6 +124,21 @@ protected:
 		m_gamespyMaster.Stop();
 
 		return isFinished;
+	}
+
+	// Each master that answered, by index, with the number of servers it listed.
+	std::vector<std::pair<size_t, uint32_t>> GetAnswered() const
+	{
+		std::vector<std::pair<size_t, uint32_t>> answered{};
+
+		for (SMasterAnswered const& event : Fixtures::CollectEvents<SMasterAnswered>(m_collector.GetEvents()))
+		{
+			answered.emplace_back(event.index, event.numServers);
+		}
+
+		std::ranges::sort(answered);
+
+		return answered;
 	}
 
 	std::vector<Query::SServerAddress> GetListed() const
@@ -162,7 +187,7 @@ TEST_F(CMasterProtocolTest, ServerIsAskedThroughTheGamesProtocol)
 TEST_F(CMasterProtocolTest, ServerListedByBothMastersIsAskedOnce)
 {
 	ASSERT_TRUE(StartStatusServer());
-	ASSERT_TRUE(m_quake2Master.Start(MakeQuake2List(m_status.GetAddress())));
+	ASSERT_TRUE(StartQuake2Master({ m_status.GetAddress() }));
 	ASSERT_TRUE(StartGamespyMaster(GetGamespyAddress()));
 
 	Query::SServerAddress const status{ m_status.GetAddress() };
@@ -198,6 +223,59 @@ TEST_F(CMasterProtocolTest, GameFileNamingAMastersProtocolListsThroughIt)
 	ASSERT_TRUE(Run(AddGameFile("kingpin-gamespy", masterPorts)));
 	EXPECT_TRUE(Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()).empty());
 	EXPECT_EQ(GetListed(), std::vector<Query::SServerAddress>{ status });
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterProtocolTest, EachMasterSaysHowManyServersItListed)
+{
+	ASSERT_TRUE(StartStatusServer());
+	ASSERT_TRUE(StartQuake2Master({ m_status.GetAddress() }));
+	ASSERT_TRUE(StartGamespyMaster(GetGamespyAddress()));
+	ASSERT_TRUE(Run(AddKingpin({ MakeQuake2Master(), MakeGamespyMaster() })));
+	EXPECT_EQ(GetAnswered(), (std::vector<std::pair<size_t, uint32_t>>{ { 0, 1 }, { 1, 1 } }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterProtocolTest, ServerAMasterListsTwiceIsCountedOnce)
+{
+	ASSERT_TRUE(StartStatusServer());
+	ASSERT_TRUE(StartQuake2Master({ m_status.GetAddress(), m_status.GetAddress() }));
+	ASSERT_TRUE(Run(AddKingpin({ MakeQuake2Master() })));
+	EXPECT_EQ(GetAnswered(), (std::vector<std::pair<size_t, uint32_t>>{ { 0, 1 } }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterProtocolTest, ListedPortShiftedOutOfRangeIsNotCounted)
+{
+	ASSERT_TRUE(StartGamespyMaster(Query::SServerAddress{ 0x7F000001, 65530 }));
+
+	Query::EGame const game{ AddKingpin({ MakeGamespyMaster() }) };
+	CExpectedLog const expected{ NetChannel, 1, 0 };
+
+	ASSERT_TRUE(Run(game));
+	EXPECT_EQ(GetAnswered(), (std::vector<std::pair<size_t, uint32_t>>{ { 0, 0 } }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterProtocolTest, FailedMasterSaysWhichItIs)
+{
+	ASSERT_TRUE(StartStatusServer());
+	ASSERT_TRUE(StartQuake2Master({ m_status.GetAddress() }));
+	ASSERT_TRUE(StartGamespyMaster(GetGamespyAddress()));
+
+	Query::SMasterEndpoint const closed{ MakeGamespyMaster() };
+
+	m_gamespyMaster.Stop();
+
+	Query::EGame const game{ AddKingpin({ MakeQuake2Master(), closed }) };
+	CExpectedLog const expected{ NetChannel, 1, 0 };
+
+	ASSERT_TRUE(Run(game));
+
+	std::vector<SMasterFailed> const failures{ Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()) };
+
+	ASSERT_EQ(failures.size(), 1u);
+	EXPECT_EQ(failures[0].index, 1u);
 }
 } // namespace
 } // namespace Lkt::Net
