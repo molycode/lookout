@@ -158,7 +158,7 @@ void CLookout::ReloadGames()
 	if (isReplaced || hasNewProblems)
 	{
 		ReportGameProblems(content.problems);
-		gLog.Info("Reloaded the game descriptions: {} games", numGames);
+		gLog.Info("Reloaded the game descriptions: {} {}", numGames, (numGames == 1) ? "game" : "games");
 	}
 
 	m_browser.SetGameProblems(std::move(content.problems));

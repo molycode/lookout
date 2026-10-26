@@ -38,7 +38,8 @@ std::optional<std::string> FindEnding(SMasterRecord const& record, Clock::time_p
 
 	if (now - record.startedAt >= Deadline)
 	{
-		ending = record.hasAnswered ? std::format("did not finish its list in {} s, after {} servers", Deadline / std::chrono::seconds{ 1 }, record.numEntries)
+		ending = record.hasAnswered ? std::format("did not finish its list in {} s, after {} {}", Deadline / std::chrono::seconds{ 1 }, record.numEntries,
+				(record.numEntries == 1) ? "server" : "servers")
 			: std::string{ "did not answer" };
 	}
 	else if (record.quiet.has_value() && now - record.lastDatagramAt >= *record.quiet)
@@ -47,7 +48,8 @@ std::optional<std::string> FindEnding(SMasterRecord const& record, Clock::time_p
 	}
 	else if (IsStepExhausted(record, now))
 	{
-		ending = record.hasAnswered ? std::format("stopped answering after listing {} servers", record.numEntries) : std::string{ "did not answer" };
+		ending = record.hasAnswered ? std::format("stopped answering after listing {} {}", record.numEntries, (record.numEntries == 1) ? "server" : "servers")
+			: std::string{ "did not answer" };
 	}
 
 	return ending;
