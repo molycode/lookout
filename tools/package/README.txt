@@ -31,7 +31,8 @@ updates and removes them. From a terminal, the same is
 
 which downloads the games named, or every game missing or with an update. They are kept in
 ~/.local/share/lookout/downloaded/. When games need a newer Lookout, Download games names
-it and links to its release.
+it and links to its release. The icon at the right of the menu bar says whether a newer
+Lookout is out; Lookout asks GitHub at start and once a day.
 
 Starting a game
 ---------------

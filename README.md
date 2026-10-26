@@ -22,7 +22,8 @@ master as you open and edit it: a check with the number of servers it listed, or
 gear sets the protocol it lists with, its options and a port offset, for masters that speak another protocol than the
 game's; a protocol from lookout-games that is not installed yet is downloaded when you choose it. A protocol of yours
 replaces the downloaded one of its name; Download games, a game's editor and its settings name the protocol in use and
-the downloaded one's version. When games need a newer Lookout, Download games names it and links to its release.
+the downloaded one's version. When games need a newer Lookout, Download games names it and links to its release. The
+icon at the right of the menu bar says whether a newer Lookout is out; Lookout asks GitHub at start and once a day.
 `lookout --check <folder>` checks a lookout-games folder before a pull request.
 
 ![Download games on a first start: every game in lookout-games, ready to download](docs/download-games.png)

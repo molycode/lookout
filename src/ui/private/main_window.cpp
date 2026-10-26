@@ -1,20 +1,26 @@
 #include "main_window.hpp"
+#include "format_to.hpp"
 #include "frame_intents.hpp"
 #include "game_sidebar.hpp"
+#include "icons.hpp"
 #include "join_message.hpp"
 #include "loggers.hpp"
 #include "server_details.hpp"
 #include "server_table.hpp"
 #include "status_bar.hpp"
 #include "theme.hpp"
+#include "theme_colors.hpp"
 #include "browser/browser.hpp"
 #include "download/lookout_games.hpp"
+#include "download/lookout_release.hpp"
+#include "net/clock.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <tge/module/runtime.hpp>
 #include <imgui.h>
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <format>
 #include <optional>
@@ -34,7 +40,80 @@ constexpr float MinDetailsEm{ 14.0f };
 constexpr float MaxDetailsEm{ 40.0f };
 
 //////////////////////////////////////////////////////////////////////////
-void DrawMenuBar(SFrameIntents& intents)
+std::string_view DescribeLatestRelease(Download::CLatestRelease const& latestRelease, std::string_view version, std::array<char, 256>& buffer)
+{
+	std::string_view const latest{ latestRelease.GetVersion() };
+	std::string_view const problem{ latestRelease.GetProblem() };
+	std::string_view description{};
+
+	if (latest.empty() && problem.empty())
+	{
+		description = FormatTo(buffer, "Not known yet whether Lookout {} is the latest version", version);
+	}
+	else if (latest.empty())
+	{
+		description = FormatTo(buffer, "Cannot tell whether Lookout {} is the latest version: {}", version, problem);
+	}
+	else if (Download::IsNewerLookout(latest, version))
+	{
+		description = FormatTo(buffer, "Lookout {} is out; you have {}. Click to get it.", latest, version);
+	}
+	else if (Download::IsNewerLookout(version, latest))
+	{
+		description = FormatTo(buffer, "Lookout {} is newer than the latest release, {}", version, latest);
+	}
+	else
+	{
+		description = FormatTo(buffer, "Lookout {} is the latest version", version);
+	}
+
+	return description;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// At the menu bar's right end; only a newer release stands out, and only it can be clicked.
+void DrawLatestRelease(Download::CLatestRelease const& latestRelease, std::string_view version)
+{
+	SThemeColors const& colors{ GetThemeColors() };
+	std::string_view const latest{ latestRelease.GetVersion() };
+	bool const isNewerOut{ Download::IsNewerLookout(latest, version) };
+	float const spacing{ ImGui::GetStyle().ItemSpacing.x };
+	std::array<char, 32> labelBuffer{};
+	std::array<char, 256> tooltipBuffer{};
+	std::string_view const label{ isNewerOut ? FormatTo(labelBuffer, LKT_ICON_CIRCLE_UP " {}", latest)
+		: FormatTo(labelBuffer, "{}", latest.empty() ? LKT_ICON_QUESTION : LKT_ICON_CIRCLE_CHECK) };
+	std::string_view const tooltip{ DescribeLatestRelease(latestRelease, version, tooltipBuffer) };
+	float const width{ ImGui::CalcTextSize(label.data(), label.data() + label.size()).x + spacing };
+
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - width));
+
+	if (isNewerOut)
+	{
+		ImGui::PushStyleColor(ImGuiCol_Text, colors.amber);
+
+		bool const isClicked{ ImGui::MenuItem(label.data()) };
+
+		ImGui::PopStyleColor();
+		ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
+
+		if (isClicked && !SDL_OpenURL(Download::LookoutReleaseUrl.data()))
+		{
+			gLog.Warning("Cannot open {}: {}", Download::LookoutReleaseUrl, SDL_GetError());
+		}
+	}
+	else
+	{
+		// Where a menu item's text would start, so the icon does not move when it becomes one.
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + spacing * 0.5f);
+		ImGui::PushStyleColor(ImGuiCol_Text, colors.textDisabled);
+		ImGui::TextUnformatted(label.data(), label.data() + label.size());
+		ImGui::PopStyleColor();
+		ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void DrawMenuBar(Download::CLatestRelease const& latestRelease, std::string_view version, SFrameIntents& intents)
 {
 	if (ImGui::BeginMenuBar())
 	{
@@ -46,6 +125,7 @@ void DrawMenuBar(SFrameIntents& intents)
 			ImGui::EndMenu();
 		}
 
+		DrawLatestRelease(latestRelease, version);
 		ImGui::EndMenuBar();
 	}
 }
@@ -92,8 +172,15 @@ void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutI
 	std::filesystem::path const& cacheDir, std::function<void()> requestReload, std::function<void()> wake)
 {
 	m_userDir = userDir;
+	m_version = about.version;
 	m_requestReload = std::move(requestReload);
 	m_masterProbes.Initialize(wake);
+
+	if (!m_latestRelease.Initialize(Download::GetLookoutReleaseOrigin(about.version), wake))
+	{
+		gLog.Warning("Lookout cannot ask whether a newer version is out: the check could not be set up");
+	}
+
 	m_canDownload = !userDir.empty() && m_downloads.Initialize(userDir, cacheDir, Download::GetLookoutGamesSource(about.version), std::move(wake));
 
 	if (!userDir.empty() && !m_canDownload)
@@ -135,6 +222,7 @@ void CMainWindow::Terminate()
 	m_downloadWindow.Terminate();
 	m_downloads.Terminate();
 	m_canDownload = false;
+	m_latestRelease.Terminate();
 	m_masterProbes.Terminate();
 }
 
@@ -152,6 +240,7 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 	bool const hasNewDownloads{ m_canDownload && m_downloads.Update() };
 
 	m_masterProbes.Update();
+	m_latestRelease.Update(Net::Clock::now());
 
 	intents.quit = std::exchange(m_isQuitRequested, false);
 
@@ -161,7 +250,7 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 		m_hasStarted = true;
 	}
 
-	DrawMenuBar(intents);
+	DrawMenuBar(m_latestRelease, m_version, intents);
 	ReadShortcuts(browser.GetSelectedGame() != Query::NoGame, intents);
 	m_toolbar.Draw(browser, !m_userDir.empty(), m_downloadWindow.CanOpen(), m_serverPaneX, intents);
 	DrawBody(browser, intents);
@@ -207,7 +296,15 @@ uint32_t CMainWindow::GetDetailsWidth() const
 // What only time brings, with no event to wake the window for it.
 std::optional<std::chrono::steady_clock::time_point> CMainWindow::GetNextDeadline() const
 {
-	return m_masterProbes.GetNextDeadline();
+	std::optional<std::chrono::steady_clock::time_point> deadline{ m_masterProbes.GetNextDeadline() };
+	std::optional<std::chrono::steady_clock::time_point> const check{ m_latestRelease.GetNextCheck() };
+
+	if (check.has_value() && (!deadline.has_value() || *check < *deadline))
+	{
+		deadline = check;
+	}
+
+	return deadline;
 }
 
 //////////////////////////////////////////////////////////////////////////
