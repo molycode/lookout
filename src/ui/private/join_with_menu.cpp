@@ -65,16 +65,31 @@ void DrawJoinWithItems(Browser::CBrowser const& browser, uint64_t key, SFrameInt
 	std::span<Launch::SLaunchOption const> const options{ browser.GetLaunchOptions(game) };
 	std::span<Browser::SInstallLauncher const> const installs{ browser.GetInstallLaunchers(game) };
 
-	for (Launch::SLaunchOption const& option : options)
+	if (!options.empty())
 	{
-		DrawItem(option.id, option.name, option.location, std::nullopt, key, intents);
+		ImGui::SeparatorText("Found");
+
+		for (Launch::SLaunchOption const& option : options)
+		{
+			DrawItem(option.id, option.name, option.location, std::nullopt, key, intents);
+		}
 	}
 
-	for (Browser::SInstallLauncher const& install : installs)
+	if (!installs.empty())
 	{
-		std::optional<Launch::ELaunchError> const error{ install.option.has_value() ? std::nullopt : std::optional{ install.option.error() } };
+		if (!options.empty())
+		{
+			ImGui::Spacing();
+		}
 
-		DrawItem(install.id, install.name, install.location, error, key, intents);
+		ImGui::SeparatorText("Your installs");
+
+		for (Browser::SInstallLauncher const& install : installs)
+		{
+			std::optional<Launch::ELaunchError> const error{ install.option.has_value() ? std::nullopt : std::optional{ install.option.error() } };
+
+			DrawItem(install.id, install.name, install.location, error, key, intents);
+		}
 	}
 
 	if (options.empty() && installs.empty())
