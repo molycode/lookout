@@ -1,4 +1,5 @@
 #include "master_tracker.hpp"
+#include <tge/assert.hpp>
 #include <algorithm>
 #include <format>
 #include <utility>
@@ -85,14 +86,17 @@ std::optional<Clock::time_point> GetDeadline(SMasterRecord const& record)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-void CMasterTracker::Begin(Query::EGame game, uint32_t generation, std::span<Query::SMasterEndpoint const> masters, Script::EMasterTransport transport,
-	Clock::time_point now)
+void CMasterTracker::Begin(Query::EGame game, uint32_t generation, std::span<Query::SMasterEndpoint const> masters,
+	std::span<Script::EMasterTransport const> transports, Clock::time_point now)
 {
+	TGE_ASSERT(transports.size() == masters.size(), "A transport for each master");
+
 	Cancel(game);
 
 	for (size_t index{ 0 }; index < masters.size(); ++index)
 	{
 		Query::SMasterEndpoint const& master{ masters[index] };
+		Script::EMasterTransport const transport{ transports[index] };
 		SMasterRecord record{};
 
 		record.game = game;

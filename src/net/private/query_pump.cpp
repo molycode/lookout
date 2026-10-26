@@ -19,6 +19,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace Lkt::Net
 {
@@ -267,7 +268,10 @@ void CQueryPump::StartRefresh(Query::EGame game, std::span<Query::SServerAddress
 	refresh.generation = generation;
 	refresh.startedAt = now;
 
-	m_masters.Begin(game, generation, Query::GetGame(game).masters, GetScript(game).GetMasterTransport(), now);
+	std::span<Query::SMasterEndpoint const> const masters{ Query::GetGame(game).masters };
+	std::vector<Script::EMasterTransport> const transports(masters.size(), GetScript(game).GetMasterTransport());
+
+	m_masters.Begin(game, generation, masters, transports, now);
 	ResolveMasters(game, generation, now);
 	ListServers(game, favourites);
 }
