@@ -10,6 +10,8 @@ struct SGameFormNode;
 
 namespace Lkt::Ui
 {
-bool DrawGameForm(Games::SGameFormNode& form, Games::SGameFormNode const* pDownloaded, Games::SFieldProblem const* pProblem);
+struct SFormProtocols;
+
+bool DrawGameForm(Games::SGameFormNode& form, Games::SGameFormNode const* pDownloaded, Games::SFieldProblem const* pProblem, SFormProtocols const& protocols);
 std::string DescribeFieldProblem(Games::SFieldProblem const& problem);
 } // namespace Lkt::Ui

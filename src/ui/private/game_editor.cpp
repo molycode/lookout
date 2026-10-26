@@ -1,4 +1,5 @@
 #include "game_editor.hpp"
+#include "form_protocols.hpp"
 #include "format_to.hpp"
 #include "game_form_view.hpp"
 #include "icons.hpp"
@@ -187,7 +188,8 @@ EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::stri
 
 				ImGui::BeginChild("##form", ImVec2{ 0.0f, -m_footerHeight }, ImGuiChildFlags_NavFlattened);
 
-				if (DrawGameForm(m_form, m_downloadedForm.has_value() ? &*m_downloadedForm : nullptr, m_problem.has_value() ? &*m_problem : nullptr))
+				if (DrawGameForm(m_form, m_downloadedForm.has_value() ? &*m_downloadedForm : nullptr, m_problem.has_value() ? &*m_problem : nullptr,
+					SFormProtocols{ Query::GetProtocolCatalog() }))
 				{
 					Check();
 				}
