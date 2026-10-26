@@ -1,4 +1,5 @@
 #include "download/lookout_release.hpp"
+#include "user_agent.hpp"
 #include <charconv>
 #include <cstddef>
 #include <system_error>
@@ -37,5 +38,16 @@ bool IsNewerLookout(std::string_view latest, std::string_view running)
 	std::optional<std::array<uint32_t, 3>> const runningNumbers{ ParseLookoutVersion(running) };
 
 	return latestNumbers.has_value() && runningNumbers.has_value() && *latestNumbers > *runningNumbers;
+}
+
+//////////////////////////////////////////////////////////////////////////
+Net::SHttpsOrigin GetLookoutReleaseOrigin(std::string_view version)
+{
+	Net::SHttpsOrigin origin{};
+
+	origin.host = "api.github.com";
+	origin.userAgent = MakeUserAgent(version);
+
+	return origin;
 }
 } // namespace Lkt::Download
