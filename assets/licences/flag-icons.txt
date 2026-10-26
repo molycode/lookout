@@ -1,4 +1,4 @@
-Flags from flag-icons v7.5.0 (https://github.com/lipis/flag-icons), rendered to bitmaps.
+Flags from flag-icons v7.6.0 (https://github.com/lipis/flag-icons), rendered to bitmaps.
 
 The MIT License (MIT)
 
