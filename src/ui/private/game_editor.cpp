@@ -37,6 +37,7 @@ constexpr float HeaderLabelEm{ 13.0f };
 constexpr float PromptWidthEm{ 22.0f };
 constexpr std::string_view ProtocolField{ "protocol" };
 constexpr std::string_view OptionsField{ "protocolOptions" };
+constexpr std::string_view MastersField{ "masters" };
 
 //////////////////////////////////////////////////////////////////////////
 // Typed capitals become small letters and anything a key cannot hold is dropped, so most keys are valid as typed.
@@ -56,18 +57,37 @@ int FilterKeyCharacter(ImGuiInputTextCallbackData* pData)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// The protocol and its options alone decide what the protocol's conversations make of a description.
-std::string MakeScriptSignature(Games::SGameFormNode const& form)
+void AddProtocolChoice(Games::SGameFormNode const& node, std::string& signature)
 {
-	Games::SGameFormNode const* const pProtocol{ Games::FindFormField(form, ProtocolField) };
-	Games::SGameFormNode const* const pOptions{ Games::FindFormField(form, OptionsField) };
-	std::string signature{ (pProtocol != nullptr) ? pProtocol->text : std::string{} };
+	Games::SGameFormNode const* const pProtocol{ Games::FindFormField(node, ProtocolField) };
+	Games::SGameFormNode const* const pOptions{ Games::FindFormField(node, OptionsField) };
+
+	signature += std::format("\n{}", (pProtocol != nullptr) ? std::string_view{ pProtocol->text } : std::string_view{});
 
 	if (pOptions != nullptr)
 	{
 		for (Games::SGameFormNode const& option : pOptions->children)
 		{
 			signature += std::format("\n{}={}", option.name, option.text);
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The protocols and their options alone, the game's and each master's, decide what the conversations make of a description.
+std::string MakeScriptSignature(Games::SGameFormNode const& form)
+{
+	Games::SGameFormNode const* const pMasters{ Games::FindFormField(form, MastersField) };
+	std::string signature{};
+
+	AddProtocolChoice(form, signature);
+
+	if (pMasters != nullptr)
+	{
+		for (Games::SGameFormNode const& master : pMasters->children)
+		{
+			signature += "\n|";
+			AddProtocolChoice(master, signature);
 		}
 	}
 
