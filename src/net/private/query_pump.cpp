@@ -801,7 +801,6 @@ void CQueryPump::EndRequests(Clock::time_point now)
 		else
 		{
 			CloseServer(ended.request);
-			stats.firstNoAnswer = (stats.numNoAnswer == 0) ? ended.request.address : stats.firstNoAnswer;
 			++stats.numNoAnswer;
 			Emit(SServerFailed{ ended.request.game, ended.request.address, EServerFailure::NoAnswer });
 		}
@@ -1049,9 +1048,9 @@ void CQueryPump::ReportRefresh(Query::EGame game) const
 
 	gLog.Info("{}: {} of {} servers answered in {:.1f} s", name, stats.numAnswered, stats.numListed, seconds);
 
-	if (stats.numNoAnswer > 0)
+	if (stats.numNoAnswer > 0 && stats.numNoAnswer == stats.numListed)
 	{
-		gLog.Warning("{}: {} servers did not answer, first {}", name, stats.numNoAnswer, Query::FormatAddress(stats.firstNoAnswer));
+		gLog.Warning("{}: no server answered ({} listed)", name, stats.numListed);
 	}
 
 	if (stats.numBadReplies > 0)

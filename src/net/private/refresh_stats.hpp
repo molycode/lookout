@@ -12,7 +12,6 @@ struct SRefreshStats final
 	size_t numListed{ 0 };
 	size_t numAnswered{ 0 };
 	size_t numNoAnswer{ 0 };
-	Query::SServerAddress firstNoAnswer;
 	size_t numBadReplies{ 0 };
 	Query::SServerAddress firstBadReply;
 	Query::EParseError firstBadReplyError{ Query::EParseError::Malformed };
