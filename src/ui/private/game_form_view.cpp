@@ -17,6 +17,7 @@
 #include <charconv>
 #include <cstddef>
 #include <format>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -322,10 +323,10 @@ bool DrawScalar(SGameField const& field, SGameFormNode& node, SGameFormNode cons
 
 //////////////////////////////////////////////////////////////////////////
 // A value not among the names, such as a protocol that did not load, is shown as it is. A none label, when given, is
-// the first choice and leaves the field empty.
+// the first choice and leaves the field empty; more choices, when given, follow the names.
 template<typename TNames>
 bool DrawChoice(SGameField const& field, SGameFormNode& node, SGameFormNode const* pBase, TNames&& names, std::string_view path, SFieldProblem const* pProblem,
-	std::string_view choiceNote, std::string_view noneLabel)
+	std::string_view choiceNote, std::string_view noneLabel, std::function<bool(std::string&)> const& drawMoreChoices)
 {
 	bool isEdited{ false };
 
@@ -346,6 +347,11 @@ bool DrawChoice(SGameField const& field, SGameFormNode& node, SGameFormNode cons
 				node.text = name;
 				isEdited = true;
 			}
+		}
+
+		if (drawMoreChoices)
+		{
+			isEdited = drawMoreChoices(node.text) || isEdited;
 		}
 
 		ImGui::EndCombo();
@@ -468,7 +474,7 @@ bool DrawMasterSettings(SGameFormNode& row, std::string_view rowPath, SFieldProb
 
 	if (DrawChoice(*FindField(MastersRow, ProtocolField), protocol, nullptr,
 		protocols.definitions | std::views::transform([](Query::SProtocolDefinition const& definition) { return std::string_view{ definition.name }; }),
-		JoinPath(rowPath, ProtocolField), pProblem, DescribeProtocolNamed(protocols, protocol.text), inherited))
+		JoinPath(rowPath, ProtocolField), pProblem, DescribeProtocolNamed(protocols, protocol.text), inherited, protocols.drawMoreChoices))
 	{
 		isEdited = true;
 
@@ -479,6 +485,14 @@ bool DrawMasterSettings(SGameFormNode& row, std::string_view rowPath, SFieldProb
 			options.children.clear();
 			options.isPresent = false;
 		}
+	}
+
+	if (!protocol.text.empty() && !std::ranges::contains(protocols.definitions, protocol.text, &Query::SProtocolDefinition::name) && protocols.drawAbsent)
+	{
+		ImGui::SetCursorPosX(GetControlX());
+		ImGui::BeginGroup();
+		protocols.drawAbsent(protocol.text);
+		ImGui::EndGroup();
 	}
 
 	ImGui::PopID();
@@ -730,12 +744,12 @@ bool DrawField(SGameField const& field, SGameFormNode& parent, SGameFormNode con
 			isEdited = DrawScalar(field, Games::GetFormField(parent, field.name), pBase, path, pProblem);
 			break;
 		case EGameFieldKind::Choice:
-			isEdited = DrawChoice(field, Games::GetFormField(parent, field.name), pBase, field.choices, path, pProblem, {}, {});
+			isEdited = DrawChoice(field, Games::GetFormField(parent, field.name), pBase, field.choices, path, pProblem, {}, {}, {});
 			break;
 		case EGameFieldKind::Protocol:
 			isEdited = DrawChoice(field, Games::GetFormField(parent, field.name), pBase,
 				protocols.definitions | std::views::transform([](Query::SProtocolDefinition const& protocol) { return std::string_view{ protocol.name }; }),
-				path, pProblem, DescribeProtocolNamed(protocols, Games::GetFormField(parent, field.name).text), {});
+				path, pProblem, DescribeProtocolNamed(protocols, Games::GetFormField(parent, field.name).text), {}, {});
 			break;
 		case EGameFieldKind::ProtocolOptions:
 			isEdited = DrawProtocolOptions(field, parent, pBaseParent, parentPath, pProblem, protocols);

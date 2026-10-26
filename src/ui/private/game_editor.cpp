@@ -1,5 +1,4 @@
 #include "game_editor.hpp"
-#include "form_protocols.hpp"
 #include "format_to.hpp"
 #include "game_form_view.hpp"
 #include "icons.hpp"
@@ -157,6 +156,8 @@ void CGameEditor::OnCatalogChanged(std::filesystem::path const& userDir)
 	}
 	else if (m_isOpen)
 	{
+		m_protocols.Refresh();
+
 		if (!m_isNew && Games::ReadGameText(userDir, m_key).text != m_openedText)
 		{
 			m_note = "This game's files changed while you edited it. Saving keeps your changes on top of them.";
@@ -168,9 +169,15 @@ void CGameEditor::OnCatalogChanged(std::filesystem::path const& userDir)
 }
 
 //////////////////////////////////////////////////////////////////////////
-EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::string& message)
+EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::string& message, Download::CGameDownloads* pDownloads)
 {
 	EEditorOutcome outcome{ EEditorOutcome::None };
+
+	if (m_isOpen && m_protocols.Update(pDownloads, userDir, m_form))
+	{
+		m_scriptSignature.clear();
+		Check();
+	}
 
 	if (m_isOpen)
 	{
@@ -209,7 +216,7 @@ EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::stri
 				ImGui::BeginChild("##form", ImVec2{ 0.0f, -m_footerHeight }, ImGuiChildFlags_NavFlattened);
 
 				if (DrawGameForm(m_form, m_downloadedForm.has_value() ? &*m_downloadedForm : nullptr, m_problem.has_value() ? &*m_problem : nullptr,
-					SFormProtocols{ Query::GetProtocolCatalog() }))
+					m_protocols.MakeFormProtocols(pDownloads)))
 				{
 					Check();
 				}
@@ -269,6 +276,8 @@ void CGameEditor::Load(std::string_view key, std::filesystem::path const& userDi
 	std::expected<Games::SGameFormNode, std::string> downloaded{ std::unexpect };
 	std::string const file{ (userDir / "games" / key / "game.json").string() };
 
+	m_protocols.Refresh();
+
 	if (!opened.downloaded.empty())
 	{
 		downloaded = Games::ReadGameForm(opened.downloaded);
@@ -298,6 +307,7 @@ void CGameEditor::Load(std::string_view key, std::filesystem::path const& userDi
 //////////////////////////////////////////////////////////////////////////
 void CGameEditor::LoadNew()
 {
+	m_protocols.Refresh();
 	m_key.clear();
 	m_name.clear();
 	m_source = Games::EGameSource::None;
@@ -351,7 +361,7 @@ void CGameEditor::Ask(EEditorPending pending, std::string_view key)
 //////////////////////////////////////////////////////////////////////////
 void CGameEditor::Check()
 {
-	std::span<Query::SProtocolDefinition const> const protocols{ Query::GetProtocolCatalog() };
+	std::span<Query::SProtocolDefinition const> const protocols{ m_protocols.GetDefinitions() };
 	std::string const text{ Games::WriteGameForm(m_form) };
 	std::expected<void, Games::SFieldProblem> const fields{ Games::CheckGameFields(text, protocols) };
 	std::string const signature{ MakeScriptSignature(m_form) };

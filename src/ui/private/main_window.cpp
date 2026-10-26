@@ -404,7 +404,7 @@ void CMainWindow::SetGameListed(Browser::CBrowser& browser, Query::EGame game, b
 // What they change in the data folder is read again at the end of a frame with no popup open.
 void CMainWindow::DrawGamePrompts()
 {
-	EEditorOutcome const edited{ m_gameEditor.Draw(m_userDir, m_message) };
+	EEditorOutcome const edited{ m_gameEditor.Draw(m_userDir, m_message, m_canDownload ? &m_downloads : nullptr) };
 
 	if (edited == EEditorOutcome::FilesChanged)
 	{

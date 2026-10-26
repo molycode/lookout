@@ -4,6 +4,7 @@
 #include "discard_prompt.hpp"
 #include "editor_outcome.hpp"
 #include "editor_pending.hpp"
+#include "editor_protocols.hpp"
 #include "games/field_problem.hpp"
 #include "games/game_form_node.hpp"
 #include "games/game_source.hpp"
@@ -13,7 +14,14 @@
 #include <string>
 #include <string_view>
 
-namespace Lkt::Ui
+namespace Lkt
+{
+namespace Download
+{
+class CGameDownloads;
+} // namespace Download
+
+namespace Ui
 {
 class CGameEditor final : private Tge::SNoCopyNoMove
 {
@@ -27,7 +35,7 @@ public:
 	void AskToQuit();
 	bool HasUnsavedChanges() const;
 	void OnCatalogChanged(std::filesystem::path const& userDir);
-	EEditorOutcome Draw(std::filesystem::path const& userDir, std::string& message);
+	EEditorOutcome Draw(std::filesystem::path const& userDir, std::string& message, Download::CGameDownloads* pDownloads);
 
 private:
 
@@ -63,6 +71,7 @@ private:
 	std::optional<Games::SFieldProblem> m_problem;
 	std::optional<Games::SFieldProblem> m_scriptProblem;
 	CDiscardPrompt m_discardPrompt;
+	CEditorProtocols m_protocols;
 	float m_footerHeight{ 0.0f };
 	EEditorPending m_pending{ EEditorPending::None };
 	EDiscardKind m_discardKind{ EDiscardKind::Changes };
@@ -72,4 +81,5 @@ private:
 	bool m_shouldFocus{ false };
 	bool m_shouldAsk{ false };
 };
-} // namespace Lkt::Ui
+} // namespace Ui
+} // namespace Lkt
