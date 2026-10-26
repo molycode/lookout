@@ -1,6 +1,7 @@
 #include "net/loopback_https_server.hpp"
 #include "sha256.hpp"
 #include "download/game_downloads.hpp"
+#include "games/game_format.hpp"
 #include "json/json.hpp"
 #include "script/script_api.hpp"
 #include <gtest/gtest.h>
@@ -396,12 +397,25 @@ TEST_F(CGameDownloadsTest, NewerFormatNeedsANewerLookout)
 {
 	JsonValue index = MakeIndex();
 
-	index["games"]["kingpin"]["format"] = 2;
+	index["games"]["kingpin"]["format"] = Games::GameFormat + 1;
 	Serve(index);
 	Start();
 	ReadIndex();
 
 	EXPECT_EQ(GetState("kingpin"), EOfferState::NeedsNewerLookout);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, FormatThisLookoutReadsIsOffered)
+{
+	JsonValue index = MakeIndex();
+
+	index["games"]["kingpin"]["format"] = Games::GameFormat;
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(GetState("kingpin"), EOfferState::NotInstalled);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -493,7 +507,7 @@ TEST_F(CGameDownloadsTest, DownloadedGameThatNeedsANewerLookoutIsStillOnDisk)
 	Start();
 	ReadIndex();
 	Download("kingpin");
-	index["games"]["kingpin"]["format"] = 2;
+	index["games"]["kingpin"]["format"] = Games::GameFormat + 1;
 	Serve(index);
 	ReadIndex();
 

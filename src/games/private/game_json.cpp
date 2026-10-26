@@ -39,7 +39,7 @@ constexpr std::array<std::string_view, 3> ColourCodeNames{ "alphanumeric", "prin
 using enum EGameFieldKind;
 
 constexpr std::array<SGameField, 41> Fields{ {
-	{ "", "format", "Format", Version, true, {}, "The version of this format: 1." },
+	{ "", "format", "Format", Version, true, {}, "The version of this format, 1 or 2: the lowest that has every field the file uses." },
 	{ "", "name", "Name", Text, true, {}, "The game's name in the game list." },
 	{ "", "protocol", "Protocol", Protocol, true, {}, "The protocol script that queries the game's masters and servers, by name." },
 	{ "", "protocolOptions", "Protocol options", ProtocolOptions, false, {},
@@ -178,7 +178,7 @@ std::string ToParent(std::string_view path)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A field format 1 does not know is a typo or a later format's, so it is never skipped silently.
+// A field no format knows is a typo or a later Lookout's, so it is never skipped silently.
 void CheckFields(JsonValue const& object, std::string_view path, SFieldProblem& problem)
 {
 	std::string const parent{ ToParent(path) };
@@ -194,7 +194,7 @@ void CheckFields(JsonValue const& object, std::string_view path, SFieldProblem& 
 		}
 		else if (!isField)
 		{
-			Fail(problem, JoinPath(path, key), "is not a field of format 1");
+			Fail(problem, JoinPath(path, key), std::format("is not a field of any format up to {}", GameFormat));
 		}
 	}
 }
@@ -362,9 +362,9 @@ bool ReadFormat(JsonValue const& root, SFieldProblem& problem)
 	{
 		Fail(problem, "format", std::format("is {}, which needs a newer Lookout", it->get<uint64_t>()));
 	}
-	else if (!it->is_number_unsigned() || it->get<uint64_t>() != GameFormat)
+	else if (!it->is_number_unsigned() || it->get<uint64_t>() < FirstGameFormat)
 	{
-		Fail(problem, "format", std::format("must be {}", GameFormat));
+		Fail(problem, "format", std::format("must be a whole number from {} to {}", FirstGameFormat, GameFormat));
 	}
 
 	return problem.reason.empty();

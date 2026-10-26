@@ -5,6 +5,6 @@
 
 namespace Lkt::Games
 {
-// Every field of format 1, each object's own fields right after it.
+// Every field, each object's own fields right after it.
 std::span<SGameField const> GetGameFields();
 } // namespace Lkt::Games
