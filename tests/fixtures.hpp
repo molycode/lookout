@@ -2,6 +2,7 @@
 
 #include "query/game.hpp"
 #include "query/game_definition.hpp"
+#include "query/protocol.hpp"
 #include "query/protocol_definition.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -24,4 +25,5 @@ Query::SMasterEndpoint MakeMaster(Query::SGameDefinition const& game, std::strin
 
 // A protocol of lookout-games by its name; an unknown name fails the calling test and stops the run.
 Query::SProtocolDefinition const& GetProtocolByName(std::string_view name);
+Query::EProtocol GetProtocolId(std::string_view name);
 } // namespace Lkt::Fixtures

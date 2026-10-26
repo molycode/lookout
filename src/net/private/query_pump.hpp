@@ -81,7 +81,6 @@ private:
 	void EndServer(SServerRequest const& request, Clock::duration roundTrip, std::expected<Script::SScriptAction, std::string> action);
 	void CloseServer(SServerRequest const& request);
 	void CloseConversations(Query::EGame game);
-	std::expected<void, std::string> StartConversation(SConversationRecord& record);
 	void FinishRefreshes();
 	void ListServers(Query::EGame game, std::span<Query::SServerAddress const> servers);
 	void ReportRefresh(Query::EGame game) const;
@@ -89,6 +88,7 @@ private:
 	void NotifyIfNeeded();
 	SRefreshState& GetRefresh(Query::EGame game);
 	Script::CProtocolScript& GetScript(Query::EGame game);
+	Script::CProtocolScript& GetScript(SMasterId const& master);
 	SRefreshState const& GetRefresh(Query::EGame game) const;
 
 	std::atomic<bool> m_isNotified{ false };
