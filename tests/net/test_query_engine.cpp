@@ -45,7 +45,7 @@ TEST(QueryEngine, AnswersAServerItWasAskedAbout)
 	CQueryEngine engine{};
 
 	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
-	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
+	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, server.GetAddress());
 
@@ -71,7 +71,7 @@ TEST(QueryEngine, SilentServerIsAskedTwiceThenFails)
 	CQueryEngine engine{};
 
 	ASSERT_TRUE(server.Start({}));
-	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
+	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, server.GetAddress());
 
@@ -94,7 +94,7 @@ TEST(QueryEngine, RetrySendsWhatTheConversationStartedWith)
 	CQueryEngine engine{};
 
 	ASSERT_TRUE(server.Start({}));
-	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
+	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, server.GetAddress());
 
@@ -117,7 +117,7 @@ TEST(QueryEngine, RunsAgainAfterARefreshFinished)
 	CQueryEngine engine{};
 
 	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
-	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
+	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, server.GetAddress());
 
@@ -144,7 +144,7 @@ TEST(QueryEngine, TerminateDuringARefreshReturnsPromptly)
 	CQueryEngine engine{};
 
 	ASSERT_TRUE(server.Start({}));
-	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
+	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, server.GetAddress());
 
@@ -168,7 +168,7 @@ TEST(QueryEngine, EachRefreshCarriesALargerIdThanTheOneBefore)
 	CQueryEngine engine{};
 
 	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
-	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
+	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, server.GetAddress());
 
@@ -206,7 +206,7 @@ TEST(QueryEngine, ServerAskedDuringARefreshCarriesThatRefreshsId)
 
 	ASSERT_TRUE(silent.Start({}));
 	ASSERT_TRUE(answering.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
-	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
+	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, silent.GetAddress());
 	engine.RefreshServer(game, answering.GetAddress());
@@ -233,7 +233,7 @@ TEST(QueryEngine, RefreshAfterACancelCarriesTheNewId)
 
 	ASSERT_TRUE(silent.Start({}));
 	ASSERT_TRUE(answering.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
-	ASSERT_TRUE(engine.Initialize(collector.MakeCallback()));
+	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, silent.GetAddress());
 	engine.Cancel(game);

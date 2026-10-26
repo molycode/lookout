@@ -99,7 +99,7 @@ protected:
 	{
 		bool isFinished{ false };
 
-		if (m_engine.Initialize(m_collector.MakeCallback()))
+		if (m_engine.Initialize(Fixtures::GetCatalog(), m_collector.MakeCallback()))
 		{
 			isFinished = true;
 
@@ -266,7 +266,7 @@ TEST_F(CStreamMasterTest, EndedMastersLeaveNoSocketOpen)
 
 	Query::EGame const game{ AddStreamGame(m_master.GetAddress().port) };
 
-	ASSERT_TRUE(m_engine.Initialize(m_collector.MakeCallback()));
+	ASSERT_TRUE(m_engine.Initialize(Fixtures::GetCatalog(), m_collector.MakeCallback()));
 
 	m_engine.Refresh(game, {});
 	EXPECT_TRUE(WaitForConnections(m_master, 1));

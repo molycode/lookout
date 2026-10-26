@@ -14,6 +14,7 @@
 #include "request_scheduler.hpp"
 #include "server_request.hpp"
 #include "udp_socket.hpp"
+#include "net/query_catalog.hpp"
 #include "net/query_event.hpp"
 #include "query/game.hpp"
 #include "query/server_address.hpp"
@@ -46,7 +47,7 @@ public:
 	CQueryPump() = default;
 	~CQueryPump() = default;
 
-	bool Initialize(std::function<void()> onEventsReady);
+	bool Initialize(SQueryCatalog catalog, std::function<void()> onEventsReady);
 	void Terminate();
 
 	void Refresh(Query::EGame game, std::vector<Query::SServerAddress> favourites, uint32_t refreshId);
@@ -90,10 +91,13 @@ private:
 	Script::CProtocolScript& GetScript(Query::EGame game);
 	Script::CProtocolScript& GetScript(SMasterId const& master);
 	SRefreshState const& GetRefresh(Query::EGame game) const;
+	Query::SGameDefinition const& GetGame(Query::EGame game) const;
+	Query::SMasterEndpoint const& GetMaster(SMasterId const& master) const;
 
 	std::atomic<bool> m_isNotified{ false };
 	bool m_hasNewEvents{ false };
 	std::function<void()> m_onEventsReady;
+	SQueryCatalog m_catalog;
 
 	Tge::Threading::CEventLoop m_loop;
 	Tge::Threading::STimerId m_timer;

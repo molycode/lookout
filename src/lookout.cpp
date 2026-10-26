@@ -10,6 +10,7 @@
 #include "games/game_files.hpp"
 #include "games/load_games.hpp"
 #include "launch/launch_environment.hpp"
+#include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include <tge/logging/log_system.hpp>
 #include <tge/module/runtime.hpp>
@@ -171,7 +172,7 @@ bool CLookout::RunList(Query::SGameDefinition const& game)
 	bool hasEvents{ false };
 	bool success{ false };
 
-	bool const isEngineReady{ m_engine.Initialize([&mutex, &wake, &hasEvents]()
+	bool const isEngineReady{ m_engine.Initialize(Net::SQueryCatalog{ Query::GetGameCatalog(), Query::GetProtocolCatalog() }, [&mutex, &wake, &hasEvents]()
 	{
 		{
 			std::lock_guard const lock{ mutex };

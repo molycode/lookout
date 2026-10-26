@@ -106,7 +106,7 @@ protected:
 	{
 		bool isFinished{ false };
 
-		if (m_engine.Initialize(m_collector.MakeCallback()))
+		if (m_engine.Initialize(Fixtures::GetCatalog(), m_collector.MakeCallback()))
 		{
 			if (server.has_value())
 			{
@@ -279,7 +279,7 @@ TEST_F(CConversationTest, EndedConversationsLeaveNoSocketOpen)
 
 	Query::EGame const game{ AddMasterGame("silent-master", { m_master.GetAddress().port }) };
 
-	ASSERT_TRUE(m_engine.Initialize(m_collector.MakeCallback()));
+	ASSERT_TRUE(m_engine.Initialize(Fixtures::GetCatalog(), m_collector.MakeCallback()));
 
 	m_engine.Refresh(game, {});
 	EXPECT_TRUE(WaitForRequests(m_master, 1));

@@ -74,7 +74,7 @@ protected:
 	{
 		bool isFinished{ false };
 
-		if (m_engine.Initialize(m_collector.MakeCallback()))
+		if (m_engine.Initialize(Fixtures::GetCatalog(), m_collector.MakeCallback()))
 		{
 			if (server.has_value())
 			{

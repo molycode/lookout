@@ -1,5 +1,6 @@
 #pragma once
 
+#include "net/query_catalog.hpp"
 #include "net/query_event.hpp"
 #include "query/game.hpp"
 #include "query/server_address.hpp"
@@ -23,7 +24,7 @@ public:
 	CQueryEngine();
 	~CQueryEngine();
 
-	bool Initialize(std::function<void()> onEventsReady);
+	bool Initialize(SQueryCatalog catalog, std::function<void()> onEventsReady);
 	void Terminate();
 
 	uint32_t Refresh(Query::EGame game, std::span<Query::SServerAddress const> favourites);

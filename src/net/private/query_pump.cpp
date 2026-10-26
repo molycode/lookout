@@ -1,6 +1,5 @@
 #include "query_pump.hpp"
 #include "loggers.hpp"
-#include "query/game_catalog.hpp"
 #include "query/master_endpoint.hpp"
 #include "query/protocol_definition.hpp"
 #include <tge/assert.hpp>
@@ -86,12 +85,6 @@ uint64_t ToConversationKey(SMasterId const& master)
 }
 
 //////////////////////////////////////////////////////////////////////////
-Query::SMasterEndpoint const& GetMaster(SMasterId const& master)
-{
-	return Query::GetGame(master.game).masters[master.index];
-}
-
-//////////////////////////////////////////////////////////////////////////
 std::expected<void, std::string> StartConversation(Script::CProtocolScript& script, std::map<std::string, std::string> const& options,
 	SConversationRecord& record)
 {
@@ -131,13 +124,21 @@ void RecordScriptFailure(SRefreshStats& stats, std::string_view failure)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-bool CQueryPump::Initialize(std::function<void()> onEventsReady)
+bool CQueryPump::Initialize(SQueryCatalog catalog, std::function<void()> onEventsReady)
 {
-	m_onEventsReady = std::move(onEventsReady);
-	m_buffer.resize(MaxDatagramSize);
-	m_refreshes.assign(Query::GetGameCatalog().size(), SRefreshState{});
+	TGE_ASSERT(catalog.games.size() < static_cast<size_t>(Query::NoGame), "More games than EGame can number");
+	TGE_ASSERT(std::ranges::all_of(catalog.games, [&catalog](Query::SGameDefinition const& game)
+	{
+		return static_cast<size_t>(game.protocol) < catalog.protocols.size()
+			&& std::ranges::all_of(game.masters, [&catalog](Query::SMasterEndpoint const& master) { return static_cast<size_t>(master.protocol) < catalog.protocols.size(); });
+	}), "A game or a master names a protocol the catalog does not have");
 
-	std::span<Query::SProtocolDefinition const> const protocols{ Query::GetProtocolCatalog() };
+	m_onEventsReady = std::move(onEventsReady);
+	m_catalog = catalog;
+	m_buffer.resize(MaxDatagramSize);
+	m_refreshes.assign(catalog.games.size(), SRefreshState{});
+
+	std::span<Query::SProtocolDefinition const> const protocols{ catalog.protocols };
 	bool areScriptsReady{ true };
 
 	// Each script's state is created here and used only on the LookoutNet thread, which starts after this.
@@ -295,7 +296,7 @@ void CQueryPump::StartRefresh(Query::EGame game, std::span<Query::SServerAddress
 	refresh.generation = generation;
 	refresh.startedAt = now;
 
-	std::span<Query::SMasterEndpoint const> const masters{ Query::GetGame(game).masters };
+	std::span<Query::SMasterEndpoint const> const masters{ GetGame(game).masters };
 	std::vector<Script::EMasterTransport> transports{};
 
 	for (size_t index{ 0 }; index < masters.size(); ++index)
@@ -357,7 +358,7 @@ void CQueryPump::CancelRefresh(Query::EGame game)
 // A literal address needs no lookup, nor the glibc thread a lookup starts.
 void CQueryPump::ResolveMasters(Query::EGame game, uint32_t generation, Clock::time_point now)
 {
-	std::span<Query::SMasterEndpoint const> const masters{ Query::GetGame(game).masters };
+	std::span<Query::SMasterEndpoint const> const masters{ GetGame(game).masters };
 
 	for (size_t index{ 0 }; index < masters.size(); ++index)
 	{
@@ -378,7 +379,7 @@ void CQueryPump::ResolveMasters(Query::EGame game, uint32_t generation, Clock::t
 // Polled, not notified: a notification would run on a glibc thread and race the loop.
 void CQueryPump::Resolve(Query::EGame game, uint32_t generation, size_t index, Clock::time_point now)
 {
-	auto lookup{ std::make_unique<SDnsLookup>(game, generation, index, std::string{ Query::GetGame(game).masters[index].host }) };
+	auto lookup{ std::make_unique<SDnsLookup>(game, generation, index, std::string{ GetGame(game).masters[index].host }) };
 
 	lookup->hints.ai_family = AF_INET;
 	lookup->hints.ai_socktype = SOCK_DGRAM;
@@ -462,7 +463,7 @@ void CQueryPump::UpdateMasters(Clock::time_point now)
 		{
 			if (m_masterWarnings.RecordFailure(outcome.master, outcome.failure))
 			{
-				gLog.Warning("{}: master {} {}", Query::GetGame(outcome.master.game).name, outcome.host, outcome.failure);
+				gLog.Warning("{}: master {} {}", GetGame(outcome.master.game).name, outcome.host, outcome.failure);
 			}
 
 			Emit(SMasterFailed{ outcome.master.game, std::string{ outcome.host }, outcome.failure });
@@ -714,7 +715,7 @@ void CQueryPump::SendDueRequests(Clock::time_point now)
 		if (it == m_serverConversations.end())
 		{
 			it = m_serverConversations.try_emplace(key, SConversationRecord{ request.game, Script::SConversation{ Script::EConversationKind::Server, 0 }, {} }).first;
-			started = StartConversation(GetScript(request.game), Query::GetGame(request.game).protocolOptions, it->second);
+			started = StartConversation(GetScript(request.game), GetGame(request.game).protocolOptions, it->second);
 		}
 
 		if (started.has_value())
@@ -1008,7 +1009,7 @@ void CQueryPump::ReportRefresh(Query::EGame game) const
 {
 	SRefreshState const& refresh{ GetRefresh(game) };
 	SRefreshStats const& stats{ refresh.stats };
-	std::string_view const name{ Query::GetGame(game).name };
+	std::string_view const name{ GetGame(game).name };
 	double const seconds{ std::chrono::duration<double>{ Clock::now() - refresh.startedAt }.count() };
 
 	gLog.Info("{}: {} of {} servers answered in {:.1f} s", name, stats.numAnswered, stats.numListed, seconds);
@@ -1100,12 +1101,24 @@ SRefreshState const& CQueryPump::GetRefresh(Query::EGame game) const
 //////////////////////////////////////////////////////////////////////////
 Script::CProtocolScript& CQueryPump::GetScript(Query::EGame game)
 {
-	return m_scripts[static_cast<size_t>(Query::GetGame(game).protocol)];
+	return m_scripts[static_cast<size_t>(GetGame(game).protocol)];
 }
 
 //////////////////////////////////////////////////////////////////////////
 Script::CProtocolScript& CQueryPump::GetScript(SMasterId const& master)
 {
 	return m_scripts[static_cast<size_t>(GetMaster(master).protocol)];
+}
+
+//////////////////////////////////////////////////////////////////////////
+Query::SGameDefinition const& CQueryPump::GetGame(Query::EGame game) const
+{
+	return m_catalog.games[static_cast<size_t>(game)];
+}
+
+//////////////////////////////////////////////////////////////////////////
+Query::SMasterEndpoint const& CQueryPump::GetMaster(SMasterId const& master) const
+{
+	return GetGame(master.game).masters[master.index];
 }
 } // namespace Lkt::Net

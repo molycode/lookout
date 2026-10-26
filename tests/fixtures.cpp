@@ -128,4 +128,10 @@ Query::EProtocol GetProtocolId(std::string_view name)
 {
 	return static_cast<Query::EProtocol>(&GetProtocolByName(name) - Query::GetProtocolCatalog().data());
 }
+
+//////////////////////////////////////////////////////////////////////////
+Net::SQueryCatalog GetCatalog()
+{
+	return Net::SQueryCatalog{ Query::GetGameCatalog(), Query::GetProtocolCatalog() };
+}
 } // namespace Lkt::Fixtures

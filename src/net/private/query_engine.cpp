@@ -12,13 +12,14 @@ CQueryEngine::CQueryEngine() = default;
 CQueryEngine::~CQueryEngine() = default;
 
 //////////////////////////////////////////////////////////////////////////
-bool CQueryEngine::Initialize(std::function<void()> onEventsReady)
+// The loop's thread reads the catalog without a lock, so it stays as it is until Terminate.
+bool CQueryEngine::Initialize(SQueryCatalog catalog, std::function<void()> onEventsReady)
 {
 	TGE_ASSERT(m_pPump == nullptr, "Initialize twice");
 
 	m_pPump = std::make_unique<CQueryPump>();
 
-	bool const isReady{ m_pPump->Initialize(std::move(onEventsReady)) };
+	bool const isReady{ m_pPump->Initialize(catalog, std::move(onEventsReady)) };
 
 	if (!isReady)
 	{

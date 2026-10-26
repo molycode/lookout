@@ -1,5 +1,6 @@
 #pragma once
 
+#include "net/query_catalog.hpp"
 #include "query/game.hpp"
 #include "query/game_definition.hpp"
 #include "query/protocol.hpp"
@@ -26,4 +27,6 @@ Query::SMasterEndpoint MakeMaster(Query::SGameDefinition const& game, std::strin
 // A protocol of lookout-games by its name; an unknown name fails the calling test and stops the run.
 Query::SProtocolDefinition const& GetProtocolByName(std::string_view name);
 Query::EProtocol GetProtocolId(std::string_view name);
+
+Net::SQueryCatalog GetCatalog();
 } // namespace Lkt::Fixtures

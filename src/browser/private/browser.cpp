@@ -114,7 +114,7 @@ void CBrowser::Initialize(std::string_view configDir, std::string_view logsDir, 
 bool CBrowser::Start(std::function<void()> onEventsReady)
 {
 	m_onEventsReady = std::move(onEventsReady);
-	m_isStarted = m_engine.Initialize(m_onEventsReady);
+	m_isStarted = m_engine.Initialize(Net::SQueryCatalog{ Query::GetGameCatalog(), Query::GetProtocolCatalog() }, m_onEventsReady);
 
 	return m_isStarted;
 }
@@ -554,7 +554,7 @@ void CBrowser::SwapCatalog(std::vector<Query::SProtocolDefinition> protocols, st
 
 	if (wasStarted)
 	{
-		m_isStarted = m_engine.Initialize(m_onEventsReady);
+		m_isStarted = m_engine.Initialize(Net::SQueryCatalog{ Query::GetGameCatalog(), Query::GetProtocolCatalog() }, m_onEventsReady);
 	}
 
 	if (m_isStarted && IsGameSelected() && !m_statuses[GetSelectedIndex()].hasRefreshed)
