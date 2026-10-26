@@ -1,6 +1,6 @@
 #pragma once
 
-#include "form_protocols.hpp"
+#include "form_context.hpp"
 #include "query/protocol_definition.hpp"
 #include <tge/non_copyable.hpp>
 #include <filesystem>
@@ -35,7 +35,7 @@ public:
 	void Refresh();
 	bool Update(Download::CGameDownloads* pDownloads, std::filesystem::path const& userDir, Games::SGameFormNode const& form);
 	std::span<Query::SProtocolDefinition const> GetDefinitions() const;
-	SFormProtocols MakeFormProtocols(Download::CGameDownloads* pDownloads);
+	SFormContext MakeFormContext(Download::CGameDownloads* pDownloads);
 
 private:
 

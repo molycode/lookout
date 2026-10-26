@@ -217,7 +217,7 @@ EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::stri
 				ImGui::BeginChild("##form", ImVec2{ 0.0f, -m_footerHeight }, ImGuiChildFlags_NavFlattened);
 
 				if (DrawGameForm(m_form, m_downloadedForm.has_value() ? &*m_downloadedForm : nullptr, m_problem.has_value() ? &*m_problem : nullptr,
-					m_protocols.MakeFormProtocols(pDownloads)))
+					m_protocols.MakeFormContext(pDownloads)))
 				{
 					Check();
 				}

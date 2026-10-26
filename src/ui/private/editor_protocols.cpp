@@ -81,9 +81,9 @@ std::span<Query::SProtocolDefinition const> CEditorProtocols::GetDefinitions() c
 }
 
 //////////////////////////////////////////////////////////////////////////
-SFormProtocols CEditorProtocols::MakeFormProtocols(Download::CGameDownloads* pDownloads)
+SFormContext CEditorProtocols::MakeFormContext(Download::CGameDownloads* pDownloads)
 {
-	return SFormProtocols{ m_definitions,
+	return SFormContext{ m_definitions,
 		[this, pDownloads](std::string& protocol) { return DrawMoreChoices(protocol, pDownloads); },
 		[this, pDownloads](std::string_view protocol) { DrawAbsent(protocol, pDownloads); } };
 }

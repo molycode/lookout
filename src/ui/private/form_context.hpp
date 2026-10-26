@@ -8,7 +8,7 @@
 
 namespace Lkt::Ui
 {
-struct SFormProtocols final
+struct SFormContext final
 {
 	std::span<Query::SProtocolDefinition const> definitions;
 	std::function<bool(std::string& protocol)> drawMoreChoices;
