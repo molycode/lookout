@@ -5,6 +5,8 @@
 #include "script/protocol_script.hpp"
 #include <cstddef>
 #include <format>
+#include <memory>
+#include <vector>
 
 namespace Lkt::Games
 {
@@ -17,10 +19,14 @@ std::expected<void, SFieldProblem> CheckGameText(std::string_view text, std::spa
 	if (game.has_value())
 	{
 		Query::SProtocolDefinition const& protocol{ protocols[static_cast<size_t>(game->protocol)] };
-		Script::CProtocolScript script{};
-		std::expected<void, std::string> const loaded{ script.Initialize(protocol.name, protocol.source) };
+		std::vector<std::unique_ptr<Script::CProtocolScript>> scripts(protocols.size());
+		std::unique_ptr<Script::CProtocolScript>& pScript{ scripts[static_cast<size_t>(game->protocol)] };
 
-		std::expected<void, std::string> const tried{ loaded.has_value() ? TryConversations(script, game->protocolOptions)
+		pScript = std::make_unique<Script::CProtocolScript>();
+
+		std::expected<void, std::string> const loaded{ pScript->Initialize(protocol.name, protocol.source) };
+
+		std::expected<void, std::string> const tried{ loaded.has_value() ? TryConversations(*game, scripts)
 			: std::expected<void, std::string>{ std::unexpected{ std::format("the {} protocol cannot be loaded: {}", protocol.name, loaded.error()) } } };
 
 		if (!tried.has_value())
@@ -28,7 +34,7 @@ std::expected<void, SFieldProblem> CheckGameText(std::string_view text, std::spa
 			result = std::unexpected{ SFieldProblem{ {}, tried.error() } };
 		}
 
-		script.Terminate();
+		pScript->Terminate();
 	}
 	else
 	{

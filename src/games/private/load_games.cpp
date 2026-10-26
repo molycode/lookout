@@ -222,7 +222,7 @@ std::expected<Query::SGameDefinition, std::string> ReadGame(std::string_view key
 
 	if (game.has_value())
 	{
-		std::expected<void, std::string> const tried{ TryConversations(*scripts[static_cast<size_t>(game->protocol)], game->protocolOptions) };
+		std::expected<void, std::string> const tried{ TryConversations(*game, scripts) };
 
 		if (tried.has_value())
 		{
