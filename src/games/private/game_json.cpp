@@ -277,7 +277,7 @@ void ReadName(JsonValue const& object, std::string_view parent, std::string_view
 }
 
 //////////////////////////////////////////////////////////////////////////
-JsonValue const* FindObject(JsonValue const& object, std::string_view key, bool isRequired, SFieldProblem& problem)
+JsonValue const* FindObject(JsonValue const& object, std::string_view parent, std::string_view key, bool isRequired, SFieldProblem& problem)
 {
 	JsonValue const* pFound{ nullptr };
 	JsonValue::const_iterator const it{ object.find(key) };
@@ -288,11 +288,11 @@ JsonValue const* FindObject(JsonValue const& object, std::string_view key, bool 
 	}
 	else if (it != object.cend())
 	{
-		Fail(problem, key, "must be an object");
+		Fail(problem, JoinPath(parent, key), "must be an object");
 	}
 	else if (isRequired)
 	{
-		Fail(problem, key, "is missing");
+		Fail(problem, JoinPath(parent, key), "is missing");
 	}
 
 	return pFound;
@@ -399,7 +399,7 @@ void ReadMasters(JsonValue const& root, Query::SGameDefinition& game, SFieldProb
 //////////////////////////////////////////////////////////////////////////
 void ReadKeys(JsonValue const& root, Query::SServerKeys& keys, SFieldProblem& problem)
 {
-	JsonValue const* const pKeys{ FindObject(root, "keys", true, problem) };
+	JsonValue const* const pKeys{ FindObject(root, {}, "keys", true, problem) };
 
 	if (pKeys != nullptr)
 	{
@@ -463,7 +463,7 @@ void ReadForeignServers(JsonValue const& root, std::vector<Query::SKeyMatch>& ma
 // All or nothing: an install folder without its program would be probed and rejected on every start.
 void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, SFieldProblem& problem)
 {
-	JsonValue const* const pLaunch{ FindObject(root, "launch", false, problem) };
+	JsonValue const* const pLaunch{ FindObject(root, {}, "launch", false, problem) };
 
 	if (pLaunch != nullptr)
 	{
@@ -612,7 +612,7 @@ void ReadColourCodes(JsonValue const& text, Query::STextStyle& style, SFieldProb
 //////////////////////////////////////////////////////////////////////////
 void ReadText(JsonValue const& root, Query::STextStyle& style, SFieldProblem& problem)
 {
-	JsonValue const* const pText{ FindObject(root, "text", true, problem) };
+	JsonValue const* const pText{ FindObject(root, {}, "text", true, problem) };
 
 	if (pText != nullptr)
 	{
@@ -699,7 +699,7 @@ void ReadPasswordRules(JsonValue const& join, Query::SPasswordRules& rules, SFie
 //////////////////////////////////////////////////////////////////////////
 void ReadJoin(JsonValue const& root, Query::SJoinCommand& join, SFieldProblem& problem)
 {
-	JsonValue const* const pJoin{ FindObject(root, "join", true, problem) };
+	JsonValue const* const pJoin{ FindObject(root, {}, "join", true, problem) };
 
 	if (pJoin != nullptr)
 	{
@@ -714,13 +714,13 @@ void ReadJoin(JsonValue const& root, Query::SJoinCommand& join, SFieldProblem& p
 
 //////////////////////////////////////////////////////////////////////////
 // Null, with the problem set, when the protocol is not one of the loaded scripts.
-Query::SProtocolDefinition const* ReadProtocol(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::EProtocol& protocol,
-	SFieldProblem& problem)
+Query::SProtocolDefinition const* ReadProtocol(JsonValue const& object, std::string_view parent, std::span<Query::SProtocolDefinition const> protocols,
+	Query::EProtocol& protocol, SFieldProblem& problem)
 {
 	Query::SProtocolDefinition const* pFound{ nullptr };
 	std::string name{};
 
-	ReadRequiredString(root, {}, "protocol", name, problem);
+	ReadRequiredString(object, parent, "protocol", name, problem);
 
 	auto const it{ std::ranges::find(protocols, name, &Query::SProtocolDefinition::name) };
 
@@ -738,7 +738,7 @@ Query::SProtocolDefinition const* ReadProtocol(JsonValue const& root, std::span<
 			known += std::format("{}{}", known.empty() ? "" : ", ", candidate.name);
 		}
 
-		Fail(problem, "protocol", std::format("'{}' is not one of {}", name, known));
+		Fail(problem, JoinPath(parent, "protocol"), std::format("'{}' is not one of {}", name, known));
 	}
 
 	return pFound;
@@ -747,20 +747,21 @@ Query::SProtocolDefinition const* ReadProtocol(JsonValue const& root, std::span<
 //////////////////////////////////////////////////////////////////////////
 // Checked against what the script declares, so a game cannot pass an option its protocol never reads, or leave out one
 // it needs.
-void ReadProtocolOptions(JsonValue const& root, Query::SProtocolDefinition const& protocol, std::map<std::string, std::string>& options,
-	SFieldProblem& problem)
+void ReadProtocolOptions(JsonValue const& object, std::string_view parent, Query::SProtocolDefinition const& protocol,
+	std::map<std::string, std::string>& options, SFieldProblem& problem)
 {
-	JsonValue const* const pOptions{ FindObject(root, "protocolOptions", false, problem) };
+	std::string const optionsPath{ JoinPath(parent, "protocolOptions") };
+	JsonValue const* const pOptions{ FindObject(object, parent, "protocolOptions", false, problem) };
 
 	if (pOptions != nullptr)
 	{
 		for (auto const& item : pOptions->items())
 		{
-			std::string const path{ JoinPath("protocolOptions", item.key()) };
+			std::string const path{ JoinPath(optionsPath, item.key()) };
 
 			if (IsComment(item.key()))
 			{
-				CheckComment(*pOptions, "protocolOptions", item.key(), item.value(), problem);
+				CheckComment(*pOptions, optionsPath, item.key(), item.value(), problem);
 			}
 			else if (std::ranges::contains(protocol.options, item.key(), &Query::SProtocolOption::name))
 			{
@@ -777,17 +778,17 @@ void ReadProtocolOptions(JsonValue const& root, Query::SProtocolDefinition const
 	{
 		if (option.isRequired && !options.contains(option.name))
 		{
-			Fail(problem, JoinPath("protocolOptions", option.name), std::format("is missing; the {} protocol requires it", protocol.name));
+			Fail(problem, JoinPath(optionsPath, option.name), std::format("is missing; the {} protocol requires it", protocol.name));
 		}
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadQueryPortOffset(JsonValue const& root, int32_t& offset, SFieldProblem& problem)
+void ReadPortOffset(JsonValue const& object, std::string_view parent, std::string_view key, int32_t& offset, SFieldProblem& problem)
 {
-	JsonValue::const_iterator const it{ root.find("queryPortOffset") };
+	JsonValue::const_iterator const it{ object.find(key) };
 
-	if (it != root.cend())
+	if (it != object.cend())
 	{
 		bool const isValid{ (it->is_number_unsigned() && it->get<uint64_t>() <= static_cast<uint64_t>(MaxPortOffset))
 			|| (it->is_number_integer() && !it->is_number_unsigned() && it->get<int64_t>() >= -MaxPortOffset) };
@@ -798,7 +799,7 @@ void ReadQueryPortOffset(JsonValue const& root, int32_t& offset, SFieldProblem& 
 		}
 		else
 		{
-			Fail(problem, "queryPortOffset", std::format("must be a whole number from {} to {}", -MaxPortOffset, MaxPortOffset));
+			Fail(problem, JoinPath(parent, key), std::format("must be a whole number from {} to {}", -MaxPortOffset, MaxPortOffset));
 		}
 	}
 }
@@ -809,14 +810,14 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 	CheckFields(root, {}, problem);
 	ReadRequiredString(root, {}, "name", game.name, problem);
 
-	Query::SProtocolDefinition const* const pProtocol{ ReadProtocol(root, protocols, game.protocol, problem) };
+	Query::SProtocolDefinition const* const pProtocol{ ReadProtocol(root, {}, protocols, game.protocol, problem) };
 
 	if (pProtocol != nullptr)
 	{
-		ReadProtocolOptions(root, *pProtocol, game.protocolOptions, problem);
+		ReadProtocolOptions(root, {}, *pProtocol, game.protocolOptions, problem);
 	}
 
-	ReadQueryPortOffset(root, game.queryPortOffset, problem);
+	ReadPortOffset(root, {}, "queryPortOffset", game.queryPortOffset, problem);
 	ReadMasters(root, game, problem);
 	ReadKeys(root, game.keys, problem);
 	ReadModes(root, game.modes, problem);
