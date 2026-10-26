@@ -185,5 +185,19 @@ TEST_F(CMasterProtocolTest, ListedPortShiftedOutOfRangeIsNotAsked)
 	EXPECT_TRUE(Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()).empty());
 	EXPECT_TRUE(GetListed().empty());
 }
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterProtocolTest, GameFileNamingAMastersProtocolListsThroughIt)
+{
+	ASSERT_TRUE(StartStatusServer());
+	ASSERT_TRUE(StartGamespyMaster(GetGamespyAddress()));
+
+	Query::SServerAddress const status{ m_status.GetAddress() };
+	std::array<uint16_t, 1> const masterPorts{ m_gamespyMaster.GetAddress().port };
+
+	ASSERT_TRUE(Run(AddGameFile("kingpin-gamespy", masterPorts)));
+	EXPECT_TRUE(Fixtures::CollectEvents<SMasterFailed>(m_collector.GetEvents()).empty());
+	EXPECT_EQ(GetListed(), std::vector<Query::SServerAddress>{ status });
+}
 } // namespace
 } // namespace Lkt::Net

@@ -221,7 +221,7 @@ void ReadNotes(JsonValue const& object, std::string_view path, SGameFormNode& no
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, SGameFormNode& node, std::string& problem);
+void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, uint64_t format, SGameFormNode& node, std::string& problem);
 
 //////////////////////////////////////////////////////////////////////////
 void ReadOptions(JsonValue const& object, std::string_view path, SGameFormNode& node, std::string& problem)
@@ -242,7 +242,7 @@ void ReadOptions(JsonValue const& object, std::string_view path, SGameFormNode& 
 }
 
 //////////////////////////////////////////////////////////////////////////
-SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::string_view path, std::string& problem)
+SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::string_view path, uint64_t format, std::string& problem)
 {
 	SGameFormNode node{};
 
@@ -285,7 +285,7 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 		case EGameFieldKind::Group:
 			if (value.is_object())
 			{
-				ReadFields(value, ToSchemaPath(field), path, node, problem);
+				ReadFields(value, ToSchemaPath(field), path, format, node, problem);
 			}
 			else
 			{
@@ -307,7 +307,7 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 
 					if (entry.is_object())
 					{
-						ReadFields(entry, ToSchemaPath(field), entryPath, item, problem);
+						ReadFields(entry, ToSchemaPath(field), entryPath, format, item, problem);
 					}
 					else
 					{
@@ -341,16 +341,20 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 
 //////////////////////////////////////////////////////////////////////////
 // In the file's order, so a description written back unchanged makes no patch; the fields it lacks follow.
-void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, SGameFormNode& node, std::string& problem)
+void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, uint64_t format, SGameFormNode& node, std::string& problem)
 {
 	for (auto const& item : object.items())
 	{
 		std::string_view const key{ item.key() };
 		SGameField const* const pField{ FindField(schemaParent, key) };
 
-		if (pField != nullptr)
+		if (pField != nullptr && pField->firstFormat > format)
 		{
-			node.children.emplace_back(ReadField(item.value(), *pField, JoinPath(path, key), problem));
+			Fail(problem, JoinPath(path, key), std::format("is a field of format {}; this file is format {}", pField->firstFormat, format));
+		}
+		else if (pField != nullptr)
+		{
+			node.children.emplace_back(ReadField(item.value(), *pField, JoinPath(path, key), format, problem));
 		}
 		else if (!key.starts_with(CommentPrefix))
 		{
@@ -522,6 +526,16 @@ JsonValue WriteFields(SGameFormNode const& node, std::string_view schemaParent, 
 
 	return object;
 }
+
+//////////////////////////////////////////////////////////////////////////
+// A format the file cannot have is the format field's own problem, so its fields are read as this Lookout's newest.
+uint64_t ReadDeclaredFormat(JsonValue const& root)
+{
+	JsonValue::const_iterator const it{ root.find("format") };
+	bool const isFormat{ it != root.cend() && it->is_number_unsigned() && it->get<uint64_t>() >= FirstGameFormat && it->get<uint64_t>() <= GameFormat };
+
+	return isFormat ? it->get<uint64_t>() : GameFormat;
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
@@ -543,7 +557,7 @@ std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text)
 	}
 	else
 	{
-		ReadFields(root, {}, {}, form, problem);
+		ReadFields(root, {}, {}, ReadDeclaredFormat(root), form, problem);
 	}
 
 	std::expected<SGameFormNode, std::string> result{ std::move(form) };

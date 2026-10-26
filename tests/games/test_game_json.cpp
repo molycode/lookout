@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <expected>
 #include <format>
+#include <map>
+#include <string_view>
 #include <string>
 #include <vector>
 
@@ -37,6 +39,18 @@ JsonValue MakeMinimalGame()
 		"join": { "arguments": [ "+connect", "{address}" ], "passwordArguments": [ "+password", "{password}", "+connect", "{address}" ],
 			"password": { "maxLength": 63 } }
 	})json");
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Format 2, its one master given these fields too.
+JsonValue MakeGameWithMaster(std::string_view fields)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["format"] = 2;
+	game["masters"][0].update(JsonValue::parse(fields));
+
+	return game;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -501,6 +515,98 @@ TEST(GameJson, QueryPortOffsetOutsideItsRangeIsRejected)
 
 		EXPECT_TRUE(ReadProblem(game).starts_with("queryPortOffset:")) << offset.dump();
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, MasterWithoutAProtocolListsThroughTheGames)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["protocol"] = "quake3";
+	game["protocolOptions"] = { { "masterQuery", "68 empty full" } };
+
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->masters[0].protocol, read->protocol);
+	EXPECT_EQ(read->masters[0].protocolOptions, read->protocolOptions);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, MasterNamesItsOwnProtocol)
+{
+	JsonValue const game = MakeGameWithMaster(R"json({ "protocol": "quake3", "protocolOptions": { "masterQuery": "68 empty full" } })json");
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->masters[0].protocol, Query::EProtocol{ 1 });
+	EXPECT_EQ(read->masters[0].protocolOptions, (std::map<std::string, std::string>{ { "masterQuery", "68 empty full" } }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, MasterNamingItsProtocolTakesNoneOfTheGamesOptions)
+{
+	JsonValue game = MakeGameWithMaster(R"json({ "protocol": "quake2" })json");
+
+	game["protocol"] = "quake3";
+	game["protocolOptions"] = { { "masterQuery", "68 empty full" } };
+
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_TRUE(read->masters[0].protocolOptions.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, MasterOptionsWithoutAProtocolAreRejected)
+{
+	EXPECT_EQ(ReadProblem(MakeGameWithMaster(R"json({ "protocolOptions": { "masterQuery": "68" } })json")),
+		"masters[0].protocolOptions: is only for a master that names its protocol");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, MasterOptionItsProtocolDoesNotDeclareIsRejected)
+{
+	EXPECT_EQ(ReadProblem(MakeGameWithMaster(R"json({ "protocol": "quake2", "protocolOptions": { "masterQuery": "68" } })json")),
+		"masters[0].protocolOptions.masterQuery: is not an option of the quake2 protocol");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, MasterProtocolsRequiredOptionIsRequired)
+{
+	EXPECT_EQ(ReadProblem(MakeGameWithMaster(R"json({ "protocol": "quake3" })json")),
+		"masters[0].protocolOptions.masterQuery: is missing; the quake3 protocol requires it");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, UnknownMasterProtocolIsRejected)
+{
+	EXPECT_EQ(ReadProblem(MakeGameWithMaster(R"json({ "protocol": "gamespy9" })json")), "masters[0].protocol: 'gamespy9' is not one of quake2, quake3");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, MasterPortOffsetIsRead)
+{
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(MakeGameWithMaster(R"json({ "portOffset": 10 })json").dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->masters[0].portOffset, 10);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, MasterPortOffsetOutsideItsRangeIsRejected)
+{
+	EXPECT_EQ(ReadProblem(MakeGameWithMaster(R"json({ "portOffset": 65535 })json")), "masters[0].portOffset: must be a whole number from -65534 to 65534");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FieldOfALaterFormatIsRejectedInAnEarlierOne)
+{
+	JsonValue game = MakeGameWithMaster(R"json({ "portOffset": 10 })json");
+
+	game["format"] = 1;
+
+	EXPECT_EQ(ReadProblem(game), "masters[0].portOffset: is a field of format 2; this file is format 1");
 }
 } // namespace
 } // namespace Lkt::Games

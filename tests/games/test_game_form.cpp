@@ -254,5 +254,40 @@ TEST(GameForm, FormatTwoFileWithOnlyFormatOneFieldsIsWrittenAsFormatOne)
 
 	EXPECT_EQ(JsonValue::parse(WriteGameForm(ReadForm(game.dump())))["format"], 1);
 }
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, MasterWithItsOwnProtocolIsWrittenAsFormatTwo)
+{
+	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+
+	GetFormField(GetFormField(form, "masters").children.front(), "protocol").text = "gamespy1";
+
+	EXPECT_EQ(JsonValue::parse(WriteGameForm(form))["format"], 2);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, MasterWithItsOwnProtocolMakesAFormatTwoPatch)
+{
+	std::string const text{ ReadDownloaded("kingpin") };
+	SGameFormNode form{ ReadForm(text) };
+
+	GetFormField(GetFormField(form, "masters").children.front(), "protocol").text = "gamespy1";
+
+	std::expected<std::optional<std::string>, std::string> const patch{ MakePatch(text, WriteGameForm(form)) };
+
+	ASSERT_TRUE(patch.has_value() && patch->has_value());
+
+	JsonValue const written = JsonValue::parse(**patch);
+
+	EXPECT_EQ(written["format"], 2);
+	EXPECT_EQ(written["masters"][0]["protocol"], "gamespy1");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, FieldOfALaterFormatCannotBeShownInAnEarlierOne)
+{
+	EXPECT_EQ(ProblemOf(R"json({ "format": 1, "masters": [ { "host": "master.example", "port": 28900, "portOffset": 10 } ] })json"),
+		"masters[0].portOffset: is a field of format 2; this file is format 1");
+}
 } // namespace
 } // namespace Lkt::Games

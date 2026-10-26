@@ -1,4 +1,5 @@
 #include "fixtures.hpp"
+#include "script/script_fixture.hpp"
 #include "games/check_game.hpp"
 #include "games/game_files.hpp"
 #include "games/load_games.hpp"
@@ -12,9 +13,11 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 namespace Lkt::Games
 {
@@ -369,6 +372,25 @@ TEST(GameFiles, CheckNamesAnUnknownProtocol)
 	ASSERT_FALSE(checked.has_value());
 	EXPECT_EQ(checked.error().path, "protocol");
 	EXPECT_TRUE(checked.error().reason.starts_with("'mine' is not one of ")) << checked.error().reason;
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameFiles, CheckNamesTheMasterWhoseProtocolCannotListIt)
+{
+	std::span<Query::SProtocolDefinition const> const catalog{ Query::GetProtocolCatalog() };
+	std::vector<Query::SProtocolDefinition> protocols{ catalog.begin(), catalog.end() };
+	std::string game{ UserGame };
+
+	protocols.emplace_back("broken", Fixtures::MakeScript(R"lua(protocol.master.start = function() error("no list here") end)lua"),
+		std::vector<Query::SProtocolOption>{});
+	game.replace(game.find("\"format\": 1"), 11, "\"format\": 2");
+	game.replace(game.find("\"port\": 27900 }"), 15, "\"port\": 27900, \"protocol\": \"broken\" }");
+
+	std::expected<void, SFieldProblem> const checked{ CheckGameText(game, protocols) };
+
+	ASSERT_FALSE(checked.has_value());
+	EXPECT_EQ(checked.error().path, "masters[0]");
+	EXPECT_TRUE(checked.error().reason.contains("no list here")) << checked.error().reason;
 }
 } // namespace
 } // namespace Lkt::Games

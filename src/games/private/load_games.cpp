@@ -4,6 +4,7 @@
 #include "merge_patch.hpp"
 #include "try_conversations.hpp"
 #include "user_file_size.hpp"
+#include "games/field_problem.hpp"
 #include "games/game_files.hpp"
 #include "json/files.hpp"
 #include "script/protocol_script.hpp"
@@ -222,7 +223,7 @@ std::expected<Query::SGameDefinition, std::string> ReadGame(std::string_view key
 
 	if (game.has_value())
 	{
-		std::expected<void, std::string> const tried{ TryConversations(*game, scripts) };
+		std::expected<void, SFieldProblem> const tried{ TryConversations(*game, scripts) };
 
 		if (tried.has_value())
 		{
@@ -231,7 +232,7 @@ std::expected<Query::SGameDefinition, std::string> ReadGame(std::string_view key
 		}
 		else
 		{
-			game = std::unexpected{ tried.error() };
+			game = std::unexpected{ tried.error().path.empty() ? tried.error().reason : std::format("{}: {}", tried.error().path, tried.error().reason) };
 		}
 	}
 

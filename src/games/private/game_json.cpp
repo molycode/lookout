@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <format>
 #include <map>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -38,7 +39,7 @@ constexpr std::array<std::string_view, 3> ColourCodeNames{ "alphanumeric", "prin
 
 using enum EGameFieldKind;
 
-constexpr std::array<SGameField, 41> Fields{ {
+constexpr std::array<SGameField, 44> Fields{ {
 	{ "", "format", "Format", Version, true, {}, "The version of this format, 1 or 2: the lowest that has every field the file uses." },
 	{ "", "name", "Name", Text, true, {}, "The game's name in the game list." },
 	{ "", "protocol", "Protocol", Protocol, true, {}, "The protocol script that queries the game's masters and servers, by name." },
@@ -49,6 +50,12 @@ constexpr std::array<SGameField, 41> Fields{ {
 	{ "", "masters", "Masters", GroupList, true, {}, "The master servers that list the game's servers; at least one." },
 	{ "masters[]", "host", "Host", Text, true, {}, "The master's host name or IP address." },
 	{ "masters[]", "port", "Port", Number, true, {}, "The master's port, 1 to 65535." },
+	{ "masters[]", "protocol", "Protocol", Protocol, false, {},
+		"Optional: the protocol script that reads this master's list, by name; without it, the game's protocol and options.", 2 },
+	{ "masters[]", "protocolOptions", "Protocol options", ProtocolOptions, false, {},
+		"The options of the master's own protocol, each a string; optional unless that protocol requires one.", 2 },
+	{ "masters[]", "portOffset", "Port offset", Number, false, {},
+		"Optional: added to each port this master lists, for a master that lists another port than the game's protocol asks.", 2 },
 	{ "", "keys", "Server rules", Group, true, {}, "Which of a server's rules hold what the list shows." },
 	{ "keys", "hostname", "Name rule", Text, true, {}, "The rule holding the server's name." },
 	{ "keys", "map", "Map rule", Text, true, {}, "The rule holding the map." },
@@ -350,9 +357,10 @@ void ReadPort(JsonValue const& object, std::string_view parent, uint16_t& port, 
 
 //////////////////////////////////////////////////////////////////////////
 // Read before anything else: a newer format's fields would otherwise only be reported as unknown.
-bool ReadFormat(JsonValue const& root, SFieldProblem& problem)
+std::optional<uint64_t> ReadFormat(JsonValue const& root, SFieldProblem& problem)
 {
 	JsonValue::const_iterator const it{ root.find("format") };
+	std::optional<uint64_t> format{};
 
 	if (it == root.cend())
 	{
@@ -366,35 +374,50 @@ bool ReadFormat(JsonValue const& root, SFieldProblem& problem)
 	{
 		Fail(problem, "format", std::format("must be a whole number from {} to {}", FirstGameFormat, GameFormat));
 	}
+	else
+	{
+		format = it->get<uint64_t>();
+	}
 
-	return problem.reason.empty();
+	return format;
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadMasters(JsonValue const& root, Query::SGameDefinition& game, SFieldProblem& problem)
+// An older Lookout would refuse the field without knowing why, while the format tells it the game needs a newer one.
+void CheckFieldFormats(JsonValue const& object, std::string_view path, uint64_t format, SFieldProblem& problem)
 {
-	JsonValue::const_iterator const it{ root.find("masters") };
+	std::string const parent{ ToParent(path) };
 
-	if (it != root.cend())
+	for (auto const& item : object.items())
 	{
-		ReadObjects(*it, "masters", problem, [&game, &problem](JsonValue const& object, std::string_view path)
+		std::string const itemPath{ JoinPath(path, item.key()) };
+		auto const field{ std::ranges::find_if(Fields, [&parent, &item](SGameField const& candidate)
 		{
-			Query::SMasterEndpoint& master{ game.masters.emplace_back() };
+			return candidate.parent == parent && candidate.name == item.key();
+		}) };
 
-			ReadRequiredString(object, path, "host", master.host, problem);
-			ReadPort(object, path, master.port, problem);
-			master.protocol = game.protocol;
-			master.protocolOptions = game.protocolOptions;
-		});
-
-		if (game.masters.empty())
+		if (field != Fields.end() && field->firstFormat > format)
 		{
-			Fail(problem, "masters", "must list at least one master");
+			Fail(problem, itemPath, std::format("is a field of format {}; this file is format {}", field->firstFormat, format));
 		}
-	}
-	else
-	{
-		Fail(problem, "masters", "is missing");
+		else if (field != Fields.end() && field->kind == EGameFieldKind::Group && item.value().is_object())
+		{
+			CheckFieldFormats(item.value(), itemPath, format, problem);
+		}
+		else if (field != Fields.end() && field->kind == EGameFieldKind::GroupList && item.value().is_array())
+		{
+			size_t index{ 0 };
+
+			for (JsonValue const& element : item.value())
+			{
+				if (element.is_object())
+				{
+					CheckFieldFormats(element, std::format("{}[{}]", itemPath, index), format, problem);
+				}
+
+				++index;
+			}
+		}
 	}
 }
 
@@ -807,6 +830,59 @@ void ReadPortOffset(JsonValue const& object, std::string_view parent, std::strin
 }
 
 //////////////////////////////////////////////////////////////////////////
+// A master that names no protocol lists through the game's, with the game's options.
+void ReadMasterProtocol(JsonValue const& object, std::string_view path, std::span<Query::SProtocolDefinition const> protocols,
+	Query::SGameDefinition const& game, Query::SMasterEndpoint& master, SFieldProblem& problem)
+{
+	if (object.contains("protocol"))
+	{
+		Query::SProtocolDefinition const* const pProtocol{ ReadProtocol(object, path, protocols, master.protocol, problem) };
+
+		if (pProtocol != nullptr)
+		{
+			ReadProtocolOptions(object, path, *pProtocol, master.protocolOptions, problem);
+		}
+	}
+	else if (object.contains("protocolOptions"))
+	{
+		Fail(problem, JoinPath(path, "protocolOptions"), "is only for a master that names its protocol");
+	}
+	else
+	{
+		master.protocol = game.protocol;
+		master.protocolOptions = game.protocolOptions;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadMasters(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::SGameDefinition& game, SFieldProblem& problem)
+{
+	JsonValue::const_iterator const it{ root.find("masters") };
+
+	if (it != root.cend())
+	{
+		ReadObjects(*it, "masters", problem, [protocols, &game, &problem](JsonValue const& object, std::string_view path)
+		{
+			Query::SMasterEndpoint& master{ game.masters.emplace_back() };
+
+			ReadRequiredString(object, path, "host", master.host, problem);
+			ReadPort(object, path, master.port, problem);
+			ReadMasterProtocol(object, path, protocols, game, master, problem);
+			ReadPortOffset(object, path, "portOffset", master.portOffset, problem);
+		});
+
+		if (game.masters.empty())
+		{
+			Fail(problem, "masters", "must list at least one master");
+		}
+	}
+	else
+	{
+		Fail(problem, "masters", "is missing");
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::SGameDefinition& game, SFieldProblem& problem)
 {
 	CheckFields(root, {}, problem);
@@ -820,7 +896,7 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 	}
 
 	ReadPortOffset(root, {}, "queryPortOffset", game.queryPortOffset, problem);
-	ReadMasters(root, game, problem);
+	ReadMasters(root, protocols, game, problem);
 	ReadKeys(root, game.keys, problem);
 	ReadModes(root, game.modes, problem);
 	ReadForeignServers(root, game.foreignServers, problem);
@@ -851,8 +927,9 @@ std::expected<Query::SGameDefinition, SFieldProblem> ReadGameFields(std::string_
 	{
 		problem.reason = "it must hold a JSON object";
 	}
-	else if (ReadFormat(root, problem))
+	else if (std::optional<uint64_t> const format{ ReadFormat(root, problem) }; format.has_value())
 	{
+		CheckFieldFormats(root, {}, *format, problem);
 		ReadGame(root, protocols, game, problem);
 	}
 
