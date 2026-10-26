@@ -4,6 +4,7 @@
 #include "query/game_definition.hpp"
 #include "query/protocol_definition.hpp"
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <string_view>
 #include <vector>
@@ -19,6 +20,7 @@ std::vector<std::byte> ToBytes(std::string_view text);
 // A game of lookout-games by its key; an unknown key fails the calling test and stops the run.
 Query::SGameDefinition const& GetGameByKey(std::string_view key);
 Query::EGame GetGameId(std::string_view key);
+Query::SMasterEndpoint MakeMaster(Query::SGameDefinition const& game, std::string_view host, uint16_t port);
 
 // A protocol of lookout-games by its name; an unknown name fails the calling test and stops the run.
 Query::SProtocolDefinition const& GetProtocolByName(std::string_view name);

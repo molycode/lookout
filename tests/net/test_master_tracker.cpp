@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <array>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace Lkt::Net
@@ -22,6 +23,17 @@ constexpr std::array BothOverUdp{ Script::EMasterTransport::Udp, Script::EMaster
 constexpr std::array OverTcp{ Script::EMasterTransport::Tcp };
 
 //////////////////////////////////////////////////////////////////////////
+Query::SMasterEndpoint MakeMaster(std::string_view host)
+{
+	Query::SMasterEndpoint master{};
+
+	master.host = host;
+	master.port = 27900;
+
+	return master;
+}
+
+//////////////////////////////////////////////////////////////////////////
 // The tracker keeps views of the master hosts, so the lists live as long as each test.
 class CMasterTrackerTest : public testing::Test
 {
@@ -30,8 +42,8 @@ protected:
 	// testing::Test
 	void SetUp() override
 	{
-		m_masters = { Query::SMasterEndpoint{ "master.example", 27900 } };
-		m_twoMasters = { Query::SMasterEndpoint{ "one.example", 27900 }, Query::SMasterEndpoint{ "two.example", 27900 } };
+		m_masters = { MakeMaster("master.example") };
+		m_twoMasters = { MakeMaster("one.example"), MakeMaster("two.example") };
 	}
 	// ~testing::Test
 

@@ -383,6 +383,8 @@ void ReadMasters(JsonValue const& root, Query::SGameDefinition& game, SFieldProb
 
 			ReadRequiredString(object, path, "host", master.host, problem);
 			ReadPort(object, path, master.port, problem);
+			master.protocol = game.protocol;
+			master.protocolOptions = game.protocolOptions;
 		});
 
 		if (game.masters.empty())

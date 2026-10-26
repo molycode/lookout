@@ -40,7 +40,7 @@ protected:
 		Query::SGameDefinition game{ GetUt2004Game() };
 
 		game.key = "ut2004-loopback";
-		game.masters = { Query::SMasterEndpoint{ "127.0.0.1", masterPort } };
+		game.masters = { Fixtures::MakeMaster(game, "127.0.0.1", masterPort) };
 
 		return AddGame(std::move(game));
 	}

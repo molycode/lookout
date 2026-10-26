@@ -451,7 +451,8 @@ protected:
 		{
 			for (Query::SMasterEndpoint& master : game.masters)
 			{
-				master = Query::SMasterEndpoint{ "127.0.0.1", 1 };
+				master.host = "127.0.0.1";
+				master.port = 1;
 			}
 		}
 
@@ -490,6 +491,52 @@ protected:
 		protocol.downloadedVersion = 9041;
 
 		return protocols;
+	}
+
+	std::vector<Query::SProtocolDefinition> ChangeProtocolSource(std::string_view name) const
+	{
+		std::vector<Query::SProtocolDefinition> protocols{ m_protocols };
+
+		std::ranges::find(protocols, name, &Query::SProtocolDefinition::name)->source += "\n";
+
+		return protocols;
+	}
+
+	std::vector<Query::SGameDefinition> ListThroughGamespy1(std::string_view key) const
+	{
+		std::vector<Query::SGameDefinition> games{ m_games };
+		auto const gamespy1{ std::ranges::find(m_protocols, "gamespy1", &Query::SProtocolDefinition::name) };
+
+		for (Query::SMasterEndpoint& master : std::ranges::find(games, key, &Query::SGameDefinition::key)->masters)
+		{
+			master.protocol = static_cast<Query::EProtocol>(gamespy1 - m_protocols.begin());
+			master.protocolOptions = { { "masterGame", "kingpin" } };
+		}
+
+		return games;
+	}
+
+	std::vector<Query::SProtocolDefinition> ReverseProtocols() const
+	{
+		return std::vector<Query::SProtocolDefinition>{ m_protocols.rbegin(), m_protocols.rend() };
+	}
+
+	std::vector<Query::SGameDefinition> FollowReversedProtocols() const
+	{
+		std::vector<Query::SGameDefinition> games{ m_games };
+		size_t const last{ m_protocols.size() - 1 };
+
+		for (Query::SGameDefinition& game : games)
+		{
+			game.protocol = static_cast<Query::EProtocol>(last - static_cast<size_t>(game.protocol));
+
+			for (Query::SMasterEndpoint& master : game.masters)
+			{
+				master.protocol = static_cast<Query::EProtocol>(last - static_cast<size_t>(master.protocol));
+			}
+		}
+
+		return games;
 	}
 
 	bool WaitUntilOnline()
@@ -535,6 +582,39 @@ TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenOnlyWhereItsProtocolComesFromCha
 
 	ASSERT_NE(pRow, nullptr);
 	EXPECT_EQ(pRow->state, EServerState::Online);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenProtocolsMove)
+{
+	ASSERT_TRUE(StartWithServer());
+	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(WaitUntilOnline());
+
+	m_browser.ReplaceCatalog(ReverseProtocols(), FollowReversedProtocols());
+
+	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
+
+	ASSERT_NE(pRow, nullptr);
+	EXPECT_EQ(pRow->state, EServerState::Online);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, ChangedMasterProtocolStartsTheListAgain)
+{
+	std::vector<Query::SGameDefinition> const games{ ListThroughGamespy1("kingpin") };
+
+	Install(games);
+	ASSERT_TRUE(StartWithServer());
+	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(WaitUntilOnline());
+
+	m_browser.ReplaceCatalog(ChangeProtocolSource("gamespy1"), games);
+
+	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
+
+	ASSERT_NE(pRow, nullptr);
+	EXPECT_EQ(pRow->state, EServerState::Pending);
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iterator>
+#include <string>
 
 namespace Lkt::Fixtures
 {
@@ -99,6 +100,12 @@ Query::SGameDefinition const& GetGameByKey(std::string_view key)
 Query::EGame GetGameId(std::string_view key)
 {
 	return GetGameByKey(key).game;
+}
+
+//////////////////////////////////////////////////////////////////////////
+Query::SMasterEndpoint MakeMaster(Query::SGameDefinition const& game, std::string_view host, uint16_t port)
+{
+	return Query::SMasterEndpoint{ std::string{ host }, port, game.protocol, game.protocolOptions };
 }
 
 //////////////////////////////////////////////////////////////////////////

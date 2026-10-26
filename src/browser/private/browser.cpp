@@ -44,17 +44,32 @@ size_t ToIndex(Query::EGame game)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Whatever positions the two catalogs give the game and its protocol, and wherever the protocol comes from.
-bool IsUnchanged(Query::SGameDefinition old, Query::SProtocolDefinition oldProtocol, Query::SGameDefinition const& game)
+// Wherever the protocol comes from.
+bool IsSameProtocol(Query::SProtocolDefinition old, Query::SProtocolDefinition const& protocol)
 {
-	Query::SProtocolDefinition const& protocol{ Query::GetProtocol(game.protocol) };
+	old.origin = protocol.origin;
+	old.downloadedVersion = protocol.downloadedVersion;
+
+	return old == protocol;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Whatever positions the two catalogs give the game and the protocols it uses, and wherever those come from.
+bool IsUnchanged(Query::SGameDefinition old, std::span<Query::SProtocolDefinition const> oldProtocols, Query::SGameDefinition const& game)
+{
+	bool isSame{ old.masters.size() == game.masters.size()
+		&& IsSameProtocol(oldProtocols[static_cast<size_t>(old.protocol)], Query::GetProtocol(game.protocol)) };
+
+	for (size_t index{ 0 }; isSame && index < game.masters.size(); ++index)
+	{
+		isSame = IsSameProtocol(oldProtocols[static_cast<size_t>(old.masters[index].protocol)], Query::GetProtocol(game.masters[index].protocol));
+		old.masters[index].protocol = game.masters[index].protocol;
+	}
 
 	old.game = game.game;
 	old.protocol = game.protocol;
-	oldProtocol.origin = protocol.origin;
-	oldProtocol.downloadedVersion = protocol.downloadedVersion;
 
-	return old == game && oldProtocol == protocol;
+	return isSame && old == game;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -507,7 +522,7 @@ void CBrowser::SwapCatalog(std::vector<Query::SProtocolDefinition> protocols, st
 		size_t const index{ ToIndex(game.game) };
 		auto const old{ std::ranges::find(oldGames, game.key, &Query::SGameDefinition::key) };
 
-		if (old != oldGames.end() && IsUnchanged(*old, oldProtocols[static_cast<size_t>(old->protocol)], game))
+		if (old != oldGames.end() && IsUnchanged(*old, oldProtocols, game))
 		{
 			size_t const oldIndex{ ToIndex(old->game) };
 
