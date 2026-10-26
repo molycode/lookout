@@ -48,14 +48,20 @@ std::vector<std::filesystem::path> ListEntries(std::filesystem::path const& fold
 }
 
 //////////////////////////////////////////////////////////////////////////
-// What game.json says under one string field, or nothing when it is no JSON or lacks it.
-std::string ReadGameField(std::filesystem::path const& gameFile, std::string_view field)
+JsonValue ReadGame(std::filesystem::path const& gameFile)
 {
 	std::expected<std::string, std::error_code> const text{ Json::ReadFile(gameFile, MaxFileSize) };
-	JsonValue const root = text.has_value() ? JsonValue::parse(*text, nullptr, AllowExceptions, IgnoreComments) : JsonValue{};
-	JsonValue::const_iterator const value{ root.is_object() ? root.find(field) : root.cend() };
 
-	return (value != root.cend() && value->is_string()) ? value->get<std::string>() : std::string{};
+	return text.has_value() ? JsonValue::parse(*text, nullptr, AllowExceptions, IgnoreComments) : JsonValue{};
+}
+
+//////////////////////////////////////////////////////////////////////////
+// What object says under one string field, or nothing when it is no object or lacks it.
+std::string ReadString(JsonValue const& object, std::string_view field)
+{
+	JsonValue::const_iterator const value{ object.is_object() ? object.find(field) : object.cend() };
+
+	return (value != object.cend() && value->is_string()) ? value->get<std::string>() : std::string{};
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -63,7 +69,7 @@ void AddNamedProtocols(std::filesystem::path const& gamesFolder, std::set<std::s
 {
 	for (std::filesystem::path const& folder : ListEntries(gamesFolder))
 	{
-		std::string protocol{ ReadGameField(folder / "game.json", "protocol") };
+		std::string protocol{ ReadString(ReadGame(folder / "game.json"), "protocol") };
 
 		if (!protocol.empty())
 		{
@@ -108,7 +114,7 @@ std::map<std::string, std::string> ListDownloadedGames(std::filesystem::path con
 	for (std::filesystem::path const& folder : ListEntries(downloadedDir / "games"))
 	{
 		std::string const key{ folder.filename().string() };
-		std::string name{ ReadGameField(folder / "game.json", "name") };
+		std::string name{ ReadString(ReadGame(folder / "game.json"), "name") };
 
 		if (Games::IsValidKey(key))
 		{
