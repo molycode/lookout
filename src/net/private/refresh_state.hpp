@@ -1,5 +1,6 @@
 #pragma once
 
+#include "refresh_kind.hpp"
 #include "refresh_stats.hpp"
 #include "net/clock.hpp"
 #include <cstdint>
@@ -10,6 +11,7 @@ namespace Lkt::Net
 struct SRefreshState final
 {
 	bool isActive{ false };
+	ERefreshKind kind{ ERefreshKind::Full };
 	uint32_t generation{ 0 };
 	Clock::time_point startedAt{};
 	std::unordered_set<uint64_t> knownServers;

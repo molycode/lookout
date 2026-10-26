@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -110,11 +111,21 @@ protected:
 
 	bool Run(Query::EGame game)
 	{
+		return RunWith(game, [this](Query::EGame refreshed) { m_engine.Refresh(refreshed, {}); });
+	}
+
+	bool Probe(Query::EGame game)
+	{
+		return RunWith(game, [this](Query::EGame probed) { m_engine.ProbeMasters(probed); });
+	}
+
+	bool RunWith(Query::EGame game, std::function<void(Query::EGame)> const& start)
+	{
 		bool isFinished{ false };
 
 		if (m_engine.Initialize(Fixtures::GetCatalog(), m_collector.MakeCallback()))
 		{
-			m_engine.Refresh(game, {});
+			start(game);
 			isFinished = m_collector.WaitForFinish(m_engine, game, Patience);
 			m_engine.Terminate();
 		}
@@ -276,6 +287,34 @@ TEST_F(CMasterProtocolTest, FailedMasterSaysWhichItIs)
 
 	ASSERT_EQ(failures.size(), 1u);
 	EXPECT_EQ(failures[0].index, 1u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterProtocolTest, ProbeAsksNoServer)
+{
+	ASSERT_TRUE(StartStatusServer());
+	ASSERT_TRUE(StartQuake2Master({ m_status.GetAddress() }));
+	ASSERT_TRUE(Probe(AddKingpin({ MakeQuake2Master() })));
+	EXPECT_EQ(m_status.GetNumRequests(), 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterProtocolTest, ProbeListsNoServer)
+{
+	ASSERT_TRUE(StartStatusServer());
+	ASSERT_TRUE(StartQuake2Master({ m_status.GetAddress() }));
+	ASSERT_TRUE(Probe(AddKingpin({ MakeQuake2Master() })));
+	EXPECT_TRUE(GetListed().empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CMasterProtocolTest, ProbeCountsWhatEachMasterLists)
+{
+	ASSERT_TRUE(StartStatusServer());
+	ASSERT_TRUE(StartQuake2Master({ m_status.GetAddress() }));
+	ASSERT_TRUE(StartGamespyMaster(GetGamespyAddress()));
+	ASSERT_TRUE(Probe(AddKingpin({ MakeQuake2Master(), MakeGamespyMaster() })));
+	EXPECT_EQ(GetAnswered(), (std::vector<std::pair<size_t, uint32_t>>{ { 0, 1 }, { 1, 1 } }));
 }
 } // namespace
 } // namespace Lkt::Net

@@ -61,6 +61,18 @@ void CQueryEngine::RefreshServer(Query::EGame game, Query::SServerAddress const&
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Each master lists as in a refresh, but its servers are only counted, never asked.
+uint32_t CQueryEngine::ProbeMasters(Query::EGame game)
+{
+	TGE_ASSERT(m_pPump != nullptr, "ProbeMasters before Initialize");
+
+	++m_lastRefreshId;
+	m_pPump->ProbeMasters(game, m_lastRefreshId);
+
+	return m_lastRefreshId;
+}
+
+//////////////////////////////////////////////////////////////////////////
 void CQueryEngine::Cancel(Query::EGame game)
 {
 	TGE_ASSERT(m_pPump != nullptr, "Cancel before Initialize");

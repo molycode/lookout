@@ -209,7 +209,19 @@ void CQueryPump::Refresh(Query::EGame game, std::vector<Query::SServerAddress> f
 	{
 		Clock::time_point const now{ Clock::now() };
 
-		StartRefresh(game, favourites, refreshId, now);
+		StartRefresh(game, ERefreshKind::Full, favourites, refreshId, now);
+		Update(now);
+	});
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CQueryPump::ProbeMasters(Query::EGame game, uint32_t refreshId)
+{
+	m_loop.Post([this, game, refreshId]()
+	{
+		Clock::time_point const now{ Clock::now() };
+
+		StartRefresh(game, ERefreshKind::Probe, {}, refreshId, now);
 		Update(now);
 	});
 }
@@ -282,7 +294,8 @@ void CQueryPump::ArmTimer(Clock::time_point now)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CQueryPump::StartRefresh(Query::EGame game, std::span<Query::SServerAddress const> favourites, uint32_t refreshId, Clock::time_point now)
+void CQueryPump::StartRefresh(Query::EGame game, ERefreshKind kind, std::span<Query::SServerAddress const> favourites, uint32_t refreshId,
+	Clock::time_point now)
 {
 	SRefreshState& refresh{ GetRefresh(game) };
 	uint32_t const generation{ refreshId };
@@ -293,6 +306,7 @@ void CQueryPump::StartRefresh(Query::EGame game, std::span<Query::SServerAddress
 	CloseConversations(game);
 	refresh = SRefreshState{};
 	refresh.isActive = true;
+	refresh.kind = kind;
 	refresh.generation = generation;
 	refresh.startedAt = now;
 
@@ -313,6 +327,8 @@ void CQueryPump::StartRefresh(Query::EGame game, std::span<Query::SServerAddress
 void CQueryPump::StartServerRefresh(Query::EGame game, Query::SServerAddress const& address, uint32_t refreshId, Clock::time_point now)
 {
 	SRefreshState& refresh{ GetRefresh(game) };
+
+	TGE_ASSERT(!refresh.isActive || refresh.kind == ERefreshKind::Full, "A server refresh would join a probe, which asks no server");
 
 	if (!refresh.isActive)
 	{
@@ -659,7 +675,11 @@ void CQueryPump::ReadMasterData(SMasterId const& master, SMasterConversation& co
 			conversation.listed.insert(Query::ToKey(address));
 		}
 
-		ListServers(master.game, m_listed);
+		if (GetRefresh(master.game).kind == ERefreshKind::Full)
+		{
+			ListServers(master.game, m_listed);
+		}
+
 		m_listed.clear();
 
 		if (numAdmitted < action->servers.size())
@@ -805,7 +825,12 @@ void CQueryPump::FinishRefreshes()
 				"A finished refresh left a conversation open");
 
 			refresh.isActive = false;
-			ReportRefresh(game);
+
+			if (refresh.kind == ERefreshKind::Full)
+			{
+				ReportRefresh(game);
+			}
+
 			Emit(SRefreshFinished{ game });
 		}
 	}

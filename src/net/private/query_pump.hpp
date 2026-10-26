@@ -10,6 +10,7 @@
 #include "master_query.hpp"
 #include "master_tracker.hpp"
 #include "master_warnings.hpp"
+#include "refresh_kind.hpp"
 #include "refresh_state.hpp"
 #include "request_scheduler.hpp"
 #include "server_request.hpp"
@@ -52,6 +53,7 @@ public:
 
 	void Refresh(Query::EGame game, std::vector<Query::SServerAddress> favourites, uint32_t refreshId);
 	void RefreshServer(Query::EGame game, Query::SServerAddress const& address, uint32_t refreshId);
+	void ProbeMasters(Query::EGame game, uint32_t refreshId);
 	void Cancel(Query::EGame game);
 	void TakeEvents(std::vector<SQueryEvent>& events);
 
@@ -59,7 +61,7 @@ private:
 
 	void Update(Clock::time_point now);
 	void ArmTimer(Clock::time_point now);
-	void StartRefresh(Query::EGame game, std::span<Query::SServerAddress const> favourites, uint32_t refreshId, Clock::time_point now);
+	void StartRefresh(Query::EGame game, ERefreshKind kind, std::span<Query::SServerAddress const> favourites, uint32_t refreshId, Clock::time_point now);
 	void StartServerRefresh(Query::EGame game, Query::SServerAddress const& address, uint32_t refreshId, Clock::time_point now);
 	void CancelRefresh(Query::EGame game);
 	void ResolveMasters(Query::EGame game, uint32_t generation, Clock::time_point now);

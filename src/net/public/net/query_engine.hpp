@@ -29,6 +29,7 @@ public:
 
 	uint32_t Refresh(Query::EGame game, std::span<Query::SServerAddress const> favourites);
 	void RefreshServer(Query::EGame game, Query::SServerAddress const& address);
+	uint32_t ProbeMasters(Query::EGame game);
 	void Cancel(Query::EGame game);
 
 	void TakeEvents(std::vector<SQueryEvent>& events);
