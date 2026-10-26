@@ -8,13 +8,16 @@
 #include "password_prompt.hpp"
 #include "selection.hpp"
 #include "toolbar.hpp"
+#include "browser/master_probes.hpp"
 #include "download/game_downloads.hpp"
 #include "query/game.hpp"
 #include "query/server_address.hpp"
 #include <tge/non_copyable.hpp>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -52,6 +55,7 @@ public:
 	void OnCatalogChanged(std::span<std::string const> oldKeys);
 	void RequestQuit();
 	uint32_t GetDetailsWidth() const;
+	std::optional<std::chrono::steady_clock::time_point> GetNextDeadline() const;
 
 private:
 
@@ -74,6 +78,7 @@ private:
 	CGameEditor m_gameEditor;
 	CDownloadWindow m_downloadWindow;
 	Download::CGameDownloads m_downloads;
+	Browser::CMasterProbes m_masterProbes;
 	std::filesystem::path m_userDir;
 	std::function<void()> m_requestReload;
 	std::vector<uint64_t> m_selectedKeys;

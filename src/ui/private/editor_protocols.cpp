@@ -85,7 +85,7 @@ SFormContext CEditorProtocols::MakeFormContext(Download::CGameDownloads* pDownlo
 {
 	return SFormContext{ m_definitions,
 		[this, pDownloads](std::string& protocol) { return DrawMoreChoices(protocol, pDownloads); },
-		[this, pDownloads](std::string_view protocol) { DrawAbsent(protocol, pDownloads); } };
+		[this, pDownloads](std::string_view protocol) { DrawAbsent(protocol, pDownloads); }, {} };
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -93,6 +93,7 @@ void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutI
 {
 	m_userDir = userDir;
 	m_requestReload = std::move(requestReload);
+	m_masterProbes.Initialize(wake);
 	m_canDownload = !userDir.empty() && m_downloads.Initialize(userDir, cacheDir, Download::GetLookoutGamesSource(about.version), std::move(wake));
 
 	if (!userDir.empty() && !m_canDownload)
@@ -134,6 +135,7 @@ void CMainWindow::Terminate()
 	m_downloadWindow.Terminate();
 	m_downloads.Terminate();
 	m_canDownload = false;
+	m_masterProbes.Terminate();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -148,6 +150,8 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 {
 	SFrameIntents intents{};
 	bool const hasNewDownloads{ m_canDownload && m_downloads.Update() };
+
+	m_masterProbes.Update();
 
 	intents.quit = std::exchange(m_isQuitRequested, false);
 
@@ -197,6 +201,13 @@ void CMainWindow::Draw(Browser::CBrowser& browser)
 uint32_t CMainWindow::GetDetailsWidth() const
 {
 	return static_cast<uint32_t>(std::lround(m_detailsEm * BaseFontSize));
+}
+
+//////////////////////////////////////////////////////////////////////////
+// What only time brings, with no event to wake the window for it.
+std::optional<std::chrono::steady_clock::time_point> CMainWindow::GetNextDeadline() const
+{
+	return m_masterProbes.GetNextDeadline();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -404,7 +415,7 @@ void CMainWindow::SetGameListed(Browser::CBrowser& browser, Query::EGame game, b
 // What they change in the data folder is read again at the end of a frame with no popup open.
 void CMainWindow::DrawGamePrompts()
 {
-	EEditorOutcome const edited{ m_gameEditor.Draw(m_userDir, m_message, m_canDownload ? &m_downloads : nullptr) };
+	EEditorOutcome const edited{ m_gameEditor.Draw(m_userDir, m_message, m_canDownload ? &m_downloads : nullptr, m_masterProbes) };
 
 	if (edited == EEditorOutcome::FilesChanged)
 	{

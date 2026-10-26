@@ -78,13 +78,20 @@ bool SelectableText(std::string_view text, bool isSelected)
 bool IconButton(char const* id, std::string_view glyph)
 {
 	SThemeColors const& colors{ GetThemeColors() };
+
+	return IconButton(id, glyph, colors.textDisabled, colors.text);
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool IconButton(char const* id, std::string_view glyph, ImVec4 const& color, ImVec4 const& hoveredColor)
+{
 	float const size{ ImGui::GetTextLineHeight() };
 	bool const isPressed{ ImGui::InvisibleButton(id, ImVec2{ size, size }, ImGuiButtonFlags_EnableNav) };
 	ImVec2 const min{ ImGui::GetItemRectMin() };
 	ImVec2 const glyphSize{ ImGui::CalcTextSize(glyph.data(), glyph.data() + glyph.size()) };
 
 	ImGui::GetWindowDrawList()->AddText(ImVec2{ min.x + (size - glyphSize.x) * 0.5f, min.y + (size - glyphSize.y) * 0.5f },
-		ImGui::GetColorU32(ImGui::IsItemHovered() ? colors.text : colors.textDisabled), glyph.data(), glyph.data() + glyph.size());
+		ImGui::GetColorU32(ImGui::IsItemHovered() ? hoveredColor : color), glyph.data(), glyph.data() + glyph.size());
 
 	return isPressed;
 }

@@ -40,7 +40,7 @@ constexpr std::chrono::milliseconds DialogPollInterval{ 100 };
 constexpr std::chrono::milliseconds NoTimeout{ -1 };
 
 //////////////////////////////////////////////////////////////////////////
-// Nothing else wakes the window for an auto refresh, so the wait ends at its deadline.
+// Nothing else wakes the window for a deadline, such as an auto refresh's, so the wait ends at it.
 std::chrono::milliseconds BoundByDeadline(std::chrono::milliseconds wait, std::optional<std::chrono::steady_clock::time_point> deadline)
 {
 	std::chrono::milliseconds bounded{ wait };
@@ -220,7 +220,8 @@ void CApplication::Run(Browser::CBrowser& browser, std::function<void()> const& 
 		bool const isActive{ std::chrono::steady_clock::now() < m_activeUntil };
 		std::chrono::milliseconds const frameWait{ m_hasVsync ? std::chrono::milliseconds{ 0 } : UnsyncedFrameInterval };
 		// Neither file dialog wakes the loop: the portal answers over D-Bus, which SDL reads only while pumping events.
-		std::chrono::milliseconds const idleWait{ BoundByDeadline(IsFileDialogPending() ? DialogPollInterval : NoTimeout, browser.GetNextAutoRefresh()) };
+		std::chrono::milliseconds const idleWait{ BoundByDeadline(BoundByDeadline(IsFileDialogPending() ? DialogPollInterval : NoTimeout,
+			browser.GetNextAutoRefresh()), mainWindow.GetNextDeadline()) };
 		std::chrono::milliseconds const wait{ isActive ? frameWait : idleWait };
 		bool hasEvent{ SDL_WaitEventTimeout(&event, static_cast<Sint32>(wait.count())) };
 

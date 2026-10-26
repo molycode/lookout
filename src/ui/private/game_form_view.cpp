@@ -545,6 +545,7 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 	int const numCells{ static_cast<int>(std::ranges::count_if(fields, [&schema](SGameField const& column) { return IsCell(column, schema); })) };
 	int const numColumns{ numCells + (isMasters ? 2 : 0) + 1 };
 	std::vector<std::string> listings{};
+	float const statusWidth{ context.drawMasterStatus ? ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.x : 0.0f };
 	float listingWidth{ ImGui::CalcTextSize(ListingHeader).x };
 	std::optional<size_t> removed{};
 	bool isEdited{ false };
@@ -554,7 +555,7 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 		for (SGameFormNode const& row : node.children)
 		{
 			listings.emplace_back(DescribeMasterListing(inheritedProtocol, GetText(row, ProtocolField), GetText(row, PortOffsetField)));
-			listingWidth = std::max(listingWidth, ImGui::CalcTextSize(listings.back().c_str()).x);
+			listingWidth = std::max(listingWidth, statusWidth + ImGui::CalcTextSize(listings.back().c_str()).x);
 		}
 	}
 
@@ -608,7 +609,19 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 				std::string const rowPath{ std::format("{}[{}]", path, index) };
 
 				ImGui::TableNextColumn();
-				ImGui::AlignTextToFramePadding();
+
+				// Beside the icon, the text sits where a frame's would, as it does alone.
+				if (context.drawMasterStatus)
+				{
+					AlignIconToFrame();
+					context.drawMasterStatus(index);
+					ImGui::SameLine();
+				}
+				else
+				{
+					ImGui::AlignTextToFramePadding();
+				}
+
 				ImGui::PushStyleColor(ImGuiCol_Text, IsSettingsProblem(pProblem, rowPath) ? GetThemeColors().error : GetThemeColors().text);
 				ImGui::TextUnformatted(listings[index].c_str());
 				ImGui::PopStyleColor();

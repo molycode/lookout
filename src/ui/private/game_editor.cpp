@@ -5,6 +5,8 @@
 #include "loggers.hpp"
 #include "theme.hpp"
 #include "theme_colors.hpp"
+#include "widgets.hpp"
+#include "browser/master_probes.hpp"
 #include "games/check_game.hpp"
 #include "games/editable_game.hpp"
 #include "games/game_files.hpp"
@@ -14,13 +16,18 @@
 #include "launch/file_url.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
+#include "query/master_endpoint.hpp"
+#include <tge/assert.hpp>
 #include <imgui.h>
 #include <imgui_stdlib.h>
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <array>
 #include <cfloat>
+#include <chrono>
 #include <expected>
 #include <format>
+#include <functional>
 #include <span>
 #include <utility>
 
@@ -38,6 +45,9 @@ constexpr float PromptWidthEm{ 22.0f };
 constexpr std::string_view ProtocolField{ "protocol" };
 constexpr std::string_view OptionsField{ "protocolOptions" };
 constexpr std::string_view MastersField{ "masters" };
+constexpr std::string_view HostField{ "host" };
+constexpr std::string_view PortField{ "port" };
+constexpr std::string_view PortOffsetField{ "portOffset" };
 
 //////////////////////////////////////////////////////////////////////////
 // Typed capitals become small letters and anything a key cannot hold is dropped, so most keys are valid as typed.
@@ -93,6 +103,33 @@ std::string MakeScriptSignature(Games::SGameFormNode const& form)
 
 	return signature;
 }
+
+//////////////////////////////////////////////////////////////////////////
+std::string_view GetText(Games::SGameFormNode const& node, std::string_view name)
+{
+	Games::SGameFormNode const* const pField{ Games::FindFormField(node, name) };
+
+	return (pField != nullptr) ? std::string_view{ pField->text } : std::string_view{};
+}
+
+//////////////////////////////////////////////////////////////////////////
+// All that decides how a master lists, so a change to any of it is a test of its own: a master without a protocol of its
+// own lists through the game's, with the game's options, and a protocol's script may change under its name.
+std::string MakeMasterKey(Games::SGameFormNode const& form, Games::SGameFormNode const& master, std::span<Query::SProtocolDefinition const> protocols)
+{
+	Games::SGameFormNode const& listing{ GetText(master, ProtocolField).empty() ? form : master };
+	auto const protocol{ std::ranges::find(protocols, GetText(listing, ProtocolField), &Query::SProtocolDefinition::name) };
+	std::string key{ std::format("{}\n{}\n{}", GetText(master, HostField), GetText(master, PortField), GetText(master, PortOffsetField)) };
+
+	AddProtocolChoice(listing, key);
+
+	if (protocol != protocols.end())
+	{
+		key += std::format("\n{:x}", std::hash<std::string>{}(protocol->source));
+	}
+
+	return key;
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
@@ -110,6 +147,7 @@ void CGameEditor::Open(std::string_view key, std::filesystem::path const& userDi
 	else
 	{
 		Load(key, userDir);
+		m_isOpening = true;
 		m_shouldFocus = true;
 	}
 }
@@ -129,6 +167,7 @@ void CGameEditor::OpenNew()
 	else
 	{
 		LoadNew();
+		m_isOpening = true;
 		m_shouldFocus = true;
 	}
 }
@@ -170,7 +209,9 @@ void CGameEditor::OnCatalogChanged(std::filesystem::path const& userDir)
 }
 
 //////////////////////////////////////////////////////////////////////////
-EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::string& message, Download::CGameDownloads* pDownloads)
+// The masters are tested when the user opens a game, not on every load: a save or a reload loads it again too.
+EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::string& message, Download::CGameDownloads* pDownloads,
+	Browser::CMasterProbes& probes)
 {
 	EEditorOutcome outcome{ EEditorOutcome::None };
 
@@ -179,6 +220,15 @@ EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::stri
 		m_scriptSignature.clear();
 		Check();
 	}
+
+	if (std::exchange(m_isOpening, false))
+	{
+		probes.Clear();
+	}
+
+	// With the editor closed too, so closing it stops a test.
+	probes.Want(m_isOpen ? std::span<Browser::SMasterProbeRequest const>{ m_probeRequests } : std::span<Browser::SMasterProbeRequest const>{},
+		m_protocols.GetDefinitions(), m_canProbe, std::chrono::steady_clock::now());
 
 	if (m_isOpen)
 	{
@@ -216,8 +266,11 @@ EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::stri
 
 				ImGui::BeginChild("##form", ImVec2{ 0.0f, -m_footerHeight }, ImGuiChildFlags_NavFlattened);
 
-				if (DrawGameForm(m_form, m_downloadedForm.has_value() ? &*m_downloadedForm : nullptr, m_problem.has_value() ? &*m_problem : nullptr,
-					m_protocols.MakeFormContext(pDownloads)))
+				SFormContext context{ m_protocols.MakeFormContext(pDownloads) };
+
+				context.drawMasterStatus = [this, &probes](size_t row) { DrawMasterStatus(probes, row); };
+
+				if (DrawGameForm(m_form, m_downloadedForm.has_value() ? &*m_downloadedForm : nullptr, m_problem.has_value() ? &*m_problem : nullptr, context))
 				{
 					Check();
 				}
@@ -377,6 +430,60 @@ void CGameEditor::Check()
 
 	m_problem = fields.has_value() ? m_scriptProblem : std::optional<Games::SFieldProblem>{ fields.error() };
 	m_saveError.clear();
+	MakeProbeRequests(fields.has_value() ? &*fields : nullptr, protocols);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Keys come from the form, so a row keeps its result while the description has a problem; masters to test only come
+// from a description without one.
+void CGameEditor::MakeProbeRequests(Query::SGameDefinition const* pGame, std::span<Query::SProtocolDefinition const> protocols)
+{
+	Games::SGameFormNode const* const pMasters{ Games::FindFormField(m_form, MastersField) };
+	std::span<Games::SGameFormNode const> const rows{ (pMasters != nullptr) ? std::span<Games::SGameFormNode const>{ pMasters->children }
+		: std::span<Games::SGameFormNode const>{} };
+
+	TGE_ASSERT(pGame == nullptr || pGame->masters.size() == rows.size(), "A description read without a problem has a master for each row");
+
+	m_probeRequests.clear();
+
+	for (size_t index{ 0 }; index < rows.size(); ++index)
+	{
+		m_probeRequests.emplace_back(MakeMasterKey(m_form, rows[index], protocols), (pGame != nullptr) ? pGame->masters[index] : Query::SMasterEndpoint{});
+	}
+
+	m_canProbe = pGame != nullptr;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A row the form has before its key does, as in the frame it is added, keeps room for its status.
+void CGameEditor::DrawMasterStatus(Browser::CMasterProbes& probes, size_t row) const
+{
+	Browser::SMasterProbeResult const* const pResult{ (row < m_probeRequests.size()) ? probes.GetResult(m_probeRequests[row].key) : nullptr };
+	float const size{ ImGui::GetTextLineHeight() };
+
+	if (pResult == nullptr)
+	{
+		ImGui::Dummy(ImVec2{ size, size });
+	}
+	else
+	{
+		SThemeColors const& colors{ GetThemeColors() };
+		std::array<char, 256> buffer{};
+		bool const isProbing{ pResult->state == Browser::EProbeState::Probing };
+		bool const isAnswered{ pResult->state == Browser::EProbeState::Answered };
+		ImVec4 const& color{ isProbing ? colors.amber : (isAnswered ? colors.pingGood : colors.error) };
+		std::string_view const glyph{ isProbing ? LKT_ICON_ROTATE : (isAnswered ? LKT_ICON_CHECK : LKT_ICON_XMARK) };
+		std::string_view const tooltip{ isProbing ? FormatTo(buffer, "Testing this master…")
+			: (isAnswered ? FormatTo(buffer, "Listed {} {}. Click to test it again.", pResult->numServers, (pResult->numServers == 1) ? "server" : "servers")
+				: FormatTo(buffer, "This master {}. Click to test it again.", pResult->failure)) };
+
+		if (IconButton("##status", glyph, color, color) && !isProbing)
+		{
+			probes.Forget(m_probeRequests[row].key);
+		}
+
+		ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -584,9 +691,11 @@ EEditorOutcome CGameEditor::DrawDiscardPrompt(std::filesystem::path const& userD
 					break;
 				case EEditorPending::Open:
 					Load(m_pendingKey, userDir);
+					m_isOpening = true;
 					break;
 				case EEditorPending::New:
 					LoadNew();
+					m_isOpening = true;
 					break;
 				case EEditorPending::Prefill:
 					Prefill(m_pendingKey, userDir);
