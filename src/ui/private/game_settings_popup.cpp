@@ -12,6 +12,8 @@
 #include "launch/quote_argument.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
+#include "query/master_endpoint.hpp"
+#include "query/protocol.hpp"
 #include "query/protocol_definition.hpp"
 #include "query/utf8.hpp"
 #include <imgui.h>
@@ -21,6 +23,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace Lkt::Ui
 {
@@ -221,13 +224,29 @@ void CGameSettingsPopup::DrawFound(Browser::CBrowser const& browser) const
 }
 
 //////////////////////////////////////////////////////////////////////////
+// The game's protocol, then any other its masters list through.
 void CGameSettingsPopup::DrawProtocol() const
 {
-	Query::SProtocolDefinition const& protocol{ Query::GetProtocol(Query::GetGame(m_game).protocol) };
+	Query::SGameDefinition const& game{ Query::GetGame(m_game) };
+	std::vector<Query::EProtocol> protocols{ game.protocol };
+
+	for (Query::SMasterEndpoint const& master : game.masters)
+	{
+		if (!std::ranges::contains(protocols, master.protocol))
+		{
+			protocols.emplace_back(master.protocol);
+		}
+	}
 
 	ImGui::Spacing();
-	ImGui::SeparatorText("Protocol");
-	DrawLauncherLabel(protocol.name, DescribeProtocol(protocol));
+	ImGui::SeparatorText((protocols.size() == 1) ? "Protocol" : "Protocols");
+
+	for (Query::EProtocol const id : protocols)
+	{
+		Query::SProtocolDefinition const& protocol{ Query::GetProtocol(id) };
+
+		DrawLauncherLabel(protocol.name, DescribeProtocol(protocol));
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
