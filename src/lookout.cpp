@@ -62,7 +62,7 @@ void PrintServers(Browser::CServerList const& servers)
 	{
 		Query::SServerSummary const& summary{ pEntry->summary };
 
-		std::println("{} {}/{} {} {}", Query::FormatAddress(pEntry->address), summary.numPlayers, summary.maxPlayers, summary.map, summary.name.plain);
+		std::println("{} {}/{} {} {}", Query::FormatAddress(pEntry->joinAddress), summary.numPlayers, summary.maxPlayers, summary.map, summary.name.plain);
 	}
 }
 } // namespace

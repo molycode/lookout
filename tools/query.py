@@ -4,8 +4,8 @@
     tools/query.py <game>                          list the game's servers, one line each
     tools/query.py <game> --save-fixtures <dir>    also save raw replies as parser test data
 
-Each line is "<address> <players>/<max> <map> <name>", sorted by address, the address being the one queried. Compare
-`lookout --list <game>` with it on the first three columns: names are only roughly decoded here.
+Each line is "<address> <players>/<max> <map> <name>", the address being the one players join, sorted by the one
+queried. Compare `lookout --list <game>` with it on the first three columns: names are only roughly decoded here.
 """
 
 import argparse
@@ -330,6 +330,14 @@ def describe_unreal2(packets):
 	return f"{players}/{maximum} {plain_map} {''.join(ch for ch in plain_name if ord(ch) >= 32)}"
 
 
+def unreal2_join_port(packets, port):
+	"""The port the info reply names after the server's address, else the one it was asked on."""
+	info = next(packet for packet in packets if len(packet) > 4 and packet[4] == UNREAL2_INFO)
+	_, pos = read_unreal2_string(info, 9)
+	(join,) = struct.unpack("<i", info[pos:pos + 4])
+	return join if 0 < join <= 65535 else port
+
+
 def main_unreal2(options, masters):
 	answers = [(host, *query_unreal2_master(host, port)) for host, port in masters]
 	servers = sorted({server for _, _, listed in answers for server in listed}, key=lambda server: (socket.inet_aton(server[0]), server[1]))
@@ -337,7 +345,7 @@ def main_unreal2(options, masters):
 
 	for server in servers:
 		if server in replies:
-			print(f"{server[0]}:{server[1]} {describe_unreal2(replies[server])}")
+			print(f"{server[0]}:{unreal2_join_port(replies[server], server[1])} {describe_unreal2(replies[server])}")
 
 	print(f"{len(replies)} of {len(servers)} servers answered", file=sys.stderr)
 
@@ -489,6 +497,17 @@ def describe_gamespy(packets):
 	return f"{len(players)}/{info.get('maxplayers', '?')} {info.get('mapname', '?')} {info.get('hostname', '')}"
 
 
+def gamespy_join_port(packets, port):
+	"""The reply's hostport, else the port it was asked on."""
+	info = {}
+
+	for packet in packets:
+		info.update(gamespy_fields(packet))
+
+	hostport = info.get("hostport", "").strip()
+	return int(hostport) if hostport.isdigit() and 0 < int(hostport) <= 65535 else port
+
+
 def main_gamespy(options, masters, game):
 	answers = [(host, *query_gamespy_master(host, port, game)) for host, port in masters]
 	servers = sorted({server for _, _, listed in answers for server in listed}, key=lambda server: (socket.inet_aton(server[0]), server[1]))
@@ -496,7 +515,7 @@ def main_gamespy(options, masters, game):
 
 	for server in servers:
 		if server in replies:
-			print(f"{server[0]}:{server[1]} {describe_gamespy(replies[server])}")
+			print(f"{server[0]}:{gamespy_join_port(replies[server], server[1])} {describe_gamespy(replies[server])}")
 
 	print(f"{len(replies)} of {len(servers)} servers answered", file=sys.stderr)
 
