@@ -18,11 +18,9 @@ from the download button above the game list (or `lookout --download`), into `~/
 `~/.local/share/lookout/`, where a description under a downloaded game's key changes only what it names, so it survives
 the game's updates. In the app, click the pencil on a game to edit its description, or click the gamepad above the game
 list to add one; Lookout checks it as you type and reloads the games whenever that folder changes. The editor tests each
-master as you open and edit it: a check with the number of servers it listed, or a cross with the reason. A master's
-gear sets the protocol it lists with, its options and a port offset, for masters that speak another protocol than the
-game's; a protocol from lookout-games that is not installed yet is downloaded when you choose it. A protocol of yours
-replaces the downloaded one of its name; Download games, a game's editor and its settings name the protocol in use and
-the downloaded one's version. When games need a newer Lookout, Download games names it and links to its release. The
+master as you open and edit it: a check with the number of servers it listed, or a cross with the reason. A protocol of
+yours replaces the downloaded one of its name; Download games, a game's editor and its settings name the protocol in use
+and the downloaded one's version. When games need a newer Lookout, Download games names it and links to its release. The
 icon at the right of the menu bar says whether a newer Lookout is out; Lookout asks GitHub at start and once a day.
 `lookout --check <folder>` checks a lookout-games folder before a pull request.
 
