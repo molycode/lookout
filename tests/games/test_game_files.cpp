@@ -375,7 +375,7 @@ TEST(GameFiles, CheckNamesAnUnknownProtocol)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST(GameFiles, CheckNamesTheMasterWhoseProtocolCannotListIt)
+TEST(GameFiles, CheckSaysWhyTheProtocolCannotList)
 {
 	std::span<Query::SProtocolDefinition const> const catalog{ Query::GetProtocolCatalog() };
 	std::vector<Query::SProtocolDefinition> protocols{ catalog.begin(), catalog.end() };
@@ -383,13 +383,12 @@ TEST(GameFiles, CheckNamesTheMasterWhoseProtocolCannotListIt)
 
 	protocols.emplace_back("broken", Fixtures::MakeScript(R"lua(protocol.master.start = function() error("no list here") end)lua"),
 		std::vector<Query::SProtocolOption>{});
-	game.replace(game.find("\"format\": 1"), 11, "\"format\": 2");
-	game.replace(game.find("\"port\": 27900 }"), 15, "\"port\": 27900, \"protocol\": \"broken\" }");
+	game.replace(game.find("\"protocol\": \"quake2\""), 20, "\"protocol\": \"broken\"");
 
 	std::expected<void, SFieldProblem> const checked{ CheckGameText(game, protocols) };
 
 	ASSERT_FALSE(checked.has_value());
-	EXPECT_EQ(checked.error().path, "masters[0]");
+	EXPECT_EQ(checked.error().path, "");
 	EXPECT_TRUE(checked.error().reason.contains("no list here")) << checked.error().reason;
 }
 } // namespace

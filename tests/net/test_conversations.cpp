@@ -90,7 +90,7 @@ protected:
 
 		for (uint16_t const port : masterPorts)
 		{
-			game.masters.emplace_back(Fixtures::MakeMaster(game, Loopback, port));
+			game.masters.emplace_back(std::string{ Loopback }, port);
 		}
 
 		return AddGame(std::move(game));

@@ -321,19 +321,19 @@ TEST_F(CLoadGamesTest, BrokenDownloadIsLeftOutAndNamesNoGame)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CLoadGamesTest, MasterProtocolThatCannotListIsAProblem)
+TEST_F(CLoadGamesTest, ProtocolThatCannotListIsAProblem)
 {
 	std::string game{ UserGame };
 
-	game.replace(game.find("\"format\": 1"), 11, "\"format\": 2");
-	game.replace(game.find("\"port\": 27900 }"), 15, "\"port\": 27900, \"protocol\": \"broken\" }");
+	game.replace(game.find("\"protocol\": \"quake2\""), 20, "\"protocol\": \"broken\"");
 	WriteFile("protocols/broken.lua", Fixtures::MakeScript(R"lua(protocol.master.start = function() error("no list here") end)lua"));
 	WriteFile("games/mygame/game.json", game);
 
 	SGameContent const content{ LoadGames(LKT_LOOKOUT_GAMES_DIR, m_dir) };
 
 	ASSERT_EQ(content.problems.size(), 1u);
-	EXPECT_TRUE(content.problems.front().text.starts_with("games/mygame/game.json: masters[0]: ")) << content.problems.front().text;
+	EXPECT_TRUE(content.problems.front().text.starts_with("games/mygame/game.json: ")) << content.problems.front().text;
+	EXPECT_TRUE(content.problems.front().text.contains("no list here")) << content.problems.front().text;
 	EXPECT_EQ(content.problems.front().key, "mygame");
 	EXPECT_EQ(FindGame(content, "mygame"), nullptr);
 }

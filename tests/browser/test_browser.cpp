@@ -510,20 +510,6 @@ protected:
 		return protocols;
 	}
 
-	std::vector<Query::SGameDefinition> ListThroughQuake2(std::string_view key) const
-	{
-		std::vector<Query::SGameDefinition> games{ m_games };
-		auto const quake2{ std::ranges::find(m_protocols, "quake2", &Query::SProtocolDefinition::name) };
-
-		for (Query::SMasterEndpoint& master : std::ranges::find(games, key, &Query::SGameDefinition::key)->masters)
-		{
-			master.protocol = static_cast<Query::EProtocol>(quake2 - m_protocols.begin());
-			master.protocolOptions = {};
-		}
-
-		return games;
-	}
-
 	std::vector<Query::SProtocolDefinition> ReverseProtocols() const
 	{
 		return std::vector<Query::SProtocolDefinition>{ m_protocols.rbegin(), m_protocols.rend() };
@@ -537,11 +523,6 @@ protected:
 		for (Query::SGameDefinition& game : games)
 		{
 			game.protocol = static_cast<Query::EProtocol>(last - static_cast<size_t>(game.protocol));
-
-			for (Query::SMasterEndpoint& master : game.masters)
-			{
-				master.protocol = static_cast<Query::EProtocol>(last - static_cast<size_t>(master.protocol));
-			}
 		}
 
 		return games;
@@ -608,16 +589,13 @@ TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenProtocolsMove)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CBrowserCatalogTest, ChangedMasterProtocolStartsTheListAgain)
+TEST_F(CBrowserCatalogTest, ChangedProtocolStartsTheListAgain)
 {
-	std::vector<Query::SGameDefinition> const games{ ListThroughQuake2("kingpin") };
-
-	Install(games);
 	ASSERT_TRUE(StartWithServer());
 	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
-	m_browser.ReplaceCatalog(ChangeProtocolSource("quake2"), games);
+	m_browser.ReplaceCatalog(ChangeProtocolSource("gamespy1"), m_games);
 
 	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
 

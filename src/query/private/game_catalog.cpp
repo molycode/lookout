@@ -20,10 +20,6 @@ void InitializeGameCatalog(std::span<SProtocolDefinition const> protocols, std::
 	TGE_ASSERT(protocols.size() < static_cast<size_t>(NoProtocol), "More protocols than EProtocol can number");
 	TGE_ASSERT(std::ranges::all_of(games, [&protocols](SGameDefinition const& game) { return static_cast<size_t>(game.protocol) < protocols.size(); }),
 		"A game names a protocol the catalog does not have");
-	TGE_ASSERT(std::ranges::all_of(games, [&protocols](SGameDefinition const& game)
-	{
-		return std::ranges::all_of(game.masters, [&protocols](SMasterEndpoint const& master) { return static_cast<size_t>(master.protocol) < protocols.size(); });
-	}), "A master names a protocol the catalog does not have");
 
 	gProtocols.assign(protocols.begin(), protocols.end());
 	gGames.assign(games.begin(), games.end());

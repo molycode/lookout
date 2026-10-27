@@ -91,10 +91,8 @@ private:
 	void NotifyIfNeeded();
 	SRefreshState& GetRefresh(Query::EGame game);
 	Script::CProtocolScript& GetScript(Query::EGame game);
-	Script::CProtocolScript& GetScript(SMasterId const& master);
 	SRefreshState const& GetRefresh(Query::EGame game) const;
 	Query::SGameDefinition const& GetGame(Query::EGame game) const;
-	Query::SMasterEndpoint const& GetMaster(SMasterId const& master) const;
 
 	std::atomic<bool> m_isNotified{ false };
 	bool m_hasNewEvents{ false };

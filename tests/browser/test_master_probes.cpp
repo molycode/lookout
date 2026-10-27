@@ -6,6 +6,7 @@
 #include "net/socket_table.hpp"
 #include "browser/master_probes.hpp"
 #include "query/game_catalog.hpp"
+#include "query/game_definition.hpp"
 #include "query/master_endpoint.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
@@ -78,7 +79,9 @@ protected:
 
 	SMasterProbeRequest MakeRequest() const
 	{
-		return SMasterProbeRequest{ std::string{ Key }, Fixtures::MakeMaster(Fixtures::GetGameByKey("quake2"), "127.0.0.1", m_master.GetAddress().port) };
+		Query::SGameDefinition const& quake2{ Fixtures::GetGameByKey("quake2") };
+
+		return SMasterProbeRequest{ std::string{ Key }, Query::SMasterEndpoint{ "127.0.0.1", m_master.GetAddress().port }, quake2.protocol, quake2.protocolOptions };
 	}
 
 	void Want(std::vector<SMasterProbeRequest> const& requests, Net::Clock::time_point now, bool canStart = true)
@@ -158,8 +161,9 @@ TEST_F(CMasterProbesTest, FailedRowSaysWhy)
 
 	ASSERT_TRUE(closed.Start(Fixtures::SLoopbackStream{}));
 
-	SMasterProbeRequest request{ std::string{ Key },
-		Query::SMasterEndpoint{ "127.0.0.1", closed.GetAddress().port, Fixtures::GetProtocolId("gamespy1"), { { "masterGame", "kingpin" } }, 10 } };
+	Query::SGameDefinition const& kingpin{ Fixtures::GetGameByKey("kingpin") };
+	SMasterProbeRequest request{ std::string{ Key }, Query::SMasterEndpoint{ "127.0.0.1", closed.GetAddress().port }, kingpin.protocol,
+		kingpin.protocolOptions };
 
 	closed.Stop();
 

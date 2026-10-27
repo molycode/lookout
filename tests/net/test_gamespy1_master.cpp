@@ -37,7 +37,7 @@ protected:
 		Query::SGameDefinition game{ Fixtures::GetGameByKey("ut99") };
 
 		game.key = "ut99-loopback";
-		game.masters = { Fixtures::MakeMaster(game, "127.0.0.1", masterPort) };
+		game.masters = { Query::SMasterEndpoint{ "127.0.0.1", masterPort } };
 
 		return AddGame(std::move(game));
 	}

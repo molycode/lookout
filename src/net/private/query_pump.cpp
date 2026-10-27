@@ -127,11 +127,8 @@ void RecordScriptFailure(SRefreshStats& stats, std::string_view failure)
 bool CQueryPump::Initialize(SQueryCatalog catalog, std::function<void()> onEventsReady)
 {
 	TGE_ASSERT(catalog.games.size() < static_cast<size_t>(Query::NoGame), "More games than EGame can number");
-	TGE_ASSERT(std::ranges::all_of(catalog.games, [&catalog](Query::SGameDefinition const& game)
-	{
-		return static_cast<size_t>(game.protocol) < catalog.protocols.size()
-			&& std::ranges::all_of(game.masters, [&catalog](Query::SMasterEndpoint const& master) { return static_cast<size_t>(master.protocol) < catalog.protocols.size(); });
-	}), "A game or a master names a protocol the catalog does not have");
+	TGE_ASSERT(std::ranges::all_of(catalog.games, [&catalog](Query::SGameDefinition const& game) { return static_cast<size_t>(game.protocol) < catalog.protocols.size(); }),
+		"A game names a protocol the catalog does not have");
 
 	m_onEventsReady = std::move(onEventsReady);
 	m_catalog = catalog;
@@ -310,15 +307,7 @@ void CQueryPump::StartRefresh(Query::EGame game, ERefreshKind kind, std::span<Qu
 	refresh.generation = generation;
 	refresh.startedAt = now;
 
-	std::span<Query::SMasterEndpoint const> const masters{ GetGame(game).masters };
-	std::vector<Script::EMasterTransport> transports{};
-
-	for (size_t index{ 0 }; index < masters.size(); ++index)
-	{
-		transports.emplace_back(GetScript(SMasterId{ game, index }).GetMasterTransport());
-	}
-
-	m_masters.Begin(game, generation, masters, transports, now);
+	m_masters.Begin(game, generation, GetGame(game).masters, GetScript(game).GetMasterTransport(), now);
 	ResolveMasters(game, generation, now);
 	ListServers(game, favourites);
 }
@@ -503,9 +492,8 @@ std::expected<void, std::string> CQueryPump::OpenMaster(SMasterQuery const& quer
 
 	conversation.record.game = query.master.game;
 	conversation.record.conversation.kind = Script::EConversationKind::Master;
-	conversation.master = query.master;
 	conversation.address = query.address;
-	conversation.isStream = GetScript(query.master).GetMasterTransport() == Script::EMasterTransport::Tcp;
+	conversation.isStream = GetScript(query.master.game).GetMasterTransport() == Script::EMasterTransport::Tcp;
 
 	bool const isOpen{ conversation.isStream ? conversation.streamSocket.Initialize() : conversation.datagramSocket.Initialize() };
 	std::expected<void, int> const connected{ !isOpen ? std::expected<void, int>{}
@@ -530,7 +518,7 @@ std::expected<void, std::string> CQueryPump::OpenMaster(SMasterQuery const& quer
 			Update(Clock::now());
 		});
 
-		result = conversation.watch.has_value() ? StartConversation(GetScript(query.master), GetMaster(query.master).protocolOptions, conversation.record)
+		result = conversation.watch.has_value() ? StartConversation(GetScript(query.master.game), GetGame(query.master.game).protocolOptions, conversation.record)
 			: std::unexpected{ std::string{ "its socket cannot be watched" } };
 		result = result.transform_error([](std::string const& failure) { return std::format("cannot be asked: {}", failure); });
 	}
@@ -630,7 +618,7 @@ void CQueryPump::ReadMasterData(SMasterId const& master, SMasterConversation& co
 
 	m_masters.OnDatagram(master, now);
 
-	std::expected<Script::SScriptAction, std::string> action{ GetScript(master).Receive(conversation.record.conversation, data) };
+	std::expected<Script::SScriptAction, std::string> action{ GetScript(master.game).Receive(conversation.record.conversation, data) };
 
 	if (!action.has_value())
 	{
@@ -652,15 +640,11 @@ void CQueryPump::ReadMasterData(SMasterId const& master, SMasterConversation& co
 			++stats.numBadMasterDatagrams;
 		}
 
-		int32_t const portOffset{ GetMaster(master).portOffset };
-
 		for (Query::SServerAddress const& address : std::span<Query::SServerAddress const>{ action->servers }.first(numAdmitted))
 		{
-			std::optional<uint16_t> const port{ Query::ShiftPort(address.port, portOffset) };
-
-			if (Query::MayList(conversation.address, address) && port.has_value())
+			if (Query::MayList(conversation.address, address))
 			{
-				m_listed.emplace_back(Query::SServerAddress{ address.ipv4, *port });
+				m_listed.emplace_back(address);
 			}
 			else
 			{
@@ -722,7 +706,7 @@ void CQueryPump::CloseMaster(uint64_t key)
 
 		it->second.datagramSocket.Terminate();
 		it->second.streamSocket.Terminate();
-		GetScript(it->second.master).End(it->second.record.conversation);
+		GetScript(it->second.record.game).End(it->second.record.conversation);
 		m_masterConversations.erase(it);
 	}
 }
@@ -1161,20 +1145,8 @@ Script::CProtocolScript& CQueryPump::GetScript(Query::EGame game)
 }
 
 //////////////////////////////////////////////////////////////////////////
-Script::CProtocolScript& CQueryPump::GetScript(SMasterId const& master)
-{
-	return m_scripts[static_cast<size_t>(GetMaster(master).protocol)];
-}
-
-//////////////////////////////////////////////////////////////////////////
 Query::SGameDefinition const& CQueryPump::GetGame(Query::EGame game) const
 {
 	return m_catalog.games[static_cast<size_t>(game)];
-}
-
-//////////////////////////////////////////////////////////////////////////
-Query::SMasterEndpoint const& CQueryPump::GetMaster(SMasterId const& master) const
-{
-	return GetGame(master.game).masters[master.index];
 }
 } // namespace Lkt::Net

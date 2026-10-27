@@ -17,7 +17,6 @@
 #include "launch/file_url.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
-#include "query/master_endpoint.hpp"
 #include <tge/assert.hpp>
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -48,7 +47,6 @@ constexpr std::string_view OptionsField{ "protocolOptions" };
 constexpr std::string_view MastersField{ "masters" };
 constexpr std::string_view HostField{ "host" };
 constexpr std::string_view PortField{ "port" };
-constexpr std::string_view PortOffsetField{ "portOffset" };
 
 //////////////////////////////////////////////////////////////////////////
 // Typed capitals become small letters and anything a key cannot hold is dropped, so most keys are valid as typed.
@@ -68,37 +66,18 @@ int FilterKeyCharacter(ImGuiInputTextCallbackData* pData)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void AddProtocolChoice(Games::SGameFormNode const& node, std::string& signature)
+// The protocol and its options alone decide what the protocol's conversations make of a description.
+std::string MakeScriptSignature(Games::SGameFormNode const& form)
 {
-	Games::SGameFormNode const* const pProtocol{ Games::FindFormField(node, ProtocolField) };
-	Games::SGameFormNode const* const pOptions{ Games::FindFormField(node, OptionsField) };
-
-	signature += std::format("\n{}", (pProtocol != nullptr) ? std::string_view{ pProtocol->text } : std::string_view{});
+	Games::SGameFormNode const* const pProtocol{ Games::FindFormField(form, ProtocolField) };
+	Games::SGameFormNode const* const pOptions{ Games::FindFormField(form, OptionsField) };
+	std::string signature{ (pProtocol != nullptr) ? pProtocol->text : std::string{} };
 
 	if (pOptions != nullptr)
 	{
 		for (Games::SGameFormNode const& option : pOptions->children)
 		{
 			signature += std::format("\n{}={}", option.name, option.text);
-		}
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-// The protocols and their options alone, the game's and each master's, decide what the conversations make of a description.
-std::string MakeScriptSignature(Games::SGameFormNode const& form)
-{
-	Games::SGameFormNode const* const pMasters{ Games::FindFormField(form, MastersField) };
-	std::string signature{};
-
-	AddProtocolChoice(form, signature);
-
-	if (pMasters != nullptr)
-	{
-		for (Games::SGameFormNode const& master : pMasters->children)
-		{
-			signature += "\n|";
-			AddProtocolChoice(master, signature);
 		}
 	}
 
@@ -114,15 +93,12 @@ std::string_view GetText(Games::SGameFormNode const& node, std::string_view name
 }
 
 //////////////////////////////////////////////////////////////////////////
-// All that decides how a master lists, so a change to any of it is a test of its own: a master without a protocol of its
-// own lists through the game's, with the game's options, and a protocol's script may change under its name.
+// All that decides how a master lists, so a change to any of it is a test of its own; a protocol's script may change
+// under its name.
 std::string MakeMasterKey(Games::SGameFormNode const& form, Games::SGameFormNode const& master, std::span<Query::SProtocolDefinition const> protocols)
 {
-	Games::SGameFormNode const& listing{ GetText(master, ProtocolField).empty() ? form : master };
-	auto const protocol{ std::ranges::find(protocols, GetText(listing, ProtocolField), &Query::SProtocolDefinition::name) };
-	std::string key{ std::format("{}\n{}\n{}", GetText(master, HostField), GetText(master, PortField), GetText(master, PortOffsetField)) };
-
-	AddProtocolChoice(listing, key);
+	auto const protocol{ std::ranges::find(protocols, GetText(form, ProtocolField), &Query::SProtocolDefinition::name) };
+	std::string key{ std::format("{}\n{}\n{}", GetText(master, HostField), GetText(master, PortField), MakeScriptSignature(form)) };
 
 	if (protocol != protocols.end())
 	{
@@ -435,7 +411,16 @@ void CGameEditor::MakeProbeRequests(Query::SGameDefinition const* pGame, std::sp
 
 	for (size_t index{ 0 }; index < rows.size(); ++index)
 	{
-		m_probeRequests.emplace_back(MakeMasterKey(m_form, rows[index], protocols), (pGame != nullptr) ? pGame->masters[index] : Query::SMasterEndpoint{});
+		Browser::SMasterProbeRequest& request{ m_probeRequests.emplace_back() };
+
+		request.key = MakeMasterKey(m_form, rows[index], protocols);
+
+		if (pGame != nullptr)
+		{
+			request.endpoint = pGame->masters[index];
+			request.protocol = pGame->protocol;
+			request.protocolOptions = pGame->protocolOptions;
+		}
 	}
 
 	m_canProbe = pGame != nullptr;

@@ -414,13 +414,6 @@ bool DrawGroup(SGameField const& field, SGameFormNode& node, SGameFormNode const
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A row's optional fields may need more than a line of text, so the table leaves them as the file has them.
-bool IsCell(SGameField const& field, std::string_view schema)
-{
-	return field.parent == schema && field.isRequired;
-}
-
-//////////////////////////////////////////////////////////////////////////
 // Each row is applied after the table, so no field a row's controls are bound to moves while they are drawn.
 bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode const* pBase, std::string_view path, SFieldProblem const* pProblem,
 	SFormContext const& context)
@@ -428,7 +421,7 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 	std::string const schema{ ToSchemaPath(field) };
 	std::span<SGameField const> const fields{ Games::GetGameFields() };
 	bool const hasStatus{ schema == MastersRow && context.drawMasterStatus };
-	int const numCells{ static_cast<int>(std::ranges::count_if(fields, [&schema](SGameField const& column) { return IsCell(column, schema); })) };
+	int const numCells{ static_cast<int>(std::ranges::count(fields, std::string_view{ schema }, &SGameField::parent)) };
 	int const numColumns{ numCells + (hasStatus ? 1 : 0) + 1 };
 	std::optional<size_t> removed{};
 	bool isEdited{ false };
@@ -439,7 +432,7 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 	{
 		for (SGameField const& column : fields)
 		{
-			if (IsCell(column, schema))
+			if (column.parent == schema)
 			{
 				bool const isNumber{ column.kind == EGameFieldKind::Number };
 
@@ -465,14 +458,15 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 
 			for (SGameField const& column : fields)
 			{
-				if (IsCell(column, schema))
+				if (column.parent == schema)
 				{
 					ImGuiInputTextFlags const flags{ (column.kind == EGameFieldKind::Number) ? ImGuiInputTextFlags_CharsDecimal : ImGuiInputTextFlags_None };
 
 					ImGui::TableNextColumn();
 					ImGui::PushID(column.name.data(), column.name.data() + column.name.size());
 					ImGui::SetNextItemWidth(-FLT_MIN);
-					isEdited = ImGui::InputTextWithHint("##value", RequiredHint, &Games::GetFormField(row, column.name).text, flags) || isEdited;
+					isEdited = ImGui::InputTextWithHint("##value", column.isRequired ? RequiredHint : OptionalHint, &Games::GetFormField(row, column.name).text,
+						flags) || isEdited;
 					ImGui::PopID();
 				}
 			}

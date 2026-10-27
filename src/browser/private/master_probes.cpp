@@ -15,6 +15,7 @@ namespace
 // Long enough that a host or port being typed is not tested at every keystroke.
 constexpr std::chrono::seconds SettleTime{ 1 };
 constexpr Query::EGame ProbedGame{ 0 };
+constexpr Query::EProtocol ProbedProtocol{ 0 };
 constexpr std::string_view ProbedGameName{ "Master test" };
 } // namespace
 
@@ -166,37 +167,33 @@ bool CMasterProbes::IsDue(std::string_view key) const
 }
 
 //////////////////////////////////////////////////////////////////////////
-// An engine of its own, on a catalog of one game whose masters are the rows due and whose protocols are only those they
-// use, so starting it loads no other script.
+// An engine of its own, on a catalog of one game whose masters are the rows due and whose protocol is theirs, so
+// starting it loads no other script.
 void CMasterProbes::StartRun(std::span<Query::SProtocolDefinition const> protocols)
 {
 	Query::SGameDefinition game{};
-	std::map<Query::EProtocol, Query::EProtocol> runProtocols{};
+	SMasterProbeRequest const* pFirst{ nullptr };
 
 	for (SMasterProbeRequest const& request : m_wanted)
 	{
 		if (IsDue(request.key) && !std::ranges::contains(m_runKeys, request.key))
 		{
-			TGE_ASSERT(static_cast<size_t>(request.endpoint.protocol) < protocols.size(), "A master to test names a protocol it was not given");
+			pFirst = (pFirst != nullptr) ? pFirst : &request;
 
-			auto const [protocol, isNew]{ runProtocols.try_emplace(request.endpoint.protocol, static_cast<Query::EProtocol>(m_runProtocols.size())) };
+			TGE_ASSERT(request.protocol == pFirst->protocol && request.protocolOptions == pFirst->protocolOptions, "The rows to test come from one description");
 
-			if (isNew)
-			{
-				m_runProtocols.emplace_back(protocols[static_cast<size_t>(request.endpoint.protocol)]);
-			}
-
-			Query::SMasterEndpoint& master{ game.masters.emplace_back(request.endpoint) };
-
-			master.protocol = protocol->second;
+			game.masters.emplace_back(request.endpoint);
 			m_runKeys.emplace_back(request.key);
 		}
 	}
 
+	TGE_ASSERT(pFirst != nullptr && static_cast<size_t>(pFirst->protocol) < protocols.size(), "A run tests rows through a protocol it was given");
+
 	game.name = ProbedGameName;
 	game.game = ProbedGame;
-	// Only server conversations use the game's own protocol, and a probe has none.
-	game.protocol = game.masters.front().protocol;
+	game.protocol = ProbedProtocol;
+	game.protocolOptions = pFirst->protocolOptions;
+	m_runProtocols.assign(1, protocols[static_cast<size_t>(pFirst->protocol)]);
 	m_runGames.assign(1, std::move(game));
 	m_isRunning = m_engine.Initialize(Net::SQueryCatalog{ m_runGames, m_runProtocols }, [wake = m_wake]() { wake(); });
 

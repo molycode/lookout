@@ -40,7 +40,7 @@ constexpr std::array<std::string_view, 3> ColourCodeNames{ "alphanumeric", "prin
 
 using enum EGameFieldKind;
 
-constexpr std::array<SGameField, 44> Fields{ {
+constexpr std::array<SGameField, 41> Fields{ {
 	{ "", "format", "Format", Version, true, {}, "The version of this format, 1 or 2: the lowest that has every field the file uses." },
 	{ "", "name", "Name", Text, true, {}, "The game's name in the game list." },
 	{ "", "protocol", "Protocol", Protocol, true, {}, "The protocol script that queries the game's masters and servers, by name." },
@@ -51,12 +51,6 @@ constexpr std::array<SGameField, 44> Fields{ {
 	{ "", "masters", "Masters", GroupList, true, {}, "The master servers that list the game's servers; at least one." },
 	{ "masters[]", "host", "Host", Text, true, {}, "The master's host name or IP address." },
 	{ "masters[]", "port", "Port", Number, true, {}, "The master's port, 1 to 65535." },
-	{ "masters[]", "protocol", "Protocol", Protocol, false, {},
-		"Optional: the protocol script that reads this master's list, by name; without it, the game's protocol and options.", 2 },
-	{ "masters[]", "protocolOptions", "Protocol options", ProtocolOptions, false, {},
-		"The options of the master's own protocol, each a string; optional unless that protocol requires one.", 2 },
-	{ "masters[]", "portOffset", "Port offset", Number, false, {},
-		"Optional: added to each port this master lists, for a master that lists another port than the game's protocol asks.", 2 },
 	{ "", "keys", "Server rules", Group, true, {}, "Which of a server's rules hold what the list shows." },
 	{ "keys", "hostname", "Name rule", Text, true, {}, "The rule holding the server's name." },
 	{ "keys", "map", "Map rule", Text, true, {}, "The rule holding the map." },
@@ -831,45 +825,18 @@ void ReadPortOffset(JsonValue const& object, std::string_view parent, std::strin
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A master that names no protocol lists through the game's, with the game's options.
-void ReadMasterProtocol(JsonValue const& object, std::string_view path, std::span<Query::SProtocolDefinition const> protocols,
-	Query::SGameDefinition const& game, Query::SMasterEndpoint& master, SFieldProblem& problem)
-{
-	if (object.contains("protocol"))
-	{
-		Query::SProtocolDefinition const* const pProtocol{ ReadProtocol(object, path, protocols, master.protocol, problem) };
-
-		if (pProtocol != nullptr)
-		{
-			ReadProtocolOptions(object, path, *pProtocol, master.protocolOptions, problem);
-		}
-	}
-	else if (object.contains("protocolOptions"))
-	{
-		Fail(problem, JoinPath(path, "protocolOptions"), "is only for a master that names its protocol");
-	}
-	else
-	{
-		master.protocol = game.protocol;
-		master.protocolOptions = game.protocolOptions;
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-void ReadMasters(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::SGameDefinition& game, SFieldProblem& problem)
+void ReadMasters(JsonValue const& root, Query::SGameDefinition& game, SFieldProblem& problem)
 {
 	JsonValue::const_iterator const it{ root.find("masters") };
 
 	if (it != root.cend())
 	{
-		ReadObjects(*it, "masters", problem, [protocols, &game, &problem](JsonValue const& object, std::string_view path)
+		ReadObjects(*it, "masters", problem, [&game, &problem](JsonValue const& object, std::string_view path)
 		{
 			Query::SMasterEndpoint& master{ game.masters.emplace_back() };
 
 			ReadRequiredString(object, path, "host", master.host, problem);
 			ReadPort(object, path, master.port, problem);
-			ReadMasterProtocol(object, path, protocols, game, master, problem);
-			ReadPortOffset(object, path, "portOffset", master.portOffset, problem);
 		});
 
 		if (game.masters.empty())
@@ -897,7 +864,7 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 	}
 
 	ReadPortOffset(root, {}, "queryPortOffset", game.queryPortOffset, problem);
-	ReadMasters(root, protocols, game, problem);
+	ReadMasters(root, game, problem);
 	ReadKeys(root, game.keys, problem);
 	ReadModes(root, game.modes, problem);
 	ReadForeignServers(root, game.foreignServers, problem);
@@ -914,7 +881,7 @@ std::span<SGameField const> GetGameFields()
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Without the conversations, which only the protocols and their options can change, so an editor need not run them on
+// Without the conversations, which only the protocol and its options can change, so an editor need not run them on
 // every keystroke.
 std::expected<Query::SGameDefinition, SFieldProblem> ReadGameFields(std::string_view text, std::span<Query::SProtocolDefinition const> protocols)
 {

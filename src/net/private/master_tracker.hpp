@@ -28,8 +28,8 @@ public:
 	CMasterTracker() = default;
 	~CMasterTracker() = default;
 
-	void Begin(Query::EGame game, uint32_t generation, std::span<Query::SMasterEndpoint const> masters,
-		std::span<Script::EMasterTransport const> transports, Clock::time_point now);
+	void Begin(Query::EGame game, uint32_t generation, std::span<Query::SMasterEndpoint const> masters, Script::EMasterTransport transport,
+		Clock::time_point now);
 	void OnResolved(Query::EGame game, uint32_t generation, size_t index, std::expected<uint32_t, std::string> const& result, Clock::time_point now);
 	// Queries to send: a master's first, or a resend of a step nobody answered.
 	void Update(Clock::time_point now, std::vector<SMasterQuery>& queries, std::vector<SMasterOutcome>& outcomes);

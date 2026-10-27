@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <fstream>
 #include <iterator>
-#include <string>
 
 namespace Lkt::Fixtures
 {
@@ -103,12 +102,6 @@ Query::EGame GetGameId(std::string_view key)
 }
 
 //////////////////////////////////////////////////////////////////////////
-Query::SMasterEndpoint MakeMaster(Query::SGameDefinition const& game, std::string_view host, uint16_t port)
-{
-	return Query::SMasterEndpoint{ std::string{ host }, port, game.protocol, game.protocolOptions };
-}
-
-//////////////////////////////////////////////////////////////////////////
 Query::SProtocolDefinition const& GetProtocolByName(std::string_view name)
 {
 	std::span<Query::SProtocolDefinition const> const protocols{ Query::GetProtocolCatalog() };
@@ -121,12 +114,6 @@ Query::SProtocolDefinition const& GetProtocolByName(std::string_view name)
 	}
 
 	return *it;
-}
-
-//////////////////////////////////////////////////////////////////////////
-Query::EProtocol GetProtocolId(std::string_view name)
-{
-	return static_cast<Query::EProtocol>(&GetProtocolByName(name) - Query::GetProtocolCatalog().data());
 }
 
 //////////////////////////////////////////////////////////////////////////

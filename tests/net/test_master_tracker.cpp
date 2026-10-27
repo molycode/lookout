@@ -1,8 +1,6 @@
 #include "master_tracker.hpp"
 #include <gtest/gtest.h>
-#include <array>
 #include <optional>
-#include <string_view>
 #include <vector>
 
 namespace Lkt::Net
@@ -18,20 +16,6 @@ constexpr SMasterId Master{ Game, 0 };
 constexpr uint32_t MasterIp{ 0x2D5E3A3C };
 constexpr uint32_t SecondMasterIp{ 0x2D5E3A3D };
 constexpr Query::SServerAddress MasterAddress{ MasterIp, 27900 };
-constexpr std::array OverUdp{ Script::EMasterTransport::Udp };
-constexpr std::array BothOverUdp{ Script::EMasterTransport::Udp, Script::EMasterTransport::Udp };
-constexpr std::array OverTcp{ Script::EMasterTransport::Tcp };
-
-//////////////////////////////////////////////////////////////////////////
-Query::SMasterEndpoint MakeMaster(std::string_view host)
-{
-	Query::SMasterEndpoint master{};
-
-	master.host = host;
-	master.port = 27900;
-
-	return master;
-}
 
 //////////////////////////////////////////////////////////////////////////
 // The tracker keeps views of the master hosts, so the lists live as long as each test.
@@ -42,14 +26,14 @@ protected:
 	// testing::Test
 	void SetUp() override
 	{
-		m_masters = { MakeMaster("master.example") };
-		m_twoMasters = { MakeMaster("one.example"), MakeMaster("two.example") };
+		m_masters = { Query::SMasterEndpoint{ "master.example", 27900 } };
+		m_twoMasters = { Query::SMasterEndpoint{ "one.example", 27900 }, Query::SMasterEndpoint{ "two.example", 27900 } };
 	}
 	// ~testing::Test
 
 	void BeginResolved()
 	{
-		m_tracker.Begin(Game, 1, m_masters, OverUdp, Start);
+		m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Udp, Start);
 		m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
 	}
 
@@ -116,7 +100,7 @@ TEST_F(CMasterTrackerTest, ReportsAMasterThatNeverAnswers)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, ReportsAMasterThatCannotBeResolved)
 {
-	m_tracker.Begin(Game, 1, m_masters, OverUdp, Start);
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Udp, Start);
 	m_tracker.OnResolved(Game, 1, 0, std::unexpected{ std::string{ "Name or service not known" } }, Start);
 	Update(Start);
 
@@ -128,7 +112,7 @@ TEST_F(CMasterTrackerTest, ReportsAMasterThatCannotBeResolved)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, LookupThatNeverReturnsTimesOut)
 {
-	m_tracker.Begin(Game, 1, m_masters, OverUdp, Start);
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Udp, Start);
 	Update(Start + 5s);
 
 	ASSERT_EQ(m_outcomes.size(), 1u);
@@ -138,8 +122,8 @@ TEST_F(CMasterTrackerTest, LookupThatNeverReturnsTimesOut)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, IgnoresAnAnswerForAReplacedRefresh)
 {
-	m_tracker.Begin(Game, 1, m_masters, OverUdp, Start);
-	m_tracker.Begin(Game, 2, m_masters, OverUdp, Start);
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Udp, Start);
+	m_tracker.Begin(Game, 2, m_masters, Script::EMasterTransport::Udp, Start);
 	m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
 	Update(Start);
 
@@ -150,7 +134,7 @@ TEST_F(CMasterTrackerTest, IgnoresAnAnswerForAReplacedRefresh)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, ResolvesEachMasterByItsIndex)
 {
-	m_tracker.Begin(Game, 1, m_twoMasters, BothOverUdp, Start);
+	m_tracker.Begin(Game, 1, m_twoMasters, Script::EMasterTransport::Udp, Start);
 	m_tracker.OnResolved(Game, 1, 1, SecondMasterIp, Start);
 	Update(Start);
 
@@ -267,7 +251,7 @@ TEST_F(CMasterTrackerTest, CapsTheServersOneMasterMayList)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, MastersAtOneAddressAreApart)
 {
-	m_tracker.Begin(Game, 1, m_twoMasters, BothOverUdp, Start);
+	m_tracker.Begin(Game, 1, m_twoMasters, Script::EMasterTransport::Udp, Start);
 	m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
 	m_tracker.OnResolved(Game, 1, 1, MasterIp, Start);
 	Update(Start);
@@ -308,7 +292,7 @@ TEST_F(CMasterTrackerTest, EndedMasterIsNotReportedTwice)
 TEST_F(CMasterTrackerTest, CancelOnlyForgetsThatGame)
 {
 	BeginResolved();
-	m_tracker.Begin(OtherGame, 1, m_masters, OverUdp, Start);
+	m_tracker.Begin(OtherGame, 1, m_masters, Script::EMasterTransport::Udp, Start);
 	m_tracker.Cancel(Game);
 
 	EXPECT_FALSE(m_tracker.HasWork(Game));
@@ -318,7 +302,7 @@ TEST_F(CMasterTrackerTest, CancelOnlyForgetsThatGame)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, StreamStepIsNeverResent)
 {
-	m_tracker.Begin(Game, 1, m_masters, OverTcp, Start);
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Tcp, Start);
 	m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
 	Update(Start);
 	Update(Start + 2s);
@@ -329,24 +313,9 @@ TEST_F(CMasterTrackerTest, StreamStepIsNeverResent)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CMasterTrackerTest, EachMasterIsResentOnItsOwnTransport)
-{
-	constexpr std::array StreamThenDatagram{ Script::EMasterTransport::Tcp, Script::EMasterTransport::Udp };
-
-	m_tracker.Begin(Game, 1, m_twoMasters, StreamThenDatagram, Start);
-	m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
-	m_tracker.OnResolved(Game, 1, 1, SecondMasterIp, Start);
-	Update(Start);
-	Update(Start + 2s);
-
-	ASSERT_EQ(m_queries.size(), 3u);
-	EXPECT_EQ(m_queries[2].master, (SMasterId{ Game, 1 }));
-}
-
-//////////////////////////////////////////////////////////////////////////
 TEST_F(CMasterTrackerTest, SilentStreamMasterFailsAfterItsStep)
 {
-	m_tracker.Begin(Game, 1, m_masters, OverTcp, Start);
+	m_tracker.Begin(Game, 1, m_masters, Script::EMasterTransport::Tcp, Start);
 	m_tracker.OnResolved(Game, 1, 0, MasterIp, Start);
 	Update(Start);
 	Update(Start + 4s);

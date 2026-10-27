@@ -1,7 +1,6 @@
 #pragma once
 
 #include "conversation_record.hpp"
-#include "master_id.hpp"
 #include "stream_socket.hpp"
 #include "udp_socket.hpp"
 #include "query/server_address.hpp"
@@ -18,7 +17,6 @@ namespace Lkt::Net
 struct SMasterConversation final
 {
 	SConversationRecord record;
-	SMasterId master;
 	Query::SServerAddress address;
 	CUdpSocket datagramSocket;
 	CStreamSocket streamSocket;

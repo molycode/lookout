@@ -1,17 +1,11 @@
 #pragma once
 
-#include "games/field_problem.hpp"
 #include <expected>
-#include <memory>
-#include <span>
+#include <map>
+#include <string>
 
 namespace Lkt
 {
-namespace Query
-{
-struct SGameDefinition;
-} // namespace Query
-
 namespace Script
 {
 class CProtocolScript;
@@ -19,8 +13,7 @@ class CProtocolScript;
 
 namespace Games
 {
-// Each kind of conversation is started once with the game's options, and each master's own list conversation, so a
-// game the scripts cannot talk for fails here.
-std::expected<void, SFieldProblem> TryConversations(Query::SGameDefinition const& game, std::span<std::unique_ptr<Script::CProtocolScript> const> scripts);
+// Each kind of conversation is started once with the game's options, so a game the script cannot talk for fails here.
+std::expected<void, std::string> TryConversations(Script::CProtocolScript& script, std::map<std::string, std::string> const& options);
 } // namespace Games
 } // namespace Lkt
