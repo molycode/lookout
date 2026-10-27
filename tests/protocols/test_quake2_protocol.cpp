@@ -77,7 +77,7 @@ TEST_F(CQuake2ProtocolTest, AsksServersForStatus)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake2ProtocolTest, ReadsKingpinMasterList)
 {
-	std::vector<std::byte> const datagram{ LoadFixture("kingpin/master-master.kingpin.info-0.bin") };
+	std::vector<std::byte> const datagram{ LoadFixture("kingpin-quake2/master-master.kingpin.info-0.bin") };
 	std::vector<SServerAddress> servers{};
 
 	ASSERT_TRUE(Fixtures::ReadMasterDatagram(m_script, MasterOptions(), datagram, servers).has_value());
@@ -89,7 +89,7 @@ TEST_F(CQuake2ProtocolTest, ReadsKingpinMasterList)
 TEST_F(CQuake2ProtocolTest, MasterListEndsAfterAQuietPeriod)
 {
 	std::expected<Script::SScriptAction, std::string> const action{ Fixtures::ReceiveOnce(m_script, Script::EConversationKind::Master, MasterOptions(),
-		LoadFixture("kingpin/master-master.kingpin.info-0.bin")) };
+		LoadFixture("kingpin-quake2/master-master.kingpin.info-0.bin")) };
 
 	ASSERT_TRUE(action.has_value()) << action.error_or("");
 	EXPECT_FALSE(action->isDone);
@@ -127,7 +127,7 @@ TEST_F(CQuake2ProtocolTest, RejectsMasterReplyWithoutSeparator)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake2ProtocolTest, KeepsCompleteEntriesBeforeTruncation)
 {
-	std::vector<std::byte> datagram{ LoadFixture("kingpin/master-master.kingpin.info-0.bin") };
+	std::vector<std::byte> datagram{ LoadFixture("kingpin-quake2/master-master.kingpin.info-0.bin") };
 	std::vector<SServerAddress> servers{};
 
 	datagram.pop_back();
@@ -148,7 +148,7 @@ TEST_F(CQuake2ProtocolTest, RejectsQuake3MasterReply)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake2ProtocolTest, ReadsKingpinStatus)
 {
-	std::expected<SStatusReply, EParseError> const reply{ Fixtures::ReadStatusDatagram(m_script, LoadFixture("kingpin/status-93.226.82.165_31510.bin")) };
+	std::expected<SStatusReply, EParseError> const reply{ Fixtures::ReadStatusDatagram(m_script, LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin")) };
 
 	ASSERT_TRUE(reply.has_value());
 	EXPECT_EQ(FindRule(reply.value(), "hostname"), "BM - kp.satoki.org");
@@ -157,7 +157,7 @@ TEST_F(CQuake2ProtocolTest, ReadsKingpinStatus)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake2ProtocolTest, ReadsEveryCapturedStatus)
 {
-	for (std::string_view const game : { "kingpin", "quake2", "alienarena" })
+	for (std::string_view const game : { "kingpin-quake2", "quake2", "alienarena" })
 	{
 		for (std::filesystem::path const& path : Fixtures::ListFixtures(game, "status-"))
 		{

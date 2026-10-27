@@ -18,7 +18,7 @@ import sys
 import time
 
 GAMES = {
-	"kingpin": ("quake2", [("master.kingpin.info", 27900)], ""),
+	"kingpin-quake2": ("quake2", [("master.kingpin.info", 27900)], ""),
 	"quake2": ("quake2", [("master.quakeservers.net", 27900), ("master.maraakate.org", 27900)], ""),
 	"rtcw": ("quake3", [("wolfmaster.idsoftware.com", 27950)], "60 empty full"),
 	"et": ("quake3", [("etmaster.idsoftware.com", 27950), ("etmaster.etlegacy.com", 27950)], "84 empty full"),

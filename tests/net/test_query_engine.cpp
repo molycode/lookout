@@ -44,7 +44,7 @@ TEST(QueryEngine, AnswersAServerItWasAskedAbout)
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
 
-	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
+	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, server.GetAddress());
@@ -116,7 +116,7 @@ TEST(QueryEngine, RunsAgainAfterARefreshFinished)
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
 
-	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
+	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, server.GetAddress());
@@ -167,7 +167,7 @@ TEST(QueryEngine, EachRefreshCarriesALargerIdThanTheOneBefore)
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
 
-	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
+	ASSERT_TRUE(server.Start(Fixtures::LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, server.GetAddress());
@@ -205,7 +205,7 @@ TEST(QueryEngine, ServerAskedDuringARefreshCarriesThatRefreshsId)
 	CQueryEngine engine{};
 
 	ASSERT_TRUE(silent.Start({}));
-	ASSERT_TRUE(answering.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
+	ASSERT_TRUE(answering.Start(Fixtures::LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, silent.GetAddress());
@@ -232,7 +232,7 @@ TEST(QueryEngine, RefreshAfterACancelCarriesTheNewId)
 	CQueryEngine engine{};
 
 	ASSERT_TRUE(silent.Start({}));
-	ASSERT_TRUE(answering.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")));
+	ASSERT_TRUE(answering.Start(Fixtures::LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin")));
 	ASSERT_TRUE(engine.Initialize(Fixtures::GetCatalog(), collector.MakeCallback()));
 
 	engine.RefreshServer(game, silent.GetAddress());

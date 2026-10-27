@@ -123,7 +123,7 @@ protected:
 	{
 		Initialize();
 
-		return m_server.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin")) && m_browser.Start(m_waiter.MakeCallback());
+		return m_server.Start(Fixtures::LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin")) && m_browser.Start(m_waiter.MakeCallback());
 	}
 
 	SServerEntry const* FindRow(Query::SServerAddress const& address) const

@@ -89,7 +89,7 @@ protected:
 
 	bool StartStatusServer()
 	{
-		return m_status.Start(Fixtures::LoadFixture("kingpin/status-93.226.82.165_31510.bin"));
+		return m_status.Start(Fixtures::LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin"));
 	}
 
 	bool StartQuake2Master(std::vector<Query::SServerAddress> const& listed)

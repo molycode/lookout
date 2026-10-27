@@ -286,7 +286,7 @@ TEST_F(CQuake3ProtocolTest, RejectsQuake2MasterReply)
 {
 	std::vector<SServerAddress> servers{};
 
-	EXPECT_EQ(Fixtures::ReadMasterDatagram(m_script, MasterOptions(), LoadFixture("kingpin/master-master.kingpin.info-0.bin"), servers), std::unexpected{ EParseError::WrongHeader });
+	EXPECT_EQ(Fixtures::ReadMasterDatagram(m_script, MasterOptions(), LoadFixture("kingpin-quake2/master-master.kingpin.info-0.bin"), servers), std::unexpected{ EParseError::WrongHeader });
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -404,7 +404,7 @@ TEST_F(CQuake3ProtocolTest, PrivateSlotsAreNotCapacity)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake3ProtocolTest, RejectsQuake2StatusReply)
 {
-	EXPECT_EQ(Fixtures::ReadStatusDatagram(m_script, LoadFixture("kingpin/status-93.226.82.165_31510.bin")), std::unexpected{ EParseError::WrongHeader });
+	EXPECT_EQ(Fixtures::ReadStatusDatagram(m_script, LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin")), std::unexpected{ EParseError::WrongHeader });
 }
 } // namespace
 } // namespace Lkt::Query

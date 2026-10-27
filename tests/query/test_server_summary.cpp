@@ -42,13 +42,13 @@ SServerSummary SummarizeFixture(std::string_view key, std::string_view path)
 //////////////////////////////////////////////////////////////////////////
 TEST(ServerSummary, KingpinBagmanWinsOverDeathmatch)
 {
-	EXPECT_EQ(SummarizeFixture("kingpin", "kingpin/status-93.226.82.165_31510.bin").mode, "Bagman");
+	EXPECT_EQ(SummarizeFixture("kingpin", "kingpin-quake2/status-93.226.82.165_31510.bin").mode, "Bagman");
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST(ServerSummary, KingpinCoopIsNotDeathmatch)
 {
-	EXPECT_EQ(SummarizeFixture("kingpin", "kingpin/status-45.94.58.60_31515.bin").mode, "Co-op");
+	EXPECT_EQ(SummarizeFixture("kingpin", "kingpin-quake2/status-45.94.58.60_31515.bin").mode, "Co-op");
 }
 
 //////////////////////////////////////////////////////////////////////////
