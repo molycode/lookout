@@ -65,32 +65,15 @@ std::string ReadString(JsonValue const& object, std::string_view field)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void AddNamedProtocol(JsonValue const& object, std::set<std::string>& names)
-{
-	std::string protocol{ ReadString(object, "protocol") };
-
-	if (!protocol.empty())
-	{
-		names.insert(std::move(protocol));
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
 void AddNamedProtocols(std::filesystem::path const& gamesFolder, std::set<std::string>& names)
 {
 	for (std::filesystem::path const& folder : ListEntries(gamesFolder))
 	{
-		JsonValue const game = ReadGame(folder / "game.json");
-		JsonValue::const_iterator const masters{ game.is_object() ? game.find("masters") : game.cend() };
+		std::string protocol{ ReadString(ReadGame(folder / "game.json"), "protocol") };
 
-		AddNamedProtocol(game, names);
-
-		if (masters != game.cend() && masters->is_array())
+		if (!protocol.empty())
 		{
-			for (JsonValue const& master : *masters)
-			{
-				AddNamedProtocol(master, names);
-			}
+			names.insert(std::move(protocol));
 		}
 	}
 }
@@ -112,24 +95,6 @@ EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SInde
 		}) };
 
 		state = (hasIndexFiles && !hasOtherFiles && IsProtocolCurrent(downloadedDir, protocol)) ? EOfferState::Installed : EOfferState::UpdateAvailable;
-	}
-
-	return state;
-}
-
-//////////////////////////////////////////////////////////////////////////
-EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SIndexProtocol const& protocol)
-{
-	std::error_code error{};
-	EOfferState state{ EOfferState::NotInstalled };
-
-	if (IsProtocolCurrent(downloadedDir, protocol))
-	{
-		state = EOfferState::Installed;
-	}
-	else if (std::filesystem::exists(downloadedDir / "protocols" / protocol.file.name, error))
-	{
-		state = EOfferState::UpdateAvailable;
 	}
 
 	return state;
@@ -253,23 +218,23 @@ std::expected<void, std::string> RemoveGame(std::filesystem::path const& downloa
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<std::string> RemoveUnusedProtocols(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir,
-	std::set<std::string> inUse)
+std::vector<std::string> RemoveUnusedProtocols(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir)
 {
+	std::set<std::string> named{};
 	std::vector<std::string> problems{};
 
-	AddNamedProtocols(downloadedDir / "games", inUse);
+	AddNamedProtocols(downloadedDir / "games", named);
 
 	if (!userDir.empty())
 	{
-		AddNamedProtocols(userDir / "games", inUse);
+		AddNamedProtocols(userDir / "games", named);
 	}
 
 	for (std::filesystem::path const& path : ListEntries(downloadedDir / "protocols"))
 	{
 		std::error_code error{};
 
-		if (path.extension() == ProtocolExtension && !inUse.contains(path.stem().string()))
+		if (path.extension() == ProtocolExtension && !named.contains(path.stem().string()))
 		{
 			std::filesystem::remove(path, error);
 		}

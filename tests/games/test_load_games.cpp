@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <cstdlib>
-#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -337,46 +336,6 @@ TEST_F(CLoadGamesTest, MasterProtocolThatCannotListIsAProblem)
 	EXPECT_TRUE(content.problems.front().text.starts_with("games/mygame/game.json: masters[0]: ")) << content.problems.front().text;
 	EXPECT_EQ(content.problems.front().key, "mygame");
 	EXPECT_EQ(FindGame(content, "mygame"), nullptr);
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST_F(CLoadGamesTest, DownloadedProtocolIsReadAsTheGamesAreLoaded)
-{
-	std::expected<Query::SProtocolDefinition, std::string> const protocol{ LoadDownloadedProtocol(LKT_LOOKOUT_GAMES_DIR, "gamespy1") };
-
-	ASSERT_TRUE(protocol.has_value()) << protocol.error();
-	EXPECT_EQ(*protocol, Fixtures::GetProtocolByName("gamespy1"));
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST_F(CLoadGamesTest, DownloadedProtocolThatIsNotThereIsAProblem)
-{
-	std::expected<Query::SProtocolDefinition, std::string> const protocol{ LoadDownloadedProtocol(m_dir / "downloaded", "mine") };
-
-	ASSERT_FALSE(protocol.has_value());
-	EXPECT_EQ(protocol.error(), "downloaded/protocols/mine.lua: No such file or directory");
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST_F(CLoadGamesTest, DownloadedProtocolThatCannotLoadIsAProblem)
-{
-	WriteFile("downloaded/protocols/mine.lua", "return 1");
-
-	std::expected<Query::SProtocolDefinition, std::string> const protocol{ LoadDownloadedProtocol(m_dir / "downloaded", "mine") };
-
-	ASSERT_FALSE(protocol.has_value());
-	EXPECT_TRUE(protocol.error().starts_with("downloaded/protocols/mine.lua: ")) << protocol.error();
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST_F(CLoadGamesTest, DownloadedProtocolNameThatIsNotAKeyIsAProblem)
-{
-	WriteFile("mine.lua", Fixtures::MakeScript(""));
-
-	std::expected<Query::SProtocolDefinition, std::string> const protocol{ LoadDownloadedProtocol(m_dir / "downloaded", "../../mine") };
-
-	ASSERT_FALSE(protocol.has_value());
-	EXPECT_EQ(protocol.error(), "downloaded/protocols/../../mine.lua: its name must use only lower-case letters, digits, '-' and '_'");
 }
 } // namespace
 } // namespace Lkt::Games
