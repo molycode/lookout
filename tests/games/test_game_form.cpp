@@ -1,13 +1,11 @@
 #include "merge_patch.hpp"
 #include "games/check_game.hpp"
 #include "games/game_form.hpp"
-#include "games/game_format.hpp"
 #include "json/json.hpp"
 #include "query/game_catalog.hpp"
 #include <gtest/gtest.h>
 #include <expected>
 #include <filesystem>
-#include <format>
 #include <fstream>
 #include <iterator>
 #include <optional>
@@ -223,7 +221,7 @@ TEST(GameForm, TextThatIsNotJsonCannotBeShown)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, UnknownFieldCannotBeShown)
 {
-	EXPECT_EQ(ProblemOf(R"json({ "format": 1, "keys": { "hostnme": "hostname" } })json"), "keys.hostnme: is not a field of any format up to 2");
+	EXPECT_EQ(ProblemOf(R"json({ "format": 1, "keys": { "hostnme": "hostname" } })json"), "keys.hostnme: is not a field of format 1");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -241,18 +239,7 @@ TEST(GameForm, NoteThatIsNotTextCannotBeShown)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, NewerFormatCannotBeShown)
 {
-	EXPECT_EQ(ProblemOf(std::format(R"json({{ "format": {}, "name": "Mine" }})json", GameFormat + 1)),
-		std::format("format: is {}, which needs a newer Lookout", GameFormat + 1));
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST(GameForm, FormatTwoFileWithOnlyFormatOneFieldsIsWrittenAsFormatOne)
-{
-	JsonValue game = JsonValue::parse(ReadDownloaded("kingpin"));
-
-	game["format"] = 2;
-
-	EXPECT_EQ(JsonValue::parse(WriteGameForm(ReadForm(game.dump())))["format"], 1);
+	EXPECT_EQ(ProblemOf(R"json({ "format": 2, "name": "Mine" })json"), "format: is 2, which needs a newer Lookout");
 }
 } // namespace
 } // namespace Lkt::Games

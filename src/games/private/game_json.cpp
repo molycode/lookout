@@ -12,7 +12,6 @@
 #include <cstdint>
 #include <format>
 #include <map>
-#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -41,7 +40,7 @@ constexpr std::array<std::string_view, 3> ColourCodeNames{ "alphanumeric", "prin
 using enum EGameFieldKind;
 
 constexpr std::array<SGameField, 41> Fields{ {
-	{ "", "format", "Format", Version, true, {}, "The version of this format, 1 or 2: the lowest that has every field the file uses." },
+	{ "", "format", "Format", Version, true, {}, "The version of this format: 1." },
 	{ "", "name", "Name", Text, true, {}, "The game's name in the game list." },
 	{ "", "protocol", "Protocol", Protocol, true, {}, "The protocol script that queries the game's masters and servers, by name." },
 	{ "", "protocolOptions", "Protocol options", ProtocolOptions, false, {},
@@ -180,7 +179,7 @@ std::string ToParent(std::string_view path)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A field no format knows is a typo or a later Lookout's, so it is never skipped silently.
+// A field format 1 does not know is a typo or a later format's, so it is never skipped silently.
 void CheckFields(JsonValue const& object, std::string_view path, SFieldProblem& problem)
 {
 	std::string const parent{ ToParent(path) };
@@ -196,7 +195,7 @@ void CheckFields(JsonValue const& object, std::string_view path, SFieldProblem& 
 		}
 		else if (!isField)
 		{
-			Fail(problem, JoinPath(path, key), std::format("is not a field of any format up to {}", GameFormat));
+			Fail(problem, JoinPath(path, key), "is not a field of format 1");
 		}
 	}
 }
@@ -352,10 +351,9 @@ void ReadPort(JsonValue const& object, std::string_view parent, uint16_t& port, 
 
 //////////////////////////////////////////////////////////////////////////
 // Read before anything else: a newer format's fields would otherwise only be reported as unknown.
-std::optional<uint64_t> ReadFormat(JsonValue const& root, SFieldProblem& problem)
+bool ReadFormat(JsonValue const& root, SFieldProblem& problem)
 {
 	JsonValue::const_iterator const it{ root.find("format") };
-	std::optional<uint64_t> format{};
 
 	if (it == root.cend())
 	{
@@ -365,55 +363,12 @@ std::optional<uint64_t> ReadFormat(JsonValue const& root, SFieldProblem& problem
 	{
 		Fail(problem, "format", std::format("is {}, which needs a newer Lookout", it->get<uint64_t>()));
 	}
-	else if (!it->is_number_unsigned() || it->get<uint64_t>() < FirstGameFormat)
+	else if (!it->is_number_unsigned() || it->get<uint64_t>() != GameFormat)
 	{
-		Fail(problem, "format", std::format("must be a whole number from {} to {}", FirstGameFormat, GameFormat));
-	}
-	else
-	{
-		format = it->get<uint64_t>();
+		Fail(problem, "format", std::format("must be {}", GameFormat));
 	}
 
-	return format;
-}
-
-//////////////////////////////////////////////////////////////////////////
-// An older Lookout would refuse the field without knowing why, while the format tells it the game needs a newer one.
-void CheckFieldFormats(JsonValue const& object, std::string_view path, uint64_t format, SFieldProblem& problem)
-{
-	std::string const parent{ ToParent(path) };
-
-	for (auto const& item : object.items())
-	{
-		std::string const itemPath{ JoinPath(path, item.key()) };
-		auto const field{ std::ranges::find_if(Fields, [&parent, &item](SGameField const& candidate)
-		{
-			return candidate.parent == parent && candidate.name == item.key();
-		}) };
-
-		if (field != Fields.end() && field->firstFormat > format)
-		{
-			Fail(problem, itemPath, std::format("is a field of format {}; this file is format {}", field->firstFormat, format));
-		}
-		else if (field != Fields.end() && field->kind == EGameFieldKind::Group && item.value().is_object())
-		{
-			CheckFieldFormats(item.value(), itemPath, format, problem);
-		}
-		else if (field != Fields.end() && field->kind == EGameFieldKind::GroupList && item.value().is_array())
-		{
-			size_t index{ 0 };
-
-			for (JsonValue const& element : item.value())
-			{
-				if (element.is_object())
-				{
-					CheckFieldFormats(element, std::format("{}[{}]", itemPath, index), format, problem);
-				}
-
-				++index;
-			}
-		}
-	}
+	return problem.reason.empty();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -897,9 +852,8 @@ std::expected<Query::SGameDefinition, SFieldProblem> ReadGameFields(std::string_
 	{
 		problem.reason = "it must hold a JSON object";
 	}
-	else if (std::optional<uint64_t> const format{ ReadFormat(root, problem) }; format.has_value())
+	else if (ReadFormat(root, problem))
 	{
-		CheckFieldFormats(root, {}, *format, problem);
 		ReadGame(root, protocols, game, problem);
 	}
 

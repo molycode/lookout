@@ -1,8 +1,6 @@
 #pragma once
 
 #include "games/game_field_kind.hpp"
-#include "games/game_format.hpp"
-#include <cstdint>
 #include <span>
 #include <string_view>
 
@@ -18,6 +16,5 @@ struct SGameField final
 	bool isRequired{ false };
 	std::span<std::string_view const> choices;
 	std::string_view description;
-	uint64_t firstFormat{ FirstGameFormat };
 };
 } // namespace Lkt::Games

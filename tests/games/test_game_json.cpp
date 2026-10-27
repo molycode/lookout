@@ -1,12 +1,10 @@
 #include "game_json.hpp"
-#include "games/game_format.hpp"
 #include "json/json.hpp"
 #include "query/game_catalog.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <cstdint>
 #include <expected>
-#include <format>
 #include <string>
 #include <vector>
 
@@ -146,19 +144,9 @@ TEST(GameJson, NewerFormatAsksForANewerLookout)
 {
 	JsonValue game = MakeMinimalGame();
 
-	game["format"] = GameFormat + 1;
-
-	EXPECT_EQ(ReadProblem(game), std::format("format: is {}, which needs a newer Lookout", GameFormat + 1));
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST(GameJson, FormatTwoIsRead)
-{
-	JsonValue game = MakeMinimalGame();
-
 	game["format"] = 2;
 
-	EXPECT_EQ(ReadProblem(game), "");
+	EXPECT_EQ(ReadProblem(game), "format: is 2, which needs a newer Lookout");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -168,7 +156,7 @@ TEST(GameJson, FormatZeroIsRejected)
 
 	game["format"] = 0;
 
-	EXPECT_EQ(ReadProblem(game), "format: must be a whole number from 1 to 2");
+	EXPECT_EQ(ReadProblem(game), "format: must be 1");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -276,7 +264,7 @@ TEST(GameJson, UnknownFieldIsRejected)
 
 	game["keys"]["maxplayers"] = "sv_maxclients";
 
-	EXPECT_EQ(ReadProblem(game), "keys.maxplayers: is not a field of any format up to 2");
+	EXPECT_EQ(ReadProblem(game), "keys.maxplayers: is not a field of format 1");
 }
 
 //////////////////////////////////////////////////////////////////////////

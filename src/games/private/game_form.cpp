@@ -221,7 +221,7 @@ void ReadNotes(JsonValue const& object, std::string_view path, SGameFormNode& no
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, uint64_t format, SGameFormNode& node, std::string& problem);
+void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, SGameFormNode& node, std::string& problem);
 
 //////////////////////////////////////////////////////////////////////////
 void ReadOptions(JsonValue const& object, std::string_view path, SGameFormNode& node, std::string& problem)
@@ -242,7 +242,7 @@ void ReadOptions(JsonValue const& object, std::string_view path, SGameFormNode& 
 }
 
 //////////////////////////////////////////////////////////////////////////
-SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::string_view path, uint64_t format, std::string& problem)
+SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::string_view path, std::string& problem)
 {
 	SGameFormNode node{};
 
@@ -285,7 +285,7 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 		case EGameFieldKind::Group:
 			if (value.is_object())
 			{
-				ReadFields(value, ToSchemaPath(field), path, format, node, problem);
+				ReadFields(value, ToSchemaPath(field), path, node, problem);
 			}
 			else
 			{
@@ -307,7 +307,7 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 
 					if (entry.is_object())
 					{
-						ReadFields(entry, ToSchemaPath(field), entryPath, format, item, problem);
+						ReadFields(entry, ToSchemaPath(field), entryPath, item, problem);
 					}
 					else
 					{
@@ -341,24 +341,20 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 
 //////////////////////////////////////////////////////////////////////////
 // In the file's order, so a description written back unchanged makes no patch; the fields it lacks follow.
-void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, uint64_t format, SGameFormNode& node, std::string& problem)
+void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, SGameFormNode& node, std::string& problem)
 {
 	for (auto const& item : object.items())
 	{
 		std::string_view const key{ item.key() };
 		SGameField const* const pField{ FindField(schemaParent, key) };
 
-		if (pField != nullptr && pField->firstFormat > format)
+		if (pField != nullptr)
 		{
-			Fail(problem, JoinPath(path, key), std::format("is a field of format {}; this file is format {}", pField->firstFormat, format));
-		}
-		else if (pField != nullptr)
-		{
-			node.children.emplace_back(ReadField(item.value(), *pField, JoinPath(path, key), format, problem));
+			node.children.emplace_back(ReadField(item.value(), *pField, JoinPath(path, key), problem));
 		}
 		else if (!key.starts_with(CommentPrefix))
 		{
-			Fail(problem, JoinPath(path, key), std::format("is not a field of any format up to {}", GameFormat));
+			Fail(problem, JoinPath(path, key), "is not a field of format 1");
 		}
 	}
 
@@ -394,7 +390,7 @@ bool HasText(SGameFormNode const& node)
 }
 
 //////////////////////////////////////////////////////////////////////////
-JsonValue WriteFields(SGameFormNode const& node, std::string_view schemaParent, uint64_t& format);
+JsonValue WriteFields(SGameFormNode const& node, std::string_view schemaParent);
 
 //////////////////////////////////////////////////////////////////////////
 // Rgb codes carry their colour, so a palette or hex codes kept from other codes are not written for them.
@@ -406,14 +402,14 @@ bool IsUnusedByRgbCodes(SGameField const& field, SGameFormNode const& siblings)
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::optional<JsonValue> WriteField(SGameFormNode const& node, SGameField const& field, SGameFormNode const& siblings, uint64_t& format)
+std::optional<JsonValue> WriteField(SGameFormNode const& node, SGameField const& field, SGameFormNode const& siblings)
 {
 	std::optional<JsonValue> value{};
 
 	switch (field.kind)
 	{
 		case EGameFieldKind::Version:
-			value = static_cast<uint64_t>(FirstGameFormat);
+			value = static_cast<uint64_t>(GameFormat);
 			break;
 		case EGameFieldKind::Text:
 		case EGameFieldKind::Choice:
@@ -455,7 +451,7 @@ std::optional<JsonValue> WriteField(SGameFormNode const& node, SGameField const&
 		case EGameFieldKind::Group:
 			if (field.isRequired || node.isPresent)
 			{
-				value = WriteFields(node, ToSchemaPath(field), format);
+				value = WriteFields(node, ToSchemaPath(field));
 			}
 
 			break;
@@ -466,7 +462,7 @@ std::optional<JsonValue> WriteField(SGameFormNode const& node, SGameField const&
 
 				for (SGameFormNode const& item : node.children)
 				{
-					list.emplace_back(WriteFields(item, ToSchemaPath(field), format));
+					list.emplace_back(WriteFields(item, ToSchemaPath(field)));
 				}
 
 				value = std::move(list);
@@ -502,19 +498,17 @@ std::optional<JsonValue> WriteField(SGameFormNode const& node, SGameField const&
 
 //////////////////////////////////////////////////////////////////////////
 // A note goes just before its field, as lookout-games writes them, and only with it.
-JsonValue WriteFields(SGameFormNode const& node, std::string_view schemaParent, uint64_t& format)
+JsonValue WriteFields(SGameFormNode const& node, std::string_view schemaParent)
 {
 	JsonValue object = JsonValue::object();
 
 	for (SGameFormNode const& child : node.children)
 	{
 		SGameField const* const pField{ FindField(schemaParent, child.name) };
-		std::optional<JsonValue> value{ (pField != nullptr) ? WriteField(child, *pField, node, format) : std::nullopt };
+		std::optional<JsonValue> value{ (pField != nullptr) ? WriteField(child, *pField, node) : std::nullopt };
 
 		if (value.has_value())
 		{
-			format = std::max(format, pField->firstFormat);
-
 			if (!child.note.empty())
 			{
 				object[std::format("{}{}", CommentPrefix, child.name)] = child.note;
@@ -525,16 +519,6 @@ JsonValue WriteFields(SGameFormNode const& node, std::string_view schemaParent, 
 	}
 
 	return object;
-}
-
-//////////////////////////////////////////////////////////////////////////
-// A format the file cannot have is the format field's own problem, so its fields are read as this Lookout's newest.
-uint64_t ReadDeclaredFormat(JsonValue const& root)
-{
-	JsonValue::const_iterator const it{ root.find("format") };
-	bool const isFormat{ it != root.cend() && it->is_number_unsigned() && it->get<uint64_t>() >= FirstGameFormat && it->get<uint64_t>() <= GameFormat };
-
-	return isFormat ? it->get<uint64_t>() : GameFormat;
 }
 } // namespace
 
@@ -557,7 +541,7 @@ std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text)
 	}
 	else
 	{
-		ReadFields(root, {}, {}, ReadDeclaredFormat(root), form, problem);
+		ReadFields(root, {}, {}, form, problem);
 	}
 
 	std::expected<SGameFormNode, std::string> result{ std::move(form) };
@@ -571,15 +555,9 @@ std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// The lowest format that has every field written, so an older Lookout still reads what needs nothing newer.
 std::string WriteGameForm(SGameFormNode const& form)
 {
-	uint64_t format{ FirstGameFormat };
-	JsonValue root = WriteFields(form, {}, format);
-
-	root["format"] = format;
-
-	return WriteJsonLayout(root);
+	return WriteJsonLayout(WriteFields(form, {}));
 }
 
 //////////////////////////////////////////////////////////////////////////
