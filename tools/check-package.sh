@@ -4,7 +4,7 @@
 #
 #   tools/check-package.sh [dist/lookout-<version>-x86_64.tar.xz]
 #
-# Needs the network: the images, their package mirrors, GitHub, and live Kingpin and UT2004 masters.
+# Needs the network: the images, their package mirrors, GitHub, and live Quake II and UT2004 masters.
 
 set -u
 
@@ -60,9 +60,9 @@ cp -R /pkg /tmp/pkg || fail "copying the package"
 sh /tmp/pkg/install.sh > /tmp/out 2>&1 || fail "install.sh"
 sh /tmp/pkg/install.sh > /tmp/out 2>&1 || fail "install.sh over an existing install"
 # One game on a UDP master and one on a TCP master, each through its own protocol script.
-"$HOME/.local/bin/lookout" --download kingpin ut2004 > /tmp/out 2>&1 || fail "lookout --download kingpin ut2004"
+"$HOME/.local/bin/lookout" --download quake2 ut2004 > /tmp/out 2>&1 || fail "lookout --download quake2 ut2004"
 listed=""
-for game in kingpin ut2004; do
+for game in quake2 ut2004; do
 	"$HOME/.local/bin/lookout" --list "$game" > /tmp/list 2> /tmp/out || fail "lookout --list $game"
 	[ -s /tmp/list ] || fail "lookout --list $game printed nothing"
 	listed="$listed${listed:+ and }$(wc -l < /tmp/list) $game"
