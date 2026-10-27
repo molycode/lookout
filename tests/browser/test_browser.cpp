@@ -123,7 +123,15 @@ protected:
 	{
 		Initialize();
 
-		return m_server.Start(Fixtures::LoadFixture("kingpin-quake2/status-93.226.82.165_31510.bin")) && m_browser.Start(m_waiter.MakeCallback());
+		return m_server.Start(Fixtures::LoadFixture("kingpin/status-91.20.105.238_31500-00.bin")) && m_browser.Start(m_waiter.MakeCallback());
+	}
+
+	// What a player types: Kingpin's servers are joined ten ports above the one they answer GameSpy on.
+	std::string FormatJoinAddress() const
+	{
+		Query::SServerAddress const queried{ m_server.GetAddress() };
+
+		return Query::FormatAddress(Query::SServerAddress{ queried.ipv4, static_cast<uint16_t>(queried.port + 10) });
 	}
 
 	SServerEntry const* FindRow(Query::SServerAddress const& address) const
@@ -154,7 +162,7 @@ protected:
 TEST_F(CBrowserTest, AddedServerShowsAtOnceAsAWaitingFavourite)
 {
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 
 	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
 
@@ -167,7 +175,7 @@ TEST_F(CBrowserTest, AddedServerShowsAtOnceAsAWaitingFavourite)
 TEST_F(CBrowserTest, AddedServerIsSavedAtOnce)
 {
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 
 	EXPECT_TRUE(ReadText(m_configDir / "config.json").contains(Query::FormatAddress(m_server.GetAddress())));
 }
@@ -176,7 +184,7 @@ TEST_F(CBrowserTest, AddedServerIsSavedAtOnce)
 TEST_F(CBrowserTest, AddedServerComesOnline)
 {
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 
 	EXPECT_TRUE(m_waiter.WaitUntil(m_browser, [this]()
 	{
@@ -202,7 +210,7 @@ TEST_F(CBrowserTest, InvalidAddressIsAWarning)
 TEST_F(CBrowserTest, UnmarkedFavouriteIsSavedAtOnce)
 {
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 
 	m_browser.ToggleFavourite(m_server.GetAddress());
 
@@ -502,15 +510,15 @@ protected:
 		return protocols;
 	}
 
-	std::vector<Query::SGameDefinition> ListThroughGamespy1(std::string_view key) const
+	std::vector<Query::SGameDefinition> ListThroughQuake2(std::string_view key) const
 	{
 		std::vector<Query::SGameDefinition> games{ m_games };
-		auto const gamespy1{ std::ranges::find(m_protocols, "gamespy1", &Query::SProtocolDefinition::name) };
+		auto const quake2{ std::ranges::find(m_protocols, "quake2", &Query::SProtocolDefinition::name) };
 
 		for (Query::SMasterEndpoint& master : std::ranges::find(games, key, &Query::SGameDefinition::key)->masters)
 		{
-			master.protocol = static_cast<Query::EProtocol>(gamespy1 - m_protocols.begin());
-			master.protocolOptions = { { "masterGame", "kingpin" } };
+			master.protocol = static_cast<Query::EProtocol>(quake2 - m_protocols.begin());
+			master.protocolOptions = {};
 		}
 
 		return games;
@@ -558,7 +566,7 @@ protected:
 TEST_F(CBrowserCatalogTest, UnchangedGameKeepsItsList)
 {
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
 	m_browser.ReplaceCatalog(m_protocols, m_games);
@@ -573,7 +581,7 @@ TEST_F(CBrowserCatalogTest, UnchangedGameKeepsItsList)
 TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenOnlyWhereItsProtocolComesFromChanges)
 {
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
 	m_browser.ReplaceCatalog(ChangeProtocolOrigin("kingpin"), m_games);
@@ -588,7 +596,7 @@ TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenOnlyWhereItsProtocolComesFromCha
 TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenProtocolsMove)
 {
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
 	m_browser.ReplaceCatalog(ReverseProtocols(), FollowReversedProtocols());
@@ -602,14 +610,14 @@ TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenProtocolsMove)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserCatalogTest, ChangedMasterProtocolStartsTheListAgain)
 {
-	std::vector<Query::SGameDefinition> const games{ ListThroughGamespy1("kingpin") };
+	std::vector<Query::SGameDefinition> const games{ ListThroughQuake2("kingpin") };
 
 	Install(games);
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
-	m_browser.ReplaceCatalog(ChangeProtocolSource("gamespy1"), games);
+	m_browser.ReplaceCatalog(ChangeProtocolSource("quake2"), games);
 
 	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
 
@@ -642,7 +650,7 @@ TEST_F(CBrowserCatalogTest, SameCatalogKeepsARunningRefresh)
 TEST_F(CBrowserCatalogTest, ChangedGameStartsItsListAgain)
 {
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
 	m_browser.ReplaceCatalog(m_protocols, ChangeGame("kingpin"));
@@ -657,7 +665,7 @@ TEST_F(CBrowserCatalogTest, ChangedGameStartsItsListAgain)
 TEST_F(CBrowserCatalogTest, ServersAreAskedAgainAfterAReplace)
 {
 	ASSERT_TRUE(StartWithServer());
-	ASSERT_TRUE(m_browser.AddServer(Query::FormatAddress(m_server.GetAddress())).has_value());
+	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
 	m_browser.ReplaceCatalog(m_protocols, ChangeGame("kingpin"));

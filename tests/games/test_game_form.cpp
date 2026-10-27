@@ -260,7 +260,7 @@ TEST(GameForm, MasterWithItsOwnProtocolIsWrittenAsFormatTwo)
 {
 	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
 
-	GetFormField(GetFormField(form, "masters").children.front(), "protocol").text = "gamespy1";
+	GetFormField(GetFormField(form, "masters").children.front(), "protocol").text = "quake2";
 
 	EXPECT_EQ(JsonValue::parse(WriteGameForm(form))["format"], 2);
 }
@@ -271,7 +271,7 @@ TEST(GameForm, MasterWithItsOwnProtocolMakesAFormatTwoPatch)
 	std::string const text{ ReadDownloaded("kingpin") };
 	SGameFormNode form{ ReadForm(text) };
 
-	GetFormField(GetFormField(form, "masters").children.front(), "protocol").text = "gamespy1";
+	GetFormField(GetFormField(form, "masters").children.front(), "protocol").text = "quake2";
 
 	std::expected<std::optional<std::string>, std::string> const patch{ MakePatch(text, WriteGameForm(form)) };
 
@@ -280,7 +280,7 @@ TEST(GameForm, MasterWithItsOwnProtocolMakesAFormatTwoPatch)
 	JsonValue const written = JsonValue::parse(**patch);
 
 	EXPECT_EQ(written["format"], 2);
-	EXPECT_EQ(written["masters"][0]["protocol"], "gamespy1");
+	EXPECT_EQ(written["masters"][0]["protocol"], "quake2");
 }
 
 //////////////////////////////////////////////////////////////////////////
