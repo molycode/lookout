@@ -30,7 +30,7 @@ std::string MakePngHeader(uint32_t width, uint32_t height)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A folder laid out like lookout-games, holding its Kingpin as "mygame".
+// A folder laid out like lookout-games, holding its Quake II as "mygame".
 class CCheckFolderTest : public testing::Test
 {
 protected:
@@ -47,7 +47,7 @@ protected:
 		std::filesystem::create_directories(m_dir / "protocols");
 		std::filesystem::create_directories(m_dir / "games");
 		std::filesystem::copy(games / "protocols" / "quake2.lua", m_dir / "protocols" / "quake2.lua", error);
-		std::filesystem::copy(games / "games" / "kingpin", m_dir / "games" / "mygame", std::filesystem::copy_options::recursive, error);
+		std::filesystem::copy(games / "games" / "quake2", m_dir / "games" / "mygame", std::filesystem::copy_options::recursive, error);
 		ASSERT_EQ(error.value(), 0) << error.message();
 	}
 

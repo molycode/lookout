@@ -49,7 +49,7 @@ std::vector<std::byte> MakeQuake2List(Query::SServerAddress const& server)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Rows of lookout-games' Kingpin whose masters are on loopback, tested against the whole catalog's protocols.
+// Rows of lookout-games' Quake II whose masters are on loopback, tested against the whole catalog's protocols.
 class CMasterProbesTest : public testing::Test
 {
 protected:
@@ -78,7 +78,7 @@ protected:
 
 	SMasterProbeRequest MakeRequest() const
 	{
-		return SMasterProbeRequest{ std::string{ Key }, Fixtures::MakeMaster(Fixtures::GetGameByKey("kingpin"), "127.0.0.1", m_master.GetAddress().port) };
+		return SMasterProbeRequest{ std::string{ Key }, Fixtures::MakeMaster(Fixtures::GetGameByKey("quake2"), "127.0.0.1", m_master.GetAddress().port) };
 	}
 
 	void Want(std::vector<SMasterProbeRequest> const& requests, Net::Clock::time_point now, bool canStart = true)

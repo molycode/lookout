@@ -46,7 +46,7 @@ protected:
 
 	std::map<std::string, std::string> const& MasterOptions() const
 	{
-		return Fixtures::GetGameByKey("kingpin").protocolOptions;
+		return Fixtures::GetGameByKey("quake2").protocolOptions;
 	}
 
 	// What a conversation of that kind starts by sending, for that game.
@@ -65,13 +65,13 @@ protected:
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake2ProtocolTest, AsksMastersWithPlainQuery)
 {
-	EXPECT_EQ(GetFirstSend(Script::EConversationKind::Master, "kingpin"), std::vector<std::vector<std::byte>>{ ToBytes("query") });
+	EXPECT_EQ(GetFirstSend(Script::EConversationKind::Master, "quake2"), std::vector<std::vector<std::byte>>{ ToBytes("query") });
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CQuake2ProtocolTest, AsksServersForStatus)
 {
-	EXPECT_EQ(GetFirstSend(Script::EConversationKind::Server, "kingpin"), std::vector<std::vector<std::byte>>{ ToBytes("\xFF\xFF\xFF\xFFstatus\n") });
+	EXPECT_EQ(GetFirstSend(Script::EConversationKind::Server, "quake2"), std::vector<std::vector<std::byte>>{ ToBytes("\xFF\xFF\xFF\xFFstatus\n") });
 }
 
 //////////////////////////////////////////////////////////////////////////

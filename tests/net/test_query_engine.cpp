@@ -39,7 +39,7 @@ bool AllCarry(std::span<SQueryEvent const> events, uint32_t refreshId)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, AnswersAServerItWasAskedAbout)
 {
-	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
+	Query::EGame const game{ Fixtures::GetGameId("quake2") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -65,7 +65,7 @@ TEST(QueryEngine, AnswersAServerItWasAskedAbout)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, SilentServerIsAskedTwiceThenFails)
 {
-	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
+	Query::EGame const game{ Fixtures::GetGameId("quake2") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -88,7 +88,7 @@ TEST(QueryEngine, SilentServerIsAskedTwiceThenFails)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, RetrySendsWhatTheConversationStartedWith)
 {
-	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
+	Query::EGame const game{ Fixtures::GetGameId("quake2") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -111,7 +111,7 @@ TEST(QueryEngine, RetrySendsWhatTheConversationStartedWith)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, RunsAgainAfterARefreshFinished)
 {
-	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
+	Query::EGame const game{ Fixtures::GetGameId("quake2") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -138,7 +138,7 @@ TEST(QueryEngine, RunsAgainAfterARefreshFinished)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, TerminateDuringARefreshReturnsPromptly)
 {
-	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
+	Query::EGame const game{ Fixtures::GetGameId("quake2") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -162,7 +162,7 @@ TEST(QueryEngine, TerminateDuringARefreshReturnsPromptly)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, EachRefreshCarriesALargerIdThanTheOneBefore)
 {
-	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
+	Query::EGame const game{ Fixtures::GetGameId("quake2") };
 	Fixtures::CLoopbackServer server{};
 	Fixtures::CEventCollector collector{};
 	CQueryEngine engine{};
@@ -198,7 +198,7 @@ TEST(QueryEngine, EachRefreshCarriesALargerIdThanTheOneBefore)
 // The silent server keeps the first refresh running, so the second request joins it.
 TEST(QueryEngine, ServerAskedDuringARefreshCarriesThatRefreshsId)
 {
-	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
+	Query::EGame const game{ Fixtures::GetGameId("quake2") };
 	Fixtures::CLoopbackServer silent{};
 	Fixtures::CLoopbackServer answering{};
 	Fixtures::CEventCollector collector{};
@@ -225,7 +225,7 @@ TEST(QueryEngine, ServerAskedDuringARefreshCarriesThatRefreshsId)
 //////////////////////////////////////////////////////////////////////////
 TEST(QueryEngine, RefreshAfterACancelCarriesTheNewId)
 {
-	Query::EGame const game{ Fixtures::GetGameId("kingpin") };
+	Query::EGame const game{ Fixtures::GetGameId("quake2") };
 	Fixtures::CLoopbackServer silent{};
 	Fixtures::CLoopbackServer answering{};
 	Fixtures::CEventCollector collector{};
