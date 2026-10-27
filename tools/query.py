@@ -18,6 +18,7 @@ import sys
 import time
 
 GAMES = {
+	"kingpin": ("gamespy1", [("master.kingpin.info", 28900), ("master1.kingpin.info", 28900), ("master2.kingpin.info", 28900), ("master3.kingpin.info", 28900), ("master4.kingpin.info", 28900)], "kingpin"),
 	"kingpin-quake2": ("quake2", [("master.kingpin.info", 27900)], ""),
 	"quake2": ("quake2", [("master.quakeservers.net", 27900), ("master.maraakate.org", 27900)], ""),
 	"rtcw": ("quake3", [("wolfmaster.idsoftware.com", 27950)], "60 empty full"),

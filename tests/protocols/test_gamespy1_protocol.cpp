@@ -30,8 +30,9 @@ constexpr std::string_view StatusPrefix{ "status-" };
 // The engine hands a stream to the script in reads of at most this size.
 constexpr size_t EngineReadSize{ 16u << 10 };
 // The game's fixture folder and its name on the masters.
-constexpr std::array<std::pair<std::string_view, std::string_view>, 6> Games{ {
-	{ "ut99", "ut" }, { "unreal", "unreal" }, { "mohaa", "mohaa" }, { "bf1942", "bfield1942" }, { "rune", "rune" }, { "deusex", "deusex" }
+constexpr std::array<std::pair<std::string_view, std::string_view>, 7> Games{ {
+	{ "ut99", "ut" }, { "unreal", "unreal" }, { "mohaa", "mohaa" }, { "bf1942", "bfield1942" }, { "rune", "rune" }, { "deusex", "deusex" },
+	{ "kingpin", "kingpin" }
 } };
 
 //////////////////////////////////////////////////////////////////////////
