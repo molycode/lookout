@@ -1,4 +1,5 @@
 #include "game_editor.hpp"
+#include "form_context.hpp"
 #include "format_to.hpp"
 #include "game_form_view.hpp"
 #include "icons.hpp"
@@ -196,8 +197,6 @@ void CGameEditor::OnCatalogChanged(std::filesystem::path const& userDir)
 	}
 	else if (m_isOpen)
 	{
-		m_protocols.Refresh();
-
 		if (!m_isNew && Games::ReadGameText(userDir, m_key).text != m_openedText)
 		{
 			m_note = "This game's files changed while you edited it. Saving keeps your changes on top of them.";
@@ -210,16 +209,9 @@ void CGameEditor::OnCatalogChanged(std::filesystem::path const& userDir)
 
 //////////////////////////////////////////////////////////////////////////
 // The masters are tested when the user opens a game, not on every load: a save or a reload loads it again too.
-EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::string& message, Download::CGameDownloads* pDownloads,
-	Browser::CMasterProbes& probes)
+EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::string& message, Browser::CMasterProbes& probes)
 {
 	EEditorOutcome outcome{ EEditorOutcome::None };
-
-	if (m_isOpen && m_protocols.Update(pDownloads, userDir, m_form))
-	{
-		m_scriptSignature.clear();
-		Check();
-	}
 
 	if (std::exchange(m_isOpening, false))
 	{
@@ -228,7 +220,7 @@ EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::stri
 
 	// With the editor closed too, so closing it stops a test.
 	probes.Want(m_isOpen ? std::span<Browser::SMasterProbeRequest const>{ m_probeRequests } : std::span<Browser::SMasterProbeRequest const>{},
-		m_protocols.GetDefinitions(), m_canProbe, std::chrono::steady_clock::now());
+		Query::GetProtocolCatalog(), m_canProbe, std::chrono::steady_clock::now());
 
 	if (m_isOpen)
 	{
@@ -266,9 +258,7 @@ EEditorOutcome CGameEditor::Draw(std::filesystem::path const& userDir, std::stri
 
 				ImGui::BeginChild("##form", ImVec2{ 0.0f, -m_footerHeight }, ImGuiChildFlags_NavFlattened);
 
-				SFormContext context{ m_protocols.MakeFormContext(pDownloads) };
-
-				context.drawMasterStatus = [this, &probes](size_t row) { DrawMasterStatus(probes, row); };
+				SFormContext const context{ Query::GetProtocolCatalog(), [this, &probes](size_t row) { DrawMasterStatus(probes, row); } };
 
 				if (DrawGameForm(m_form, m_downloadedForm.has_value() ? &*m_downloadedForm : nullptr, m_problem.has_value() ? &*m_problem : nullptr, context))
 				{
@@ -330,8 +320,6 @@ void CGameEditor::Load(std::string_view key, std::filesystem::path const& userDi
 	std::expected<Games::SGameFormNode, std::string> downloaded{ std::unexpect };
 	std::string const file{ (userDir / "games" / key / "game.json").string() };
 
-	m_protocols.Refresh();
-
 	if (!opened.downloaded.empty())
 	{
 		downloaded = Games::ReadGameForm(opened.downloaded);
@@ -361,7 +349,6 @@ void CGameEditor::Load(std::string_view key, std::filesystem::path const& userDi
 //////////////////////////////////////////////////////////////////////////
 void CGameEditor::LoadNew()
 {
-	m_protocols.Refresh();
 	m_key.clear();
 	m_name.clear();
 	m_source = Games::EGameSource::None;
@@ -415,7 +402,7 @@ void CGameEditor::Ask(EEditorPending pending, std::string_view key)
 //////////////////////////////////////////////////////////////////////////
 void CGameEditor::Check()
 {
-	std::span<Query::SProtocolDefinition const> const protocols{ m_protocols.GetDefinitions() };
+	std::span<Query::SProtocolDefinition const> const protocols{ Query::GetProtocolCatalog() };
 	std::string const text{ Games::WriteGameForm(m_form) };
 	std::expected<Query::SGameDefinition, Games::SFieldProblem> const fields{ Games::ReadGameFields(text, protocols) };
 	std::string const signature{ MakeScriptSignature(m_form) };

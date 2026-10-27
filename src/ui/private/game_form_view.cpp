@@ -1,7 +1,6 @@
 #include "game_form_view.hpp"
 #include "form_context.hpp"
 #include "icons.hpp"
-#include "master_listing.hpp"
 #include "protocol_note.hpp"
 #include "theme.hpp"
 #include "theme_colors.hpp"
@@ -17,7 +16,6 @@
 #include <charconv>
 #include <cstddef>
 #include <format>
-#include <functional>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -36,20 +34,16 @@ using Games::SGameFormNode;
 constexpr float LabelWidthEm{ 13.0f };
 constexpr float HelpWidthEm{ 26.0f };
 constexpr float NumberWidthEm{ 6.0f };
-constexpr float SettingsWidthEm{ 34.0f };
 constexpr float MinListLines{ 2.0f };
 constexpr float MaxListLines{ 8.0f };
 constexpr char const* RequiredHint{ "required" };
 constexpr char const* OptionalHint{ "optional" };
-constexpr char const* ListingHeader{ "Lists through" };
 constexpr std::string_view ListSuffix{ "[]" };
 constexpr std::string_view PaletteField{ "palette" };
 constexpr std::string_view HexCodesField{ "hexCodes" };
 constexpr std::string_view CodesField{ "codes" };
 constexpr std::string_view RgbCodes{ "rgb" };
 constexpr std::string_view ProtocolField{ "protocol" };
-constexpr std::string_view OptionsField{ "protocolOptions" };
-constexpr std::string_view PortOffsetField{ "portOffset" };
 constexpr std::string_view MastersRow{ "masters[]" };
 constexpr std::string_view PathSeparator{ " › " };
 
@@ -57,14 +51,6 @@ constexpr std::string_view PathSeparator{ " › " };
 std::string JoinPath(std::string_view parent, std::string_view name)
 {
 	return parent.empty() ? std::string{ name } : std::format("{}.{}", parent, name);
-}
-
-//////////////////////////////////////////////////////////////////////////
-std::string_view GetText(SGameFormNode const& node, std::string_view name)
-{
-	SGameFormNode const* const pField{ Games::FindFormField(node, name) };
-
-	return (pField != nullptr) ? std::string_view{ pField->text } : std::string_view{};
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -322,24 +308,17 @@ bool DrawScalar(SGameField const& field, SGameFormNode& node, SGameFormNode cons
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A value not among the names, such as a protocol that did not load, is shown as it is. A none label, when given, is
-// the first choice and leaves the field empty; more choices, when given, follow the names.
+// A value not among the names, such as a protocol that did not load, is shown as it is.
 template<typename TNames>
 bool DrawChoice(SGameField const& field, SGameFormNode& node, SGameFormNode const* pBase, TNames&& names, std::string_view path, SFieldProblem const* pProblem,
-	std::string_view choiceNote, std::string_view noneLabel, std::function<bool(std::string&)> const& drawMoreChoices)
+	std::string_view choiceNote)
 {
 	bool isEdited{ false };
 
 	DrawLabel(field.label, IsMissing(field, node), IsChanged(node, pBase));
 
-	if (ImGui::BeginCombo("##value", (node.text.empty() && !noneLabel.empty()) ? noneLabel.data() : node.text.c_str()))
+	if (ImGui::BeginCombo("##value", node.text.c_str()))
 	{
-		if (!noneLabel.empty() && ImGui::Selectable(noneLabel.data(), node.text.empty()))
-		{
-			node.text.clear();
-			isEdited = true;
-		}
-
 		for (std::string_view const name : names)
 		{
 			if (ImGui::Selectable(name.data(), name == node.text))
@@ -347,11 +326,6 @@ bool DrawChoice(SGameField const& field, SGameFormNode& node, SGameFormNode cons
 				node.text = name;
 				isEdited = true;
 			}
-		}
-
-		if (drawMoreChoices)
-		{
-			isEdited = drawMoreChoices(node.text) || isEdited;
 		}
 
 		ImGui::EndCombo();
@@ -408,10 +382,6 @@ bool DrawFields(std::string_view schemaParent, SGameFormNode& group, SGameFormNo
 	SFormContext const& context);
 
 //////////////////////////////////////////////////////////////////////////
-bool DrawProtocolOptions(SGameField const& field, SGameFormNode& parent, SGameFormNode const* pBaseParent, std::string_view parentPath,
-	SFieldProblem const* pProblem, SFormContext const& context);
-
-//////////////////////////////////////////////////////////////////////////
 bool DrawGroup(SGameField const& field, SGameFormNode& node, SGameFormNode const* pBase, std::string_view path, SFieldProblem const* pProblem,
 	SFormContext const& context)
 {
@@ -451,113 +421,17 @@ bool IsCell(SGameField const& field, std::string_view schema)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// How the master lists, or a field behind its gear, has a problem.
-bool IsSettingsProblem(SFieldProblem const* pProblem, std::string_view rowPath)
-{
-	return IsProblemAt(pProblem, rowPath)
-		|| std::ranges::any_of(Games::GetGameFields(), [pProblem, rowPath](SGameField const& field)
-		{
-			return field.parent == MastersRow && !field.isRequired && IsProblemWithin(pProblem, JoinPath(rowPath, field.name));
-		});
-}
-
-//////////////////////////////////////////////////////////////////////////
-// A master on the game's protocol takes the game's options too, so choosing the game's takes the master's own away.
-bool DrawMasterSettings(SGameFormNode& row, std::string_view rowPath, SFieldProblem const* pProblem, std::string_view inheritedProtocol,
-	SFormContext const& context)
-{
-	SGameFormNode& protocol{ Games::GetFormField(row, ProtocolField) };
-	std::string const inherited{ DescribeMasterListing(inheritedProtocol, {}, {}) };
-	bool isEdited{ false };
-
-	ImGui::PushID(ProtocolField.data(), ProtocolField.data() + ProtocolField.size());
-
-	if (DrawChoice(*FindField(MastersRow, ProtocolField), protocol, nullptr,
-		context.definitions | std::views::transform([](Query::SProtocolDefinition const& definition) { return std::string_view{ definition.name }; }),
-		JoinPath(rowPath, ProtocolField), pProblem, DescribeProtocolNamed(context, protocol.text), inherited, context.drawMoreChoices))
-	{
-		isEdited = true;
-
-		if (protocol.text.empty())
-		{
-			SGameFormNode& options{ Games::GetFormField(row, OptionsField) };
-
-			options.children.clear();
-			options.isPresent = false;
-		}
-	}
-
-	if (!protocol.text.empty() && !std::ranges::contains(context.definitions, protocol.text, &Query::SProtocolDefinition::name) && context.drawAbsent)
-	{
-		ImGui::SetCursorPosX(GetControlX());
-		ImGui::BeginGroup();
-		context.drawAbsent(protocol.text);
-		ImGui::EndGroup();
-	}
-
-	ImGui::PopID();
-	ImGui::PushID(OptionsField.data(), OptionsField.data() + OptionsField.size());
-	isEdited = DrawProtocolOptions(*FindField(MastersRow, OptionsField), row, nullptr, rowPath, pProblem, context) || isEdited;
-	ImGui::PopID();
-	ImGui::PushID(PortOffsetField.data(), PortOffsetField.data() + PortOffsetField.size());
-	isEdited = DrawScalar(*FindField(MastersRow, PortOffsetField), Games::GetFormField(row, PortOffsetField), nullptr, JoinPath(rowPath, PortOffsetField),
-		pProblem) || isEdited;
-	ImGui::PopID();
-	DrawProblem(pProblem, rowPath, false);
-
-	return isEdited;
-}
-
-//////////////////////////////////////////////////////////////////////////
-bool DrawMasterGear(SGameFormNode& row, std::string_view rowPath, SFieldProblem const* pProblem, std::string_view inheritedProtocol,
-	SFormContext const& context)
-{
-	bool isEdited{ false };
-
-	AlignIconToFrame();
-
-	if (IconButton("##settings", LKT_ICON_GEAR))
-	{
-		ImGui::OpenPopup("##settings");
-	}
-
-	ImGui::SetItemTooltip("How this master lists its servers");
-	ImGui::SetNextWindowSize(ImVec2{ ImGui::GetFontSize() * SettingsWidthEm, 0.0f });
-
-	if (ImGui::BeginPopup("##settings"))
-	{
-		isEdited = DrawMasterSettings(row, rowPath, pProblem, inheritedProtocol, context);
-		ImGui::EndPopup();
-	}
-
-	return isEdited;
-}
-
-//////////////////////////////////////////////////////////////////////////
-// Each row is applied after the table, so no field a row's controls are bound to moves while they are drawn. A master
-// without a protocol of its own lists through inheritedProtocol, the one of the object holding the list.
+// Each row is applied after the table, so no field a row's controls are bound to moves while they are drawn.
 bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode const* pBase, std::string_view path, SFieldProblem const* pProblem,
-	std::string_view inheritedProtocol, SFormContext const& context)
+	SFormContext const& context)
 {
 	std::string const schema{ ToSchemaPath(field) };
 	std::span<SGameField const> const fields{ Games::GetGameFields() };
-	bool const isMasters{ schema == MastersRow };
+	bool const hasStatus{ schema == MastersRow && context.drawMasterStatus };
 	int const numCells{ static_cast<int>(std::ranges::count_if(fields, [&schema](SGameField const& column) { return IsCell(column, schema); })) };
-	int const numColumns{ numCells + (isMasters ? 2 : 0) + 1 };
-	std::vector<std::string> listings{};
-	float const statusWidth{ context.drawMasterStatus ? ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.x : 0.0f };
-	float listingWidth{ ImGui::CalcTextSize(ListingHeader).x };
+	int const numColumns{ numCells + (hasStatus ? 1 : 0) + 1 };
 	std::optional<size_t> removed{};
 	bool isEdited{ false };
-
-	if (isMasters)
-	{
-		for (SGameFormNode const& row : node.children)
-		{
-			listings.emplace_back(DescribeMasterListing(inheritedProtocol, GetText(row, ProtocolField), GetText(row, PortOffsetField)));
-			listingWidth = std::max(listingWidth, statusWidth + ImGui::CalcTextSize(listings.back().c_str()).x);
-		}
-	}
 
 	DrawNote(node);
 
@@ -574,10 +448,9 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 			}
 		}
 
-		if (isMasters)
+		if (hasStatus)
 		{
-			ImGui::TableSetupColumn(ListingHeader, ImGuiTableColumnFlags_WidthFixed, listingWidth);
-			ImGui::TableSetupColumn("##settings", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoHeaderLabel, ImGui::GetTextLineHeight());
+			ImGui::TableSetupColumn("##status", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoHeaderLabel, ImGui::GetTextLineHeight());
 		}
 
 		ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoHeaderLabel, ImGui::GetTextLineHeight());
@@ -604,29 +477,11 @@ bool DrawGroupList(SGameField const& field, SGameFormNode& node, SGameFormNode c
 				}
 			}
 
-			if (isMasters)
+			if (hasStatus)
 			{
-				std::string const rowPath{ std::format("{}[{}]", path, index) };
-
 				ImGui::TableNextColumn();
-
-				// Beside the icon, the text sits where a frame's would, as it does alone.
-				if (context.drawMasterStatus)
-				{
-					AlignIconToFrame();
-					context.drawMasterStatus(index);
-					ImGui::SameLine();
-				}
-				else
-				{
-					ImGui::AlignTextToFramePadding();
-				}
-
-				ImGui::PushStyleColor(ImGuiCol_Text, IsSettingsProblem(pProblem, rowPath) ? GetThemeColors().error : GetThemeColors().text);
-				ImGui::TextUnformatted(listings[index].c_str());
-				ImGui::PopStyleColor();
-				ImGui::TableNextColumn();
-				isEdited = DrawMasterGear(row, rowPath, pProblem, inheritedProtocol, context) || isEdited;
+				AlignIconToFrame();
+				context.drawMasterStatus(index);
 			}
 
 			ImGui::TableNextColumn();
@@ -757,12 +612,12 @@ bool DrawField(SGameField const& field, SGameFormNode& parent, SGameFormNode con
 			isEdited = DrawScalar(field, Games::GetFormField(parent, field.name), pBase, path, pProblem);
 			break;
 		case EGameFieldKind::Choice:
-			isEdited = DrawChoice(field, Games::GetFormField(parent, field.name), pBase, field.choices, path, pProblem, {}, {}, {});
+			isEdited = DrawChoice(field, Games::GetFormField(parent, field.name), pBase, field.choices, path, pProblem, {});
 			break;
 		case EGameFieldKind::Protocol:
 			isEdited = DrawChoice(field, Games::GetFormField(parent, field.name), pBase,
 				context.definitions | std::views::transform([](Query::SProtocolDefinition const& protocol) { return std::string_view{ protocol.name }; }),
-				path, pProblem, DescribeProtocolNamed(context, Games::GetFormField(parent, field.name).text), {}, {});
+				path, pProblem, DescribeProtocolNamed(context, Games::GetFormField(parent, field.name).text));
 			break;
 		case EGameFieldKind::ProtocolOptions:
 			isEdited = DrawProtocolOptions(field, parent, pBaseParent, parentPath, pProblem, context);
@@ -774,7 +629,7 @@ bool DrawField(SGameField const& field, SGameFormNode& parent, SGameFormNode con
 			isEdited = DrawGroup(field, Games::GetFormField(parent, field.name), pBase, path, pProblem, context);
 			break;
 		case EGameFieldKind::GroupList:
-			isEdited = DrawGroupList(field, Games::GetFormField(parent, field.name), pBase, path, pProblem, GetText(parent, ProtocolField), context);
+			isEdited = DrawGroupList(field, Games::GetFormField(parent, field.name), pBase, path, pProblem, context);
 			break;
 		case EGameFieldKind::Version:
 			break;
@@ -836,7 +691,7 @@ bool DrawSection(SGameField const& field, SGameFormNode& form, SGameFormNode con
 
 	if (isOpen && field.kind == EGameFieldKind::GroupList)
 	{
-		isEdited = DrawGroupList(field, node, pBase, path, pProblem, GetText(form, ProtocolField), context);
+		isEdited = DrawGroupList(field, node, pBase, path, pProblem, context);
 	}
 	else if (isOpen)
 	{

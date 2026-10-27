@@ -4,7 +4,6 @@
 #include "discard_prompt.hpp"
 #include "editor_outcome.hpp"
 #include "editor_pending.hpp"
-#include "editor_protocols.hpp"
 #include "browser/master_probe_request.hpp"
 #include "games/field_problem.hpp"
 #include "games/game_form_node.hpp"
@@ -25,14 +24,10 @@ namespace Browser
 class CMasterProbes;
 } // namespace Browser
 
-namespace Download
-{
-class CGameDownloads;
-} // namespace Download
-
 namespace Query
 {
 struct SGameDefinition;
+struct SProtocolDefinition;
 } // namespace Query
 
 namespace Ui
@@ -49,7 +44,7 @@ public:
 	void AskToQuit();
 	bool HasUnsavedChanges() const;
 	void OnCatalogChanged(std::filesystem::path const& userDir);
-	EEditorOutcome Draw(std::filesystem::path const& userDir, std::string& message, Download::CGameDownloads* pDownloads, Browser::CMasterProbes& probes);
+	EEditorOutcome Draw(std::filesystem::path const& userDir, std::string& message, Browser::CMasterProbes& probes);
 
 private:
 
@@ -87,7 +82,6 @@ private:
 	std::optional<Games::SFieldProblem> m_problem;
 	std::optional<Games::SFieldProblem> m_scriptProblem;
 	CDiscardPrompt m_discardPrompt;
-	CEditorProtocols m_protocols;
 	std::vector<Browser::SMasterProbeRequest> m_probeRequests;
 	float m_footerHeight{ 0.0f };
 	EEditorPending m_pending{ EEditorPending::None };
