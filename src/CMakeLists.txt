@@ -27,6 +27,7 @@ target_link_libraries(lookout PRIVATE
 	Lkt::Ui
 	Tge::Lifecycle
 	Tge::Logging
+	Tge::Net
 )
 
 set_target_properties(lookout PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})

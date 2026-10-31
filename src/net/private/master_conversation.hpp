@@ -1,9 +1,9 @@
 #pragma once
 
 #include "conversation_record.hpp"
-#include "stream_socket.hpp"
-#include "udp_socket.hpp"
 #include "query/server_address.hpp"
+#include <tge/net/stream_socket.hpp>
+#include <tge/net/udp_socket.hpp>
 #include <tge/threading/watch_id.hpp>
 #include <cstddef>
 #include <cstdint>
@@ -18,8 +18,8 @@ struct SMasterConversation final
 {
 	SConversationRecord record;
 	Query::SServerAddress address;
-	CUdpSocket datagramSocket;
-	CStreamSocket streamSocket;
+	Tge::Net::CUdpSocket datagramSocket;
+	Tge::Net::CStreamSocket streamSocket;
 	std::optional<Tge::Threading::SWatchId> watch;
 	std::unordered_set<uint64_t> listed;
 	size_t numStreamBytes{ 0 };

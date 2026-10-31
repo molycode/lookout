@@ -1,16 +1,15 @@
 #include "query_pump.hpp"
+#include "endpoint.hpp"
 #include "loggers.hpp"
 #include "query/master_endpoint.hpp"
 #include "query/protocol_definition.hpp"
 #include <tge/assert.hpp>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
+#include <tge/net/ipv4_endpoint.hpp>
+#include <tge/net/parse_ipv4.hpp>
+#include <tge/net/stream_socket.hpp>
+#include <tge/net/udp_socket.hpp>
 #include <algorithm>
-#include <cerrno>
 #include <cstdint>
-#include <cstring>
 #include <expected>
 #include <format>
 #include <map>
@@ -18,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -33,6 +33,8 @@ constexpr size_t StreamReadSize{ 16u << 10 };
 // The busiest master's list is a few tens of KiB; a stream far beyond that is broken or hostile.
 constexpr size_t MaxStreamBytes{ 4u << 20 };
 constexpr std::chrono::milliseconds LookupPollInterval{ 20 };
+// A master of a thousand servers and dozens of status replies can land at once; the default buffer drops some.
+constexpr uint32_t ReceiveBufferSize{ 1u << 20 };
 
 //////////////////////////////////////////////////////////////////////////
 std::optional<Clock::time_point> Earliest(std::optional<Clock::time_point> first, std::optional<Clock::time_point> second)
@@ -48,28 +50,47 @@ std::optional<Clock::time_point> Earliest(std::optional<Clock::time_point> first
 }
 
 //////////////////////////////////////////////////////////////////////////
-void FreeResults(gaicb& request)
+std::expected<void, std::error_code> OpenDatagramSocket(Tge::Net::CUdpSocket& socket)
 {
-	if (request.ar_result != nullptr)
+	std::expected<void, std::error_code> const opened{ socket.Initialize(Tge::Net::SIpv4Endpoint{}) };
+
+	if (opened.has_value())
 	{
-		freeaddrinfo(request.ar_result);
-		request.ar_result = nullptr;
+		std::expected<void, std::error_code> const enlarged{ socket.SetReceiveBufferSize(ReceiveBufferSize) };
+
+		if (!enlarged.has_value())
+		{
+			gLog.Warning("Cannot enlarge the receive buffer, replies may be dropped under load: {}", enlarged.error().message());
+		}
 	}
+	else
+	{
+		gLog.Error("Cannot create the UDP socket: {}", opened.error().message());
+	}
+
+	return opened;
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<uint32_t, std::string> TakeAddress(gaicb& request, int status)
+std::expected<void, std::error_code> OpenStreamSocket(Tge::Net::CStreamSocket& socket)
 {
-	std::expected<uint32_t, std::string> result{ std::unexpected{ std::string{ gai_strerror(status) } } };
+	std::expected<void, std::error_code> const opened{ socket.Initialize() };
 
-	if (status == 0 && request.ar_result != nullptr)
+	if (!opened.has_value())
 	{
-		result = ntohl(reinterpret_cast<sockaddr_in const*>(request.ar_result->ai_addr)->sin_addr.s_addr);
+		gLog.Error("Cannot create a TCP socket: {}", opened.error().message());
 	}
 
-	FreeResults(request);
+	return opened;
+}
 
-	return result;
+//////////////////////////////////////////////////////////////////////////
+std::expected<void, std::error_code> SendWhole(Tge::Net::CStreamSocket const& socket, std::span<std::byte const> bytes)
+{
+	return socket.Send(bytes).and_then([&bytes](size_t numSent)
+	{
+		return (numSent == bytes.size()) ? std::expected<void, std::error_code>{} : std::unexpected{ std::make_error_code(std::errc::operation_would_block) };
+	});
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -152,10 +173,17 @@ bool CQueryPump::Initialize(SQueryCatalog catalog, std::function<void()> onEvent
 		}
 	}
 
-	bool const isReady{ areScriptsReady && m_socket.Initialize() && m_loop.Initialize("LookoutNet") };
+	bool const isReady{ areScriptsReady && OpenDatagramSocket(m_socket).has_value() && m_loop.Initialize("LookoutNet") };
 
 	if (isReady)
 	{
+		std::expected<void, std::error_code> const disabled{ m_socket.DisableConnectionResetReports() };
+
+		if (!disabled.has_value())
+		{
+			gLog.Warning("Cannot turn off connection reset reports, unreachable servers may count as receive errors: {}", disabled.error().message());
+		}
+
 		m_loop.Post([this]()
 		{
 			std::optional<Tge::Threading::SWatchId> const watch{ m_loop.Watch(m_socket.GetWaitable(), [this]()
@@ -367,11 +395,11 @@ void CQueryPump::ResolveMasters(Query::EGame game, uint32_t generation, Clock::t
 
 	for (size_t index{ 0 }; index < masters.size(); ++index)
 	{
-		in_addr literal{};
+		std::optional<uint32_t> const literal{ Tge::Net::ParseIpv4(masters[index].host) };
 
-		if (inet_pton(AF_INET, masters[index].host.c_str(), &literal) == 1)
+		if (literal.has_value())
 		{
-			m_masters.OnResolved(game, generation, index, ntohl(literal.s_addr), now);
+			m_masters.OnResolved(game, generation, index, *literal, now);
 		}
 		else
 		{
@@ -381,26 +409,18 @@ void CQueryPump::ResolveMasters(Query::EGame game, uint32_t generation, Clock::t
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Polled, not notified: a notification would run on a glibc thread and race the loop.
 void CQueryPump::Resolve(Query::EGame game, uint32_t generation, size_t index, Clock::time_point now)
 {
-	auto lookup{ std::make_unique<SDnsLookup>(game, generation, index, std::string{ GetGame(game).masters[index].host }) };
+	auto lookup{ std::make_unique<SDnsLookup>(game, generation, index) };
+	std::expected<void, std::error_code> const started{ lookup->lookup.Start(GetGame(game).masters[index].host) };
 
-	lookup->hints.ai_family = AF_INET;
-	lookup->hints.ai_socktype = SOCK_DGRAM;
-	lookup->request.ar_name = lookup->host.c_str();
-	lookup->request.ar_request = &lookup->hints;
-
-	std::array<gaicb*, 1> requests{ &lookup->request };
-	int const status{ getaddrinfo_a(GAI_NOWAIT, requests.data(), static_cast<int>(requests.size()), nullptr) };
-
-	if (status == 0)
+	if (started.has_value())
 	{
 		m_lookups.emplace_back(std::move(lookup));
 	}
 	else
 	{
-		m_masters.OnResolved(game, generation, index, std::unexpected{ std::string{ gai_strerror(status) } }, now);
+		m_masters.OnResolved(game, generation, index, std::unexpected{ started.error().message() }, now);
 	}
 }
 
@@ -409,32 +429,24 @@ void CQueryPump::CollectLookups(Clock::time_point now)
 {
 	std::erase_if(m_lookups, [this, now](std::unique_ptr<SDnsLookup> const& lookup)
 	{
-		int const status{ gai_error(&lookup->request) };
-		bool const isDone{ status != EAI_INPROGRESS };
+		std::optional<std::expected<uint32_t, std::error_code>> const result{ lookup->lookup.Poll() };
 
-		if (isDone)
+		if (result.has_value())
 		{
-			m_masters.OnResolved(lookup->game, lookup->generation, lookup->masterIndex, TakeAddress(lookup->request, status), now);
+			m_masters.OnResolved(lookup->game, lookup->generation, lookup->masterIndex,
+				result->transform_error([](std::error_code const& error) { return error.message(); }), now);
 		}
 
-		return isDone;
+		return result.has_value();
 	});
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A lookup glibc cannot cancel still writes into its request, so that request is left to glibc, never freed.
 void CQueryPump::AbandonLookups()
 {
-	for (std::unique_ptr<SDnsLookup>& lookup : m_lookups)
+	for (std::unique_ptr<SDnsLookup> const& lookup : m_lookups)
 	{
-		if (gai_cancel(&lookup->request) == EAI_NOTCANCELED)
-		{
-			lookup.release();
-		}
-		else
-		{
-			FreeResults(lookup->request);
-		}
+		lookup->lookup.Terminate();
 	}
 
 	m_lookups.clear();
@@ -495,18 +507,19 @@ std::expected<void, std::string> CQueryPump::OpenMaster(SMasterQuery const& quer
 	conversation.address = query.address;
 	conversation.isStream = GetScript(query.master.game).GetMasterTransport() == Script::EMasterTransport::Tcp;
 
-	bool const isOpen{ conversation.isStream ? conversation.streamSocket.Initialize() : conversation.datagramSocket.Initialize() };
-	std::expected<void, int> const connected{ !isOpen ? std::expected<void, int>{}
-		: conversation.isStream ? conversation.streamSocket.Connect(query.address) : conversation.datagramSocket.Connect(query.address) };
+	std::expected<void, std::error_code> const opened{ conversation.isStream ? OpenStreamSocket(conversation.streamSocket)
+		: OpenDatagramSocket(conversation.datagramSocket) };
+	std::expected<void, std::error_code> const connected{ !opened.has_value() ? opened
+		: conversation.isStream ? conversation.streamSocket.Connect(ToEndpoint(query.address)) : conversation.datagramSocket.Connect(ToEndpoint(query.address)) };
 
-	if (!isOpen)
+	if (!opened.has_value())
 	{
 		result = std::unexpected{ std::string{ "cannot be asked: no socket can be created for it" } };
 	}
 	else if (!connected.has_value())
 	{
-		result = std::unexpected{ (connected.error() == ECONNREFUSED) ? std::string{ "refused the query" }
-			: std::format("cannot be asked: {}", std::strerror(connected.error())) };
+		result = std::unexpected{ (connected.error() == std::errc::connection_refused) ? std::string{ "refused the query" }
+			: std::format("cannot be asked: {}", connected.error().message()) };
 	}
 	else
 	{
@@ -538,12 +551,12 @@ std::expected<void, std::string> CQueryPump::SendToMaster(SMasterConversation co
 
 	for (std::vector<std::byte> const& bytes : conversation.record.send)
 	{
-		std::expected<void, int> const sent{ conversation.isStream ? conversation.streamSocket.Send(bytes)
-			: conversation.datagramSocket.Send(conversation.address, bytes) };
+		std::expected<void, std::error_code> const sent{ conversation.isStream ? SendWhole(conversation.streamSocket, bytes)
+			: conversation.datagramSocket.Send(ToEndpoint(conversation.address), bytes) };
 
 		if (result.has_value() && !sent.has_value())
 		{
-			result = std::unexpected{ std::format("cannot be asked: {}", std::strerror(sent.error())) };
+			result = std::unexpected{ std::format("cannot be asked: {}", sent.error().message()) };
 		}
 	}
 
@@ -568,8 +581,8 @@ void CQueryPump::ReceiveFromMaster(SMasterId const& master)
 		if (isReading)
 		{
 			SMasterConversation& conversation{ it->second };
-			Query::SServerAddress source{};
-			std::expected<size_t, int> const received{ conversation.isStream
+			Tge::Net::SIpv4Endpoint source{};
+			std::expected<size_t, std::error_code> const received{ conversation.isStream
 				? conversation.streamSocket.Receive(std::span<std::byte>{ m_buffer }.first(StreamReadSize))
 				: conversation.datagramSocket.Receive(m_buffer, source) };
 			Clock::time_point const now{ Clock::now() };
@@ -578,10 +591,10 @@ void CQueryPump::ReceiveFromMaster(SMasterId const& master)
 			{
 				isReading = false;
 
-				if (received.error() != EAGAIN && received.error() != EWOULDBLOCK)
+				if (received.error() != std::errc::operation_would_block)
 				{
-					m_masters.Fail(master, (received.error() == ECONNREFUSED) ? std::string{ "refused the query" }
-						: std::format("cannot be read: {}", std::strerror(received.error())), m_masterOutcomes);
+					m_masters.Fail(master, (received.error() == std::errc::connection_refused) ? std::string{ "refused the query" }
+						: std::format("cannot be read: {}", received.error().message()), m_masterOutcomes);
 				}
 			}
 			else if (conversation.isStream && *received == 0)
@@ -756,7 +769,7 @@ void CQueryPump::SendToServer(SServerRequest const& request, SConversationRecord
 
 	for (std::vector<std::byte> const& datagram : record.send)
 	{
-		std::expected<void, int> const sent{ m_socket.Send(request.address, datagram) };
+		std::expected<void, std::error_code> const sent{ m_socket.Send(ToEndpoint(request.address), datagram) };
 
 		if (!sent.has_value() && !hasFailed)
 		{
@@ -827,14 +840,14 @@ void CQueryPump::ReceiveDatagrams()
 
 	while (isDraining && numReceived < MaxDatagramsPerWake)
 	{
-		Query::SServerAddress source{};
-		std::expected<size_t, int> const received{ m_socket.Receive(m_buffer, source) };
+		Tge::Net::SIpv4Endpoint source{};
+		std::expected<size_t, std::error_code> const received{ m_socket.Receive(m_buffer, source) };
 
 		if (received.has_value())
 		{
 			Clock::time_point const now{ Clock::now() };
 			std::span<std::byte const> const datagram{ m_buffer.data(), received.value() };
-			std::optional<SAnsweredRequest> const answered{ m_scheduler.OnDatagram(source, datagram.size(), now) };
+			std::optional<SAnsweredRequest> const answered{ m_scheduler.OnDatagram(ToServerAddress(source), datagram.size(), now) };
 
 			if (answered.has_value())
 			{
@@ -847,7 +860,7 @@ void CQueryPump::ReceiveDatagrams()
 		{
 			isDraining = false;
 
-			if (received.error() != EAGAIN && received.error() != EWOULDBLOCK)
+			if (received.error() != std::errc::operation_would_block)
 			{
 				CountReceiveError(received.error());
 			}
@@ -857,7 +870,7 @@ void CQueryPump::ReceiveDatagrams()
 
 //////////////////////////////////////////////////////////////////////////
 // Not tied to one server, so every running refresh reports it.
-void CQueryPump::CountReceiveError(int error)
+void CQueryPump::CountReceiveError(std::error_code error)
 {
 	for (SRefreshState& refresh : m_refreshes)
 	{
@@ -1087,16 +1100,16 @@ void CQueryPump::ReportRefresh(Query::EGame game) const
 
 	if (stats.numSendFailures == 1)
 	{
-		gLog.Warning("{}: the status request to {} could not be sent: {}", name, Query::FormatAddress(stats.firstSendFailure), std::strerror(stats.firstSendError));
+		gLog.Warning("{}: the status request to {} could not be sent: {}", name, Query::FormatAddress(stats.firstSendFailure), stats.firstSendError.message());
 	}
 	else if (stats.numSendFailures > 1)
 	{
-		gLog.Warning("{}: {} status requests could not be sent, first to {}: {}", name, stats.numSendFailures, Query::FormatAddress(stats.firstSendFailure), std::strerror(stats.firstSendError));
+		gLog.Warning("{}: {} status requests could not be sent, first to {}: {}", name, stats.numSendFailures, Query::FormatAddress(stats.firstSendFailure), stats.firstSendError.message());
 	}
 
 	if (stats.numReceiveErrors > 0)
 	{
-		gLog.Warning("{}: receiving failed {} {}: {}", name, stats.numReceiveErrors, (stats.numReceiveErrors == 1) ? "time" : "times", std::strerror(stats.firstReceiveError));
+		gLog.Warning("{}: receiving failed {} {}: {}", name, stats.numReceiveErrors, (stats.numReceiveErrors == 1) ? "time" : "times", stats.firstReceiveError.message());
 	}
 }
 

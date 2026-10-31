@@ -1,17 +1,13 @@
 #include "fetch_pump.hpp"
 #include "ca_certificates.hpp"
+#include "endpoint.hpp"
 #include "loggers.hpp"
 #include <psa/crypto.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <array>
-#include <cerrno>
-#include <cstring>
+#include <cstdint>
 #include <format>
 #include <span>
 #include <string_view>
+#include <system_error>
 #include <utility>
 
 namespace Lkt::Net
@@ -30,31 +26,6 @@ std::string MakeRequest(SHttpsOrigin const& origin, std::string_view path)
 
 	return std::format("GET {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: {}\r\nAccept-Encoding: identity\r\nConnection: keep-alive\r\n\r\n", path, host,
 		origin.userAgent);
-}
-
-//////////////////////////////////////////////////////////////////////////
-// The first IPv4 address, with the origin's port; glibc's results are freed either way.
-std::optional<Query::SServerAddress> TakeAddress(gaicb& request, uint16_t port)
-{
-	std::optional<Query::SServerAddress> address{};
-
-	for (addrinfo const* pInfo{ request.ar_result }; pInfo != nullptr && !address.has_value(); pInfo = pInfo->ai_next)
-	{
-		if (pInfo->ai_family == AF_INET)
-		{
-			sockaddr_in const* const pIpv4{ reinterpret_cast<sockaddr_in const*>(pInfo->ai_addr) };
-
-			address = Query::SServerAddress{ ntohl(pIpv4->sin_addr.s_addr), port };
-		}
-	}
-
-	if (request.ar_result != nullptr)
-	{
-		freeaddrinfo(request.ar_result);
-		request.ar_result = nullptr;
-	}
-
-	return address;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -107,7 +78,7 @@ void CFetchPump::Terminate()
 	m_loop.Terminate();
 	m_tls.Terminate();
 	m_socket.Terminate();
-	AbandonLookup();
+	m_lookup.Terminate();
 	m_watch.reset();
 	m_pollTimer.reset();
 	m_deadlineTimer.reset();
@@ -239,60 +210,43 @@ void CFetchPump::StartRequest()
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Polled, not notified: a notification would run on a glibc thread and race the loop.
 void CFetchPump::Resolve()
 {
-	m_pLookup = std::make_unique<SHostLookup>();
-	m_pLookup->host = m_origin.host;
-	m_pLookup->hints.ai_family = AF_INET;
-	m_pLookup->hints.ai_socktype = SOCK_STREAM;
-	m_pLookup->request.ar_name = m_pLookup->host.c_str();
-	m_pLookup->request.ar_request = &m_pLookup->hints;
+	std::expected<void, std::error_code> const started{ m_lookup.Start(m_origin.host) };
 
-	std::array<gaicb*, 1> requests{ &m_pLookup->request };
-	int const status{ getaddrinfo_a(GAI_NOWAIT, requests.data(), static_cast<int>(requests.size()), nullptr) };
-
-	if (status == 0)
+	if (started.has_value())
 	{
 		m_state = EFetchState::Resolving;
 	}
 	else
 	{
-		m_pLookup.reset();
-		FailAll(Explain(std::format("cannot be looked up: {}", gai_strerror(status))));
+		FailAll(Explain(std::format("cannot be looked up: {}", started.error().message())));
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
 void CFetchPump::CollectLookup()
 {
-	int const status{ gai_error(&m_pLookup->request) };
+	std::optional<std::expected<uint32_t, std::error_code>> const result{ m_lookup.Poll() };
 
-	if (status == EAI_INPROGRESS)
+	if (!result.has_value())
 	{
 		PollIn(LookupPoll);
 	}
+	else if (result->has_value())
+	{
+		Connect(Query::SServerAddress{ **result, m_origin.port });
+	}
 	else
 	{
-		std::optional<Query::SServerAddress> const address{ TakeAddress(m_pLookup->request, m_origin.port) };
-
-		m_pLookup.reset();
-
-		if (address.has_value())
-		{
-			Connect(*address);
-		}
-		else
-		{
-			FailAll(Explain(std::format("cannot be looked up: {}", (status == 0) ? "it has no IPv4 address" : gai_strerror(status))));
-		}
+		FailAll(Explain(std::format("cannot be looked up: {}", result->error().message())));
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
 void CFetchPump::Connect(Query::SServerAddress const& address)
 {
-	std::expected<void, int> const connecting{ m_socket.Initialize() ? m_socket.Connect(address) : std::unexpected{ errno } };
+	std::expected<void, std::error_code> const connecting{ m_socket.Initialize().and_then([this, &address]() { return m_socket.Connect(ToEndpoint(address)); }) };
 
 	if (connecting.has_value())
 	{
@@ -300,34 +254,26 @@ void CFetchPump::Connect(Query::SServerAddress const& address)
 	}
 	else
 	{
-		FailAll(Explain(std::format("cannot be reached: {}", std::strerror(connecting.error()))));
+		FailAll(Explain(std::format("cannot be reached: {}", connecting.error().message())));
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
 void CFetchPump::CheckConnected()
 {
-	pollfd descriptor{ m_socket.GetDescriptor(), POLLOUT, 0 };
-	int error{ 0 };
-	socklen_t size{ sizeof(error) };
-	bool const isSettled{ ::poll(&descriptor, 1, 0) > 0 };
+	std::expected<bool, std::error_code> const connected{ m_socket.PollConnected() };
 
-	if (isSettled && getsockopt(m_socket.GetDescriptor(), SOL_SOCKET, SO_ERROR, &error, &size) != 0)
+	if (!connected.has_value())
 	{
-		error = errno;
+		FailAll(Explain(std::format("cannot be reached: {}", connected.error().message())));
 	}
-
-	if (!isSettled)
+	else if (!*connected)
 	{
 		PollIn(SocketPoll);
 	}
-	else if (error != 0)
-	{
-		FailAll(Explain(std::format("cannot be reached: {}", std::strerror(error))));
-	}
 	else
 	{
-		std::expected<void, std::string> const secured{ m_tls.Initialize(m_config, m_origin.host, m_socket.GetDescriptor()) };
+		std::expected<void, std::string> const secured{ m_tls.Initialize(m_config, m_origin.host, m_socket) };
 
 		m_watch = secured.has_value() ? m_loop.Watch(m_socket.GetWaitable(), [this]() { Advance(); }) : std::nullopt;
 
@@ -508,25 +454,9 @@ void CFetchPump::CloseConnection()
 
 	m_tls.Terminate();
 	m_socket.Terminate();
-	AbandonLookup();
+	m_lookup.Terminate();
 	m_isReused = false;
 	m_state = EFetchState::Idle;
-}
-
-//////////////////////////////////////////////////////////////////////////
-// A lookup glibc cannot cancel still writes into its request, so that request is left to glibc, never freed.
-void CFetchPump::AbandonLookup()
-{
-	if (m_pLookup != nullptr && gai_cancel(&m_pLookup->request) == EAI_NOTCANCELED)
-	{
-		static_cast<void>(m_pLookup.release());
-	}
-	else if (m_pLookup != nullptr && m_pLookup->request.ar_result != nullptr)
-	{
-		freeaddrinfo(m_pLookup->request.ar_result);
-	}
-
-	m_pLookup.reset();
 }
 
 //////////////////////////////////////////////////////////////////////////

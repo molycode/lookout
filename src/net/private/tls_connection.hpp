@@ -8,6 +8,11 @@
 #include <string>
 #include <string_view>
 
+namespace Tge::Net
+{
+class CStreamSocket;
+} // namespace Tge::Net
+
 namespace Lkt::Net
 {
 // TLS over a connected non-blocking socket the caller owns. Every call returns at once: an error equal to
@@ -20,7 +25,7 @@ public:
 	~CTlsConnection() = default;
 
 	// config must outlive the connection; host is the name the certificate must carry.
-	std::expected<void, std::string> Initialize(mbedtls_ssl_config const& config, std::string_view host, int descriptor);
+	std::expected<void, std::string> Initialize(mbedtls_ssl_config const& config, std::string_view host, Tge::Net::CStreamSocket const& socket);
 	void Terminate();
 
 	std::expected<void, int> Handshake();
@@ -37,7 +42,7 @@ private:
 	static int Receive(void* pContext, unsigned char* pBuffer, size_t size);
 
 	mbedtls_ssl_context m_ssl{};
-	int m_descriptor{ -1 };
+	Tge::Net::CStreamSocket const* m_pSocket{ nullptr };
 	bool m_isInitialized{ false };
 };
 } // namespace Lkt::Net

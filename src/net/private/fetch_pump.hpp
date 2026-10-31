@@ -1,9 +1,7 @@
 #pragma once
 
 #include "fetch_state.hpp"
-#include "host_lookup.hpp"
 #include "http_response_reader.hpp"
-#include "stream_socket.hpp"
 #include "tls_connection.hpp"
 #include "net/fetch_request.hpp"
 #include "net/fetch_result.hpp"
@@ -11,6 +9,8 @@
 #include "query/server_address.hpp"
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
+#include <tge/net/address_lookup.hpp>
+#include <tge/net/stream_socket.hpp>
 #include <tge/non_copyable.hpp>
 #include <tge/threading/event_loop.hpp>
 #include <tge/threading/mpsc_queue.hpp>
@@ -22,7 +22,6 @@
 #include <deque>
 #include <expected>
 #include <functional>
-#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -59,7 +58,6 @@ private:
 	void Answer(std::expected<std::string, std::string> body);
 	void FailAll(std::string const& reason);
 	void CloseConnection();
-	void AbandonLookup();
 	void PollIn(std::chrono::milliseconds delay);
 	void OnDeadline();
 	std::string Explain(std::string_view reason) const;
@@ -77,8 +75,8 @@ private:
 
 	std::deque<SFetchRequest> m_requests;
 	EFetchState m_state{ EFetchState::Idle };
-	std::unique_ptr<SHostLookup> m_pLookup;
-	CStreamSocket m_socket;
+	Tge::Net::CAddressLookup m_lookup;
+	Tge::Net::CStreamSocket m_socket;
 	CTlsConnection m_tls;
 	std::optional<Tge::Threading::SWatchId> m_watch;
 	std::optional<Tge::Threading::STimerId> m_pollTimer;

@@ -7,6 +7,7 @@
 #include "games/load_games.hpp"
 #include "net/crypto_threading.hpp"
 #include "query/game_catalog.hpp"
+#include <tge/net/socket_library.hpp>
 #include <cstdlib>
 #include <expected>
 #include <filesystem>
@@ -16,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace
@@ -69,8 +71,16 @@ int CheckFolder(std::filesystem::path const& folder)
 int main(int argc, char* argv[])
 {
 	Lkt::Net::CCryptoThreading cryptoThreading{};
+	Tge::Net::CSocketLibrary socketLibrary{};
 
 	cryptoThreading.Initialize();
+
+	std::expected<void, std::error_code> const sockets{ socketLibrary.Initialize() };
+
+	if (!sockets.has_value())
+	{
+		Lkt::gLog.Error("Cannot start the socket library, so no server can be reached: {}", sockets.error().message());
+	}
 
 	std::expected<std::filesystem::path, Lkt::Config::EXdgError> const dataHome{ Lkt::Config::GetDataHome() };
 	std::filesystem::path const userDir{ dataHome.has_value() ? *dataHome / Lkt::AppDirName : std::filesystem::path{} };
@@ -183,6 +193,7 @@ int main(int argc, char* argv[])
 	}
 
 	Lkt::Query::TerminateGameCatalog();
+	socketLibrary.Terminate();
 	cryptoThreading.Terminate();
 
 	return result;

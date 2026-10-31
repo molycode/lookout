@@ -4,6 +4,7 @@
 #include "query/server_address.hpp"
 #include <cstdint>
 #include <string>
+#include <system_error>
 
 namespace Lkt::Net
 {
@@ -24,9 +25,9 @@ struct SRefreshStats final
 	Query::EParseError firstBadMasterDatagramError{ Query::EParseError::Malformed };
 	size_t numSendFailures{ 0 };
 	Query::SServerAddress firstSendFailure;
-	int firstSendError{ 0 };
+	std::error_code firstSendError;
 	size_t numReceiveErrors{ 0 };
-	int firstReceiveError{ 0 };
+	std::error_code firstReceiveError;
 	size_t numOverCap{ 0 };
 	Query::SServerAddress firstOverCap;
 };

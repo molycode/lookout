@@ -2,12 +2,12 @@
 #include <mbedtls/error.h>
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/x509_crt.h>
-#include <sys/socket.h>
+#include <tge/net/stream_socket.hpp>
 #include <algorithm>
 #include <array>
-#include <cerrno>
 #include <format>
 #include <string>
+#include <system_error>
 
 namespace Lkt::Net
 {
@@ -16,20 +16,20 @@ namespace
 constexpr size_t MaxDescriptionSize{ 512 };
 
 //////////////////////////////////////////////////////////////////////////
-bool IsWouldBlock(int error)
+bool IsWouldBlock(std::error_code error)
 {
-	return error == EAGAIN || error == EWOULDBLOCK || error == EINTR;
+	return error == std::errc::operation_would_block || error == std::errc::interrupted;
 }
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<void, std::string> CTlsConnection::Initialize(mbedtls_ssl_config const& config, std::string_view host, int descriptor)
+std::expected<void, std::string> CTlsConnection::Initialize(mbedtls_ssl_config const& config, std::string_view host, Tge::Net::CStreamSocket const& socket)
 {
 	std::string const hostName{ host };
 	std::expected<void, std::string> result{};
 
 	mbedtls_ssl_init(&m_ssl);
-	m_descriptor = descriptor;
+	m_pSocket = &socket;
 	m_isInitialized = true;
 
 	int const setUp{ mbedtls_ssl_setup(&m_ssl, &config) };
@@ -56,7 +56,7 @@ void CTlsConnection::Terminate()
 		m_isInitialized = false;
 	}
 
-	m_descriptor = -1;
+	m_pSocket = nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -131,16 +131,19 @@ std::string CTlsConnection::Describe(int error) const
 }
 
 //////////////////////////////////////////////////////////////////////////
-// MSG_NOSIGNAL: a peer that is gone must not raise SIGPIPE in the whole process.
 int CTlsConnection::Send(void* pContext, unsigned char const* pData, size_t size)
 {
 	CTlsConnection const* const pConnection{ static_cast<CTlsConnection const*>(pContext) };
-	ssize_t const sent{ ::send(pConnection->m_descriptor, pData, size, MSG_NOSIGNAL) };
-	int result{ static_cast<int>(sent) };
+	std::expected<size_t, std::error_code> const sent{ pConnection->m_pSocket->Send(std::span{ reinterpret_cast<std::byte const*>(pData), size }) };
+	int result{ MBEDTLS_ERR_NET_SEND_FAILED };
 
-	if (sent < 0)
+	if (sent.has_value())
 	{
-		result = IsWouldBlock(errno) ? MBEDTLS_ERR_SSL_WANT_WRITE : MBEDTLS_ERR_NET_SEND_FAILED;
+		result = static_cast<int>(*sent);
+	}
+	else if (IsWouldBlock(sent.error()))
+	{
+		result = MBEDTLS_ERR_SSL_WANT_WRITE;
 	}
 
 	return result;
@@ -150,12 +153,16 @@ int CTlsConnection::Send(void* pContext, unsigned char const* pData, size_t size
 int CTlsConnection::Receive(void* pContext, unsigned char* pBuffer, size_t size)
 {
 	CTlsConnection const* const pConnection{ static_cast<CTlsConnection const*>(pContext) };
-	ssize_t const received{ ::recv(pConnection->m_descriptor, pBuffer, size, 0) };
-	int result{ static_cast<int>(received) };
+	std::expected<size_t, std::error_code> const received{ pConnection->m_pSocket->Receive(std::span{ reinterpret_cast<std::byte*>(pBuffer), size }) };
+	int result{ MBEDTLS_ERR_NET_RECV_FAILED };
 
-	if (received < 0)
+	if (received.has_value())
 	{
-		result = IsWouldBlock(errno) ? MBEDTLS_ERR_SSL_WANT_READ : MBEDTLS_ERR_NET_RECV_FAILED;
+		result = static_cast<int>(*received);
+	}
+	else if (IsWouldBlock(received.error()))
+	{
+		result = MBEDTLS_ERR_SSL_WANT_READ;
 	}
 
 	return result;

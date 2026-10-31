@@ -14,7 +14,6 @@
 #include "refresh_state.hpp"
 #include "request_scheduler.hpp"
 #include "server_request.hpp"
-#include "udp_socket.hpp"
 #include "net/query_catalog.hpp"
 #include "net/query_event.hpp"
 #include "query/game.hpp"
@@ -22,6 +21,7 @@
 #include "script/conversation_kind.hpp"
 #include "script/protocol_script.hpp"
 #include "script/script_action.hpp"
+#include <tge/net/udp_socket.hpp>
 #include <tge/non_copyable.hpp>
 #include <tge/threading/event_loop.hpp>
 #include <tge/threading/mpsc_queue.hpp>
@@ -34,6 +34,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -78,7 +79,7 @@ private:
 	void SendToServer(SServerRequest const& request, SConversationRecord const& record);
 	void EndRequests(Clock::time_point now);
 	void ReceiveDatagrams();
-	void CountReceiveError(int error);
+	void CountReceiveError(std::error_code error);
 	void ReadStatusDatagram(SAnsweredRequest const& answered, std::span<std::byte const> datagram, Clock::time_point now);
 	void FinishServer(SServerRequest const& request, Clock::duration roundTrip);
 	void EndServer(SServerRequest const& request, Clock::duration roundTrip, std::expected<Script::SScriptAction, std::string> action);
@@ -101,7 +102,7 @@ private:
 
 	Tge::Threading::CEventLoop m_loop;
 	Tge::Threading::STimerId m_timer;
-	CUdpSocket m_socket;
+	Tge::Net::CUdpSocket m_socket;
 	Tge::Threading::CMpscQueue<SQueryEvent> m_events;
 
 	std::vector<std::unique_ptr<SDnsLookup>> m_lookups;

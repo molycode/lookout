@@ -25,6 +25,7 @@ target_link_libraries(LookoutTests
 	PRIVATE
 		GTest::gtest
 		Tge::Core
+		Tge::Net
 		Tge::Testing
 		Lkt::Browser
 		Lkt::Config
