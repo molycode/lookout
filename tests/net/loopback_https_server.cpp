@@ -1,17 +1,17 @@
 #include "loopback_https_server.hpp"
 #include <psa/crypto.h>
 #include <gtest/gtest.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include <tge/net/ipv4_endpoint.hpp>
+#include <tge/net/stream_socket.hpp>
+#include <tge/net/wait_for_readable.hpp>
 #include <algorithm>
 #include <array>
-#include <cerrno>
 #include <chrono>
+#include <expected>
 #include <filesystem>
 #include <format>
+#include <span>
+#include <system_error>
 #include <utility>
 
 namespace Lkt::Fixtures
@@ -19,7 +19,8 @@ namespace Lkt::Fixtures
 namespace
 {
 constexpr std::string_view HeaderEnd{ "\r\n\r\n" };
-constexpr int PollMs{ 20 };
+constexpr uint32_t Loopback{ 0x7F000001 };
+constexpr std::chrono::milliseconds PollInterval{ 20 };
 
 //////////////////////////////////////////////////////////////////////////
 std::string GetTlsFixture(std::string_view name)
@@ -30,17 +31,19 @@ std::string GetTlsFixture(std::string_view name)
 //////////////////////////////////////////////////////////////////////////
 int SendBlocking(void* pContext, unsigned char const* pData, size_t size)
 {
-	ssize_t const sent{ ::send(*static_cast<int const*>(pContext), pData, size, MSG_NOSIGNAL) };
+	std::expected<size_t, std::error_code> const sent{ static_cast<Tge::Net::CStreamSocket const*>(pContext)->Send(
+		std::span{ reinterpret_cast<std::byte const*>(pData), size }) };
 
-	return (sent >= 0) ? static_cast<int>(sent) : MBEDTLS_ERR_SSL_INTERNAL_ERROR;
+	return sent.has_value() ? static_cast<int>(*sent) : MBEDTLS_ERR_SSL_INTERNAL_ERROR;
 }
 
 //////////////////////////////////////////////////////////////////////////
 int ReceiveBlocking(void* pContext, unsigned char* pBuffer, size_t size)
 {
-	ssize_t const received{ ::recv(*static_cast<int const*>(pContext), pBuffer, size, 0) };
+	std::expected<size_t, std::error_code> const received{ static_cast<Tge::Net::CStreamSocket const*>(pContext)->Receive(
+		std::span{ reinterpret_cast<std::byte*>(pBuffer), size }) };
 
-	return (received >= 0) ? static_cast<int>(received) : MBEDTLS_ERR_SSL_INTERNAL_ERROR;
+	return received.has_value() ? static_cast<int>(*received) : MBEDTLS_ERR_SSL_INTERNAL_ERROR;
 }
 } // namespace
 
@@ -57,22 +60,16 @@ bool CLoopbackHttpsServer::Start()
 		&& mbedtls_ssl_config_defaults(&m_config, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT) == 0
 		&& mbedtls_ssl_conf_own_cert(&m_config, &m_certificate, &m_key) == 0 };
 
-	sockaddr_in address{};
-	socklen_t size{ sizeof(address) };
-
-	address.sin_family = AF_INET;
-	address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	m_listener = isLoaded ? ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0) : -1;
-
-	bool const isListening{ m_listener >= 0 && ::bind(m_listener, reinterpret_cast<sockaddr const*>(&address), sizeof(address)) == 0
-		&& ::listen(m_listener, 8) == 0 && ::getsockname(m_listener, reinterpret_cast<sockaddr*>(&address), &size) == 0 };
+	std::expected<Tge::Net::SIpv4Endpoint, std::error_code> const local{ m_listener.Initialize(Tge::Net::SIpv4Endpoint{ Loopback, 0 })
+		.and_then([this]() { return m_listener.GetLocalEndpoint(); }) };
+	bool const isListening{ isLoaded && local.has_value() };
 
 	EXPECT_TRUE(isLoaded) << "the loopback HTTPS server cannot load tests/fixtures/tls";
-	EXPECT_TRUE(isListening) << "the loopback HTTPS server cannot listen";
+	EXPECT_TRUE(local.has_value()) << "the loopback HTTPS server cannot listen";
 
 	if (isListening)
 	{
-		m_port = ntohs(address.sin_port);
+		m_port = local->port;
 		m_thread = std::thread{ [this]() { Serve(); } };
 	}
 
@@ -89,12 +86,7 @@ void CLoopbackHttpsServer::Stop()
 		m_thread.join();
 	}
 
-	if (m_listener >= 0)
-	{
-		::close(m_listener);
-		m_listener = -1;
-	}
-
+	m_listener.Terminate();
 	mbedtls_ssl_config_free(&m_config);
 	mbedtls_x509_crt_free(&m_certificate);
 	mbedtls_pk_free(&m_key);
@@ -132,32 +124,28 @@ void CLoopbackHttpsServer::Serve()
 {
 	while (!m_isStopping)
 	{
-		pollfd listener{ m_listener, POLLIN, 0 };
+		Tge::Net::CStreamSocket connection{};
 
-		if (::poll(&listener, 1, PollMs) > 0)
+		if (Tge::Net::WaitForReadable(m_listener.GetWaitable(), PollInterval).value_or(false) && m_listener.Accept(connection).value_or(false)
+			&& connection.SetBlocking().has_value())
 		{
-			int const descriptor{ ::accept4(m_listener, nullptr, nullptr, SOCK_CLOEXEC) };
-
-			if (descriptor >= 0)
-			{
-				++m_numConnections;
-				ServeConnection(descriptor);
-				::close(descriptor);
-			}
+			++m_numConnections;
+			ServeConnection(connection);
 		}
+
+		connection.Terminate();
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CLoopbackHttpsServer::ServeConnection(int descriptor)
+void CLoopbackHttpsServer::ServeConnection(Tge::Net::CStreamSocket& connection)
 {
 	mbedtls_ssl_context ssl{};
-	int peer{ descriptor };
 	bool isOpen{ true };
 
 	mbedtls_ssl_init(&ssl);
 	isOpen = mbedtls_ssl_setup(&ssl, &m_config) == 0;
-	mbedtls_ssl_set_bio(&ssl, &peer, SendBlocking, ReceiveBlocking, nullptr);
+	mbedtls_ssl_set_bio(&ssl, &connection, SendBlocking, ReceiveBlocking, nullptr);
 	isOpen = isOpen && mbedtls_ssl_handshake(&ssl) == 0;
 
 	std::string received{};
@@ -169,8 +157,7 @@ void CLoopbackHttpsServer::ServeConnection(int descriptor)
 
 		if (end == std::string::npos)
 		{
-			pollfd connection{ descriptor, POLLIN, 0 };
-			bool const isReadable{ mbedtls_ssl_get_bytes_avail(&ssl) > 0 || ::poll(&connection, 1, PollMs) > 0 };
+			bool const isReadable{ mbedtls_ssl_get_bytes_avail(&ssl) > 0 || Tge::Net::WaitForReadable(connection.GetWaitable(), PollInterval).value_or(false) };
 			int const read{ isReadable ? mbedtls_ssl_read(&ssl, buffer.data(), buffer.size()) : MBEDTLS_ERR_SSL_WANT_READ };
 
 			isOpen = read > 0 || read == MBEDTLS_ERR_SSL_WANT_READ;
@@ -198,7 +185,7 @@ void CLoopbackHttpsServer::ServeConnection(int descriptor)
 
 			while (reply.isSilent && !m_isStopping)
 			{
-				std::this_thread::sleep_for(std::chrono::milliseconds{ PollMs });
+				std::this_thread::sleep_for(PollInterval);
 			}
 
 			isOpen = !reply.isSilent && mbedtls_ssl_write(&ssl, reinterpret_cast<unsigned char const*>(response.data()), response.size())

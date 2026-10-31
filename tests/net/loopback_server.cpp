@@ -1,14 +1,14 @@
 #include "net/loopback_server.hpp"
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <poll.h>
-#include <sys/socket.h>
+#include <tge/net/ipv4_endpoint.hpp>
+#include <tge/net/wait_for_readable.hpp>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
+#include <expected>
 #include <span>
+#include <system_error>
 #include <thread>
-#include <unistd.h>
 #include <utility>
 
 namespace Lkt::Fixtures
@@ -16,7 +16,7 @@ namespace Lkt::Fixtures
 namespace
 {
 constexpr uint32_t Loopback{ 0x7F000001 };
-constexpr int PollIntervalMs{ 20 };
+constexpr std::chrono::milliseconds PollInterval{ 20 };
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
@@ -37,25 +37,18 @@ bool CLoopbackServer::StartExchanges(std::vector<SLoopbackExchange> exchanges)
 {
 	m_exchanges = std::move(exchanges);
 	m_numMatches.assign(m_exchanges.size(), 0);
-	m_descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 
-	sockaddr_in local{};
+	std::expected<Tge::Net::SIpv4Endpoint, std::error_code> const local{ m_socket.Initialize(Tge::Net::SIpv4Endpoint{ Loopback, 0 })
+		.and_then([this]() { return m_socket.GetLocalEndpoint(); }) };
 
-	local.sin_family = AF_INET;
-	local.sin_addr.s_addr = htonl(Loopback);
-
-	socklen_t localSize{ sizeof(local) };
-	bool const isBound{ m_descriptor >= 0 && bind(m_descriptor, reinterpret_cast<sockaddr const*>(&local), sizeof(local)) == 0
-		&& getsockname(m_descriptor, reinterpret_cast<sockaddr*>(&local), &localSize) == 0 };
-
-	if (isBound)
+	if (local.has_value())
 	{
-		m_port = ntohs(local.sin_port);
+		m_port = local->port;
 		m_isServing.store(true, std::memory_order_release);
 		m_thread = std::thread{ [this]() { Serve(); } };
 	}
 
-	return isBound;
+	return local.has_value();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -68,11 +61,7 @@ void CLoopbackServer::Stop()
 		m_thread.join();
 	}
 
-	if (m_descriptor >= 0)
-	{
-		close(m_descriptor);
-		m_descriptor = -1;
-	}
+	m_socket.Terminate();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -113,18 +102,14 @@ void CLoopbackServer::Serve()
 
 	while (m_isServing.load(std::memory_order_acquire))
 	{
-		pollfd descriptor{ m_descriptor, POLLIN, 0 };
-
-		if (poll(&descriptor, 1, PollIntervalMs) > 0)
+		if (Tge::Net::WaitForReadable(m_socket.GetWaitable(), PollInterval).value_or(false))
 		{
-			sockaddr_in sender{};
-			socklen_t senderSize{ sizeof(sender) };
+			Tge::Net::SIpv4Endpoint sender{};
+			std::expected<size_t, std::error_code> const size{ m_socket.Receive(buffer, sender) };
 
-			ssize_t const size{ recvfrom(m_descriptor, buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&sender), &senderSize) };
-
-			if (size >= 0)
+			if (size.has_value())
 			{
-				std::span<std::byte const> const request{ buffer.data(), static_cast<size_t>(size) };
+				std::span<std::byte const> const request{ buffer.data(), *size };
 
 				if (m_numRequests.load(std::memory_order_acquire) == 0)
 				{
@@ -154,7 +139,7 @@ void CLoopbackServer::Serve()
 						for (std::vector<std::byte> const& reply : exchange->replies)
 						{
 							std::this_thread::sleep_for(exchange->replyInterval);
-							sendto(m_descriptor, reply.data(), reply.size(), 0, reinterpret_cast<sockaddr const*>(&sender), senderSize);
+							static_cast<void>(m_socket.Send(sender, reply));
 						}
 					}
 				}

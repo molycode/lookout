@@ -4,6 +4,7 @@
 #include <mbedtls/pk.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
+#include <tge/net/stream_listener.hpp>
 #include <tge/non_copyable.hpp>
 #include <atomic>
 #include <cstddef>
@@ -13,6 +14,11 @@
 #include <string>
 #include <string_view>
 #include <thread>
+
+namespace Tge::Net
+{
+class CStreamSocket;
+} // namespace Tge::Net
 
 namespace Lkt::Fixtures
 {
@@ -36,13 +42,13 @@ public:
 private:
 
 	void Serve();
-	void ServeConnection(int descriptor);
+	void ServeConnection(Tge::Net::CStreamSocket& connection);
 	SHttpsReply FindReply(std::string_view path) const;
 
 	mbedtls_ssl_config m_config{};
 	mbedtls_x509_crt m_certificate{};
 	mbedtls_pk_context m_key{};
-	int m_listener{ -1 };
+	Tge::Net::CStreamListener m_listener;
 	uint16_t m_port{ 0 };
 	std::thread m_thread;
 	std::atomic<bool> m_isStopping{ false };

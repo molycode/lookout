@@ -2,6 +2,7 @@
 
 #include "net/loopback_exchange.hpp"
 #include "query/server_address.hpp"
+#include <tge/net/udp_socket.hpp>
 #include <tge/non_copyable.hpp>
 #include <array>
 #include <atomic>
@@ -39,7 +40,7 @@ private:
 
 	void Serve();
 
-	int m_descriptor{ -1 };
+	Tge::Net::CUdpSocket m_socket;
 	uint16_t m_port{ 0 };
 	std::vector<SLoopbackExchange> m_exchanges;
 	std::vector<uint32_t> m_numMatches;

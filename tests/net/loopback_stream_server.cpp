@@ -1,14 +1,13 @@
 #include "net/loopback_stream_server.hpp"
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/socket.h>
+#include <tge/net/ipv4_endpoint.hpp>
+#include <tge/net/stream_socket.hpp>
+#include <tge/net/wait_for_readable.hpp>
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <expected>
 #include <span>
-#include <unistd.h>
+#include <system_error>
 #include <utility>
 
 namespace Lkt::Fixtures
@@ -16,22 +15,22 @@ namespace Lkt::Fixtures
 namespace
 {
 constexpr uint32_t Loopback{ 0x7F000001 };
-constexpr int PollIntervalMs{ 20 };
+constexpr std::chrono::milliseconds PollInterval{ 20 };
 constexpr size_t MaxRequestSize{ 256 };
 // Apart, so the client sees the reply arrive in pieces rather than as one segment.
 constexpr std::chrono::milliseconds WriteInterval{ 1 };
 
 //////////////////////////////////////////////////////////////////////////
-bool SendAll(int connection, std::span<std::byte const> bytes)
+bool SendAll(Tge::Net::CStreamSocket const& connection, std::span<std::byte const> bytes)
 {
 	bool isSent{ true };
 
 	while (isSent && !bytes.empty())
 	{
-		ssize_t const sent{ send(connection, bytes.data(), bytes.size(), MSG_NOSIGNAL) };
+		size_t const sent{ connection.Send(bytes).value_or(0) };
 
 		isSent = sent > 0;
-		bytes = isSent ? bytes.subspan(static_cast<size_t>(sent)) : bytes;
+		bytes = isSent ? bytes.subspan(sent) : bytes;
 	}
 
 	return isSent;
@@ -42,25 +41,18 @@ bool SendAll(int connection, std::span<std::byte const> bytes)
 bool CLoopbackStreamServer::Start(SLoopbackStream stream)
 {
 	m_stream = std::move(stream);
-	m_descriptor = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
-	sockaddr_in local{};
+	std::expected<Tge::Net::SIpv4Endpoint, std::error_code> const local{ m_listener.Initialize(Tge::Net::SIpv4Endpoint{ Loopback, 0 })
+		.and_then([this]() { return m_listener.GetLocalEndpoint(); }) };
 
-	local.sin_family = AF_INET;
-	local.sin_addr.s_addr = htonl(Loopback);
-
-	socklen_t localSize{ sizeof(local) };
-	bool const isListening{ m_descriptor >= 0 && bind(m_descriptor, reinterpret_cast<sockaddr const*>(&local), sizeof(local)) == 0
-		&& listen(m_descriptor, 4) == 0 && getsockname(m_descriptor, reinterpret_cast<sockaddr*>(&local), &localSize) == 0 };
-
-	if (isListening)
+	if (local.has_value())
 	{
-		m_port = ntohs(local.sin_port);
+		m_port = local->port;
 		m_isServing.store(true, std::memory_order_release);
 		m_thread = std::thread{ [this]() { Serve(); } };
 	}
 
-	return isListening;
+	return local.has_value();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -73,11 +65,7 @@ void CLoopbackStreamServer::Stop()
 		m_thread.join();
 	}
 
-	if (m_descriptor >= 0)
-	{
-		close(m_descriptor);
-		m_descriptor = -1;
-	}
+	m_listener.Terminate();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -98,28 +86,23 @@ void CLoopbackStreamServer::Serve()
 {
 	while (m_isServing.load(std::memory_order_acquire))
 	{
-		pollfd descriptor{ m_descriptor, POLLIN, 0 };
+		Tge::Net::CStreamSocket connection{};
 
-		if (poll(&descriptor, 1, PollIntervalMs) > 0)
+		if (Tge::Net::WaitForReadable(m_listener.GetWaitable(), PollInterval).value_or(false) && m_listener.Accept(connection).value_or(false)
+			&& connection.SetBlocking().has_value())
 		{
-			int const connection{ accept4(m_descriptor, nullptr, nullptr, SOCK_CLOEXEC) };
-
-			if (connection >= 0)
-			{
-				int const noDelay{ 1 };
-
-				setsockopt(connection, IPPROTO_TCP, TCP_NODELAY, &noDelay, sizeof(noDelay));
-				m_numConnections.fetch_add(1, std::memory_order_acq_rel);
-				Converse(connection);
-				close(connection);
-			}
+			static_cast<void>(connection.SetNoDelay());
+			m_numConnections.fetch_add(1, std::memory_order_acq_rel);
+			Converse(connection);
 		}
+
+		connection.Terminate();
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
 // A step that expects nothing goes at once; one whose bytes differ ends the connection.
-void CLoopbackStreamServer::Converse(int connection)
+void CLoopbackStreamServer::Converse(Tge::Net::CStreamSocket const& connection)
 {
 	std::array<std::byte, MaxRequestSize> received{};
 	size_t numReceived{ 0 };
@@ -146,14 +129,14 @@ void CLoopbackStreamServer::Converse(int connection)
 			++step;
 			isOpen = isOpen && (step < m_stream.steps.size() || !m_stream.closesWhenDone);
 		}
-		else if (pollfd descriptor{ connection, POLLIN, 0 }; poll(&descriptor, 1, PollIntervalMs) > 0)
+		else if (Tge::Net::WaitForReadable(connection.GetWaitable(), PollInterval).value_or(false))
 		{
 			size_t const offset{ (pExpect != nullptr) ? numReceived : 0 };
 			size_t const wanted{ (pExpect != nullptr) ? pExpect->size() - numReceived : received.size() };
-			ssize_t const count{ recv(connection, received.data() + offset, std::min(wanted, received.size() - offset), 0) };
+			size_t const count{ connection.Receive(std::span{ received }.subspan(offset, std::min(wanted, received.size() - offset))).value_or(0) };
 
 			isOpen = count > 0;
-			numReceived += (isOpen && pExpect != nullptr) ? static_cast<size_t>(count) : 0;
+			numReceived += (pExpect != nullptr) ? count : 0;
 		}
 	}
 }

@@ -2,10 +2,16 @@
 
 #include "net/loopback_stream.hpp"
 #include "query/server_address.hpp"
+#include <tge/net/stream_listener.hpp>
 #include <tge/non_copyable.hpp>
 #include <atomic>
 #include <cstdint>
 #include <thread>
+
+namespace Tge::Net
+{
+class CStreamSocket;
+} // namespace Tge::Net
 
 namespace Lkt::Fixtures
 {
@@ -27,9 +33,9 @@ public:
 private:
 
 	void Serve();
-	void Converse(int connection);
+	void Converse(Tge::Net::CStreamSocket const& connection);
 
-	int m_descriptor{ -1 };
+	Tge::Net::CStreamListener m_listener;
 	uint16_t m_port{ 0 };
 	SLoopbackStream m_stream;
 	std::atomic<bool> m_isServing{ false };
