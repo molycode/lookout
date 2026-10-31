@@ -64,3 +64,44 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  windows-msvc:
+    name: Windows (MSVC, ${{ matrix.preset }})
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: windows-msvc-debug
+            static: OFF
+          - preset: windows-msvc-release
+            static: ON
+    # Until the port reaches them, only the modules that build on Windows are built; the tests follow once all do.
+    env:
+      TARGETS: LktQuery LktScript LktGeo TgeLogging TgeMemory TgeMath TgeThreading TgeIO TgeCommand TgeInit TgeModule TgeLifecycle SDL3-static imgui gtest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Install CMake
+        run: |
+          $archive = "$env:RUNNER_TEMP\cmake.zip"
+          Invoke-WebRequest -UseBasicParsing -OutFile $archive `
+            https://github.com/Kitware/CMake/releases/download/v4.3.2/cmake-4.3.2-windows-x86_64.zip
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne '83d20c23f5c5f64b3b328785e35b23c532e33057a97ed6294acaca3781b78a01') { throw "cmake.zip: unexpected SHA-256 $hash" }
+          Expand-Archive $archive -DestinationPath $env:RUNNER_TEMP
+          "LKT_CMAKE=$env:RUNNER_TEMP\cmake-4.3.2-windows-x86_64\bin\cmake.exe" >> $env:GITHUB_ENV
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch submodules and Mbed TLS
+        run: '& $env:LKT_CMAKE -P scripts/init_submodules.cmake'
+
+      - name: Configure and build
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = "$vs\VC\Auxiliary\Build\vcvars64.bat"
+          cmd /c "`"$vcvars`" && `"$env:LKT_CMAKE`" --preset ${{ matrix.preset }} -DLKT_STATIC_RUNTIME=${{ matrix.static }} && `"$env:LKT_CMAKE`" --build --preset ${{ matrix.preset }} --target $env:TARGETS"
+          if ($LASTEXITCODE -ne 0) { throw "build failed ($LASTEXITCODE)" }
