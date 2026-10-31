@@ -11,4 +11,11 @@ namespace Lkt::Json
 #define JSON_USE_IMPLICIT_CONVERSIONS 0
 #define JSON_THROW_USER(exception) ::Lkt::Json::AbortOnJsonError((exception).what())
 
+#if defined(_MSC_VER) && !defined(__clang__)
+	#pragma warning(push)
+	#pragma warning(disable: 4702)
+#endif // _MSC_VER && !__clang__
 #include <nlohmann/json.hpp>
+#if defined(_MSC_VER) && !defined(__clang__)
+	#pragma warning(pop)
+#endif // _MSC_VER && !__clang__

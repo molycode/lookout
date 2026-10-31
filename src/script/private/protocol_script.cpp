@@ -35,8 +35,6 @@ constexpr std::array<std::string_view, 3> CallbackNames{ "start", "receive", "fi
 int Panic(lua_State*)
 {
 	TGE_FATAL("Lua raised an error outside a protected call");
-
-	return 0;
 }
 } // namespace
 

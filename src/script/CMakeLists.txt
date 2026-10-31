@@ -33,8 +33,13 @@ add_library(lua STATIC
 # Compiled as C, as upstream builds it: as C++ its errors would be exceptions, which Lookout builds without.
 set_target_properties(lua PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
 target_include_directories(lua SYSTEM PUBLIC ${lktLuaRoot})
-target_compile_definitions(lua PRIVATE LUA_USE_LINUX $<$<CONFIG:Debug>:LUA_USE_APICHECK>)
-target_link_libraries(lua PRIVATE m)
+target_compile_definitions(lua PRIVATE $<$<CONFIG:Debug>:LUA_USE_APICHECK>)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	target_compile_definitions(lua PRIVATE LUA_USE_LINUX)
+	target_link_libraries(lua PRIVATE m)
+endif()
+
 tge_suppress_external_warnings(lua)
 
 file(GLOB_RECURSE LKT_SCRIPT_SOURCES CONFIGURE_DEPENDS "public/*.hpp" "private/*.hpp" "private/*.cpp")

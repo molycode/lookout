@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 4.3.0)
 
 project(Lookout VERSION 1.5.0 LANGUAGES C CXX)
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-	message(FATAL_ERROR "Lookout is a Linux application; '${CMAKE_SYSTEM_NAME}' is not supported")
+if(NOT CMAKE_SYSTEM_NAME MATCHES "^(Linux|Windows)$")
+	message(FATAL_ERROR "Lookout runs on Linux and Windows; '${CMAKE_SYSTEM_NAME}' is not supported")
 endif()
 
 if(PROJECT_IS_TOP_LEVEL)
@@ -18,9 +18,11 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/lkt_targets.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/sanitizer.cmake)
 
-option(LKT_STATIC_RUNTIME "Link libstdc++ and libgcc statically" OFF)
+option(LKT_STATIC_RUNTIME "Link the C and C++ runtime statically" OFF)
 
-if(LKT_STATIC_RUNTIME)
+if(LKT_STATIC_RUNTIME AND MSVC)
+	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+elseif(LKT_STATIC_RUNTIME)
 	add_link_options(-static-libstdc++ -static-libgcc)
 endif()
 

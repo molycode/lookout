@@ -8,8 +8,8 @@ namespace Lkt::Query
 {
 namespace
 {
-constinit std::vector<SProtocolDefinition> gProtocols{};
-constinit std::vector<SGameDefinition> gGames{};
+std::vector<SProtocolDefinition> gProtocols{};
+std::vector<SGameDefinition> gGames{};
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////

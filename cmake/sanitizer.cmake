@@ -7,8 +7,18 @@ if(NOT LKT_SANITIZER STREQUAL "none")
 		message(FATAL_ERROR "LKT_SANITIZER is '${LKT_SANITIZER}'; expected none, address, undefined, address,undefined or thread")
 	endif()
 
-	add_compile_options(-fsanitize=${LKT_SANITIZER} -fno-omit-frame-pointer)
-	add_link_options(-fsanitize=${LKT_SANITIZER})
+	if(MSVC AND NOT LKT_SANITIZER STREQUAL "address")
+		message(FATAL_ERROR "LKT_SANITIZER is '${LKT_SANITIZER}'; MSVC builds only with address")
+	endif()
+
+	if(MSVC)
+		add_compile_options(/fsanitize=address)
+		add_link_options(/INCREMENTAL:NO)
+	else()
+		add_compile_options(-fsanitize=${LKT_SANITIZER} -fno-omit-frame-pointer)
+		add_link_options(-fsanitize=${LKT_SANITIZER})
+	endif()
+
 	add_compile_definitions(LKT_SANITIZER_ENABLED)
 
 	message(STATUS "Sanitizer enabled: ${LKT_SANITIZER}")

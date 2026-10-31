@@ -9,7 +9,7 @@
 
 namespace Lkt::Ui
 {
-constinit CGameIcons gGameIcons{};
+CGameIcons gGameIcons{};
 
 //////////////////////////////////////////////////////////////////////////
 void CGameIcons::Initialize(SDL_Renderer* pRenderer)

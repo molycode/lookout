@@ -144,6 +144,61 @@
 				"CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux/clang.cmake",
 				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
 			}
+		},
+		{
+			"name": "windows-msvc-debug",
+			"inherits": "base",
+			"displayName": "windows_msvc_debug",
+			"description": "Debug build with MSVC (run from an x64 Native Tools prompt)",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/msvc-Debug",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/windows/msvc.cmake",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+			}
+		},
+		{
+			"name": "windows-msvc-release",
+			"inherits": "base",
+			"displayName": "windows_msvc_release",
+			"description": "Release build with MSVC (run from an x64 Native Tools prompt)",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/msvc-Release",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/windows/msvc.cmake",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+			}
+		},
+		{
+			"name": "windows-msvc-relwithdebinfo",
+			"inherits": "base",
+			"displayName": "windows_msvc_relwithdebinfo",
+			"description": "Optimised build with symbols, using MSVC (run from an x64 Native Tools prompt)",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/msvc-RelWithDebInfo",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "RelWithDebInfo",
+				"CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/windows/msvc.cmake",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+			}
+		},
+		{
+			"name": "windows-msvc-asan",
+			"inherits": "windows-msvc-relwithdebinfo",
+			"displayName": "windows_msvc_asan",
+			"description": "AddressSanitizer with MSVC, on top of RelWithDebInfo, asserts live, ASan owns the heap",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+			"binaryDir": "${sourceDir}/build/msvc-asan",
+			"cacheVariables": {
+				"LKT_SANITIZER": "address",
+				"TGE_DEBUG_ENABLED": "ON",
+				"TGE_ENABLE_GLOBAL_ALLOCATOR": "OFF"
+			}
 		}
 	],
 	"buildPresets": [
@@ -196,6 +251,26 @@
 			"name": "linux-clang-relwithdebinfo",
 			"configurePreset": "linux-clang-relwithdebinfo",
 			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+		},
+		{
+			"name": "windows-msvc-debug",
+			"configurePreset": "windows-msvc-debug",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+		},
+		{
+			"name": "windows-msvc-release",
+			"configurePreset": "windows-msvc-release",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+		},
+		{
+			"name": "windows-msvc-relwithdebinfo",
+			"configurePreset": "windows-msvc-relwithdebinfo",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+		},
+		{
+			"name": "windows-msvc-asan",
+			"configurePreset": "windows-msvc-asan",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
 		}
 	]
 }
