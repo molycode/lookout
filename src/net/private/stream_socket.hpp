@@ -6,6 +6,11 @@
 #include <expected>
 #include <span>
 
+namespace Tge::Threading
+{
+struct SWaitable;
+} // namespace Tge::Threading
+
 namespace Lkt::Net
 {
 // A non-blocking IPv4 TCP connection. Errors are errno values; a failed connect surfaces as an error from Receive once
@@ -28,6 +33,7 @@ public:
 	std::expected<size_t, int> Receive(std::span<std::byte> buffer) const;
 
 	int GetDescriptor() const;
+	Tge::Threading::SWaitable GetWaitable() const;
 
 private:
 

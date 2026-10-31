@@ -1,5 +1,6 @@
 #include "udp_socket.hpp"
 #include "loggers.hpp"
+#include <tge/threading/waitable.hpp>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -91,8 +92,8 @@ std::expected<size_t, int> CUdpSocket::Receive(std::span<std::byte> buffer, Quer
 }
 
 //////////////////////////////////////////////////////////////////////////
-int CUdpSocket::GetDescriptor() const
+Tge::Threading::SWaitable CUdpSocket::GetWaitable() const
 {
-	return m_descriptor;
+	return Tge::Threading::SWaitable{ static_cast<uintptr_t>(m_descriptor), Tge::Threading::EWaitableKind::Socket };
 }
 } // namespace Lkt::Net

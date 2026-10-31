@@ -6,6 +6,11 @@
 #include <expected>
 #include <span>
 
+namespace Tge::Threading
+{
+struct SWaitable;
+} // namespace Tge::Threading
+
 namespace Lkt::Net
 {
 // A non-blocking IPv4 datagram socket. Errors are errno values; EAGAIN from Receive means nothing is waiting.
@@ -24,7 +29,7 @@ public:
 	std::expected<void, int> Send(Query::SServerAddress const& destination, std::span<std::byte const> datagram) const;
 	std::expected<size_t, int> Receive(std::span<std::byte> buffer, Query::SServerAddress& source) const;
 
-	int GetDescriptor() const;
+	Tge::Threading::SWaitable GetWaitable() const;
 
 private:
 

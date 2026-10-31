@@ -158,7 +158,7 @@ bool CQueryPump::Initialize(SQueryCatalog catalog, std::function<void()> onEvent
 	{
 		m_loop.Post([this]()
 		{
-			std::optional<Tge::Threading::SWatchId> const watch{ m_loop.Watch(m_socket.GetDescriptor(), [this]()
+			std::optional<Tge::Threading::SWatchId> const watch{ m_loop.Watch(m_socket.GetWaitable(), [this]()
 			{
 				ReceiveDatagrams();
 				Update(Clock::now());
@@ -510,9 +510,9 @@ std::expected<void, std::string> CQueryPump::OpenMaster(SMasterQuery const& quer
 	}
 	else
 	{
-		int const descriptor{ conversation.isStream ? conversation.streamSocket.GetDescriptor() : conversation.datagramSocket.GetDescriptor() };
+		Tge::Threading::SWaitable const waitable{ conversation.isStream ? conversation.streamSocket.GetWaitable() : conversation.datagramSocket.GetWaitable() };
 
-		conversation.watch = m_loop.Watch(descriptor, [this, master = query.master]()
+		conversation.watch = m_loop.Watch(waitable, [this, master = query.master]()
 		{
 			ReceiveFromMaster(master);
 			Update(Clock::now());

@@ -60,7 +60,9 @@ bool CFolderWatcher::Initialize(std::filesystem::path const& userDir, std::chron
 	{
 		m_loop.Post([this]()
 		{
-			if (!m_loop.Watch(m_inotify, [this]() { ReadEvents(); }).has_value())
+			Tge::Threading::SWaitable const inotify{ static_cast<uintptr_t>(m_inotify), Tge::Threading::EWaitableKind::Event };
+
+			if (!m_loop.Watch(inotify, [this]() { ReadEvents(); }).has_value())
 			{
 				gLog.Warning("Cannot wait for changes to '{}', so changed game descriptions need a restart", m_userDir.string());
 			}
