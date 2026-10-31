@@ -26,7 +26,7 @@ CMakeUserPresets.json
 # Release output of tools/build-release.sh
 dist/
 
-# Fetched by scripts/init_submodules.sh from Mbed TLS's release tarball
+# Fetched by scripts/init_submodules.cmake from Mbed TLS's release tarball
 /external/mbedtls/
 
 # IDE and editor files

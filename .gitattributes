@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+*.bin binary
+*.png binary
+*.ttf binary
+
+# Captured replies the tests compare byte for byte; some happen to look like text.
+tests/fixtures/** -text

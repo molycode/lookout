@@ -41,29 +41,21 @@ if(PROJECT_IS_TOP_LEVEL
 			OR (LKT_BUILD_TESTS AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/lookout-games/index.json)))
 	if(NOT LKT_AUTO_INIT_SUBMODULES)
 		message(FATAL_ERROR
-			"Lookout: external/ holds empty submodule mount points. Run scripts/init_submodules.sh, or "
+			"Lookout: external/ holds empty submodule mount points. Run cmake -P scripts/init_submodules.cmake, or "
 			"configure with -DLKT_AUTO_INIT_SUBMODULES=ON to have this do it.")
 	endif()
 
-	find_program(LKT_BASH bash)
-
-	if(NOT LKT_BASH)
-		message(FATAL_ERROR
-			"Lookout: submodules are not initialized and no bash was found to run "
-			"scripts/init_submodules.sh. Run it by hand.")
-	endif()
-
-	message(STATUS "[Lookout] submodules not initialized -- running scripts/init_submodules.sh")
+	message(STATUS "[Lookout] submodules not initialized -- running scripts/init_submodules.cmake")
 
 	execute_process(
-		COMMAND ${LKT_BASH} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/init_submodules.sh
+		COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/init_submodules.cmake
 		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 		RESULT_VARIABLE lktInitResult
 	)
 
 	if(NOT lktInitResult EQUAL 0)
 		message(FATAL_ERROR
-			"Lookout: scripts/init_submodules.sh failed (${lktInitResult}). Run it by hand to see "
+			"Lookout: scripts/init_submodules.cmake failed (${lktInitResult}). Run it by hand to see "
 			"why -- a network or credential problem is the usual cause.")
 	endif()
 endif()

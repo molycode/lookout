@@ -54,10 +54,10 @@ fi
 
 for submodule in external/tge-core external/sdl external/imgui external/json external/lua external/googletest external/lookout-games; do
 	[ -f "$submodule/CMakeLists.txt" ] || [ -f "$submodule/imgui.h" ] || [ -f "$submodule/lua.h" ] || [ -f "$submodule/index.json" ] \
-		|| die "$submodule is not populated - run scripts/init_submodules.sh"
+		|| die "$submodule is not populated - run cmake -P scripts/init_submodules.cmake"
 done
 
-[ -f external/mbedtls/CMakeLists.txt ] || die "external/mbedtls is not fetched - run scripts/init_submodules.sh"
+[ -f external/mbedtls/CMakeLists.txt ] || die "external/mbedtls is not fetched - run cmake -P scripts/init_submodules.cmake"
 
 OUT_DIR="dist"
 WORK=$(mktemp -d) || die "cannot create a temporary directory"

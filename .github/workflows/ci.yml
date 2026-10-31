@@ -46,7 +46,7 @@ jobs:
       - name: Fetch submodules and Mbed TLS
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          scripts/init_submodules.sh
+          cmake -P scripts/init_submodules.cmake
 
       - name: Configure
         run: |
