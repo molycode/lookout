@@ -199,6 +199,48 @@
 				"TGE_DEBUG_ENABLED": "ON",
 				"TGE_ENABLE_GLOBAL_ALLOCATOR": "OFF"
 			}
+		},
+		{
+			"name": "windows-clangcl-debug",
+			"inherits": "base",
+			"displayName": "windows_clangcl_debug",
+			"description": "Debug build with clang-cl (run from an x64 Native Tools prompt)",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/clangcl-Debug",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/windows/clang-cl.cmake",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+			}
+		},
+		{
+			"name": "windows-clangcl-release",
+			"inherits": "base",
+			"displayName": "windows_clangcl_release",
+			"description": "Release build with clang-cl (run from an x64 Native Tools prompt)",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/clangcl-Release",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/windows/clang-cl.cmake",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+			}
+		},
+		{
+			"name": "windows-clangcl-relwithdebinfo",
+			"inherits": "base",
+			"displayName": "windows_clangcl_relwithdebinfo",
+			"description": "Optimised build with symbols, using clang-cl (run from an x64 Native Tools prompt)",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/clangcl-RelWithDebInfo",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "RelWithDebInfo",
+				"CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/windows/clang-cl.cmake",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+			}
 		}
 	],
 	"buildPresets": [
@@ -270,6 +312,21 @@
 		{
 			"name": "windows-msvc-asan",
 			"configurePreset": "windows-msvc-asan",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+		},
+		{
+			"name": "windows-clangcl-debug",
+			"configurePreset": "windows-clangcl-debug",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+		},
+		{
+			"name": "windows-clangcl-release",
+			"configurePreset": "windows-clangcl-release",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+		},
+		{
+			"name": "windows-clangcl-relwithdebinfo",
+			"configurePreset": "windows-clangcl-relwithdebinfo",
 			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
 		}
 	]
