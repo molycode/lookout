@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main, windows-port]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-gcc:
+    name: Linux (GCC 15, release build)
+    runs-on: ubuntu-24.04
+    # The image and toolset tools/build-release.sh ships with.
+    container: almalinux:9@sha256:3a3fa7f043b142bc8008c8b308d39b47d2c84008addcd52f9f9a7a82d2a90474
+    env:
+      TOOLSET: gcc-toolset-15
+    steps:
+      - name: Install packages
+        run: |
+          dnf -y install dnf-plugins-core
+          dnf config-manager --set-enabled crb
+          dnf -y install git bzip2 unzip "$TOOLSET-gcc-c++" "$TOOLSET-libstdc++-devel" libstdc++-static \
+            libX11-devel libXext-devel libXcursor-devel libXi-devel libXfixes-devel libXrandr-devel libXrender-devel \
+            libxkbcommon-devel wayland-devel wayland-protocols-devel libdecor-devel \
+            mesa-libEGL-devel mesa-libGL-devel dbus-devel
+
+      - name: Install CMake and Ninja
+        run: |
+          curl --fail --silent --show-error --location --output /tmp/cmake.tar.gz \
+            https://github.com/Kitware/CMake/releases/download/v4.3.2/cmake-4.3.2-linux-x86_64.tar.gz
+          curl --fail --silent --show-error --location --output /tmp/ninja.zip \
+            https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-linux.zip
+          printf '%s\n' \
+            "791ae3604841ca03cb3889a3ad89165346e4b180ae3448efd4b0caa9ef46d245  /tmp/cmake.tar.gz" \
+            "5749cbc4e668273514150a80e387a957f933c6ed3f5f11e03fb30955e2bbead6  /tmp/ninja.zip" | sha256sum --check
+          mkdir -p /opt/cmake /opt/ninja
+          tar -xzf /tmp/cmake.tar.gz -C /opt/cmake --strip-components=1
+          unzip -q /tmp/ninja.zip -d /opt/ninja
+          echo /opt/cmake/bin >> "$GITHUB_PATH"
+          echo /opt/ninja >> "$GITHUB_PATH"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch submodules and Mbed TLS
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          scripts/init_submodules.sh
+
+      - name: Configure
+        run: |
+          source "/opt/rh/$TOOLSET/enable"
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/linux/gcc.cmake \
+            -DLKT_STATIC_RUNTIME=ON \
+            -DLKT_AUTO_INIT_SUBMODULES=OFF
+
+      - name: Build
+        run: |
+          source "/opt/rh/$TOOLSET/enable"
+          cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
