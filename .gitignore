@@ -30,6 +30,7 @@ dist/
 /external/mbedtls/
 
 # IDE and editor files
+.vs/
 .vscode/
 .idea/
 .qtcreator/
