@@ -65,8 +65,8 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
-  windows-msvc:
-    name: Windows (MSVC, ${{ matrix.preset }})
+  windows:
+    name: Windows (${{ matrix.preset }})
     runs-on: windows-2025
     strategy:
       fail-fast: false
@@ -75,6 +75,10 @@ jobs:
           - preset: windows-msvc-debug
             static: OFF
           - preset: windows-msvc-release
+            static: ON
+          - preset: windows-clangcl-debug
+            static: OFF
+          - preset: windows-clangcl-release
             static: ON
     # Until the port reaches them, only the modules that build on Windows are built; the tests follow once all do.
     env:
