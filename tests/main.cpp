@@ -1,5 +1,6 @@
 #include "tge_environment.hpp"
 #include "games/load_games.hpp"
+#include "net/crypto_threading.hpp"
 #include "query/game_catalog.hpp"
 #include <gtest/gtest.h>
 #include <cstdio>
@@ -8,6 +9,10 @@
 //////////////////////////////////////////////////////////////////////////
 int main(int argc, char** argv)
 {
+	Lkt::Net::CCryptoThreading cryptoThreading{};
+
+	cryptoThreading.Initialize();
+
 	Lkt::Games::SGameContent const downloaded{ Lkt::Games::LoadGames(LKT_LOOKOUT_GAMES_DIR, {}) };
 	int result{ EXIT_FAILURE };
 
@@ -24,6 +29,8 @@ int main(int argc, char** argv)
 		result = RUN_ALL_TESTS();
 		Lkt::Query::TerminateGameCatalog();
 	}
+
+	cryptoThreading.Terminate();
 
 	return result;
 }

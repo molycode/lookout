@@ -5,6 +5,7 @@
 #include "games/check_folder.hpp"
 #include "games/game_files.hpp"
 #include "games/load_games.hpp"
+#include "net/crypto_threading.hpp"
 #include "query/game_catalog.hpp"
 #include <cstdlib>
 #include <expected>
@@ -67,6 +68,10 @@ int CheckFolder(std::filesystem::path const& folder)
 //////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
+	Lkt::Net::CCryptoThreading cryptoThreading{};
+
+	cryptoThreading.Initialize();
+
 	std::expected<std::filesystem::path, Lkt::Config::EXdgError> const dataHome{ Lkt::Config::GetDataHome() };
 	std::filesystem::path const userDir{ dataHome.has_value() ? *dataHome / Lkt::AppDirName : std::filesystem::path{} };
 	Lkt::Games::SGameContent content{ Lkt::Games::LoadGames(Lkt::Games::GetDownloadedDir(userDir), userDir) };
@@ -178,6 +183,7 @@ int main(int argc, char* argv[])
 	}
 
 	Lkt::Query::TerminateGameCatalog();
+	cryptoThreading.Terminate();
 
 	return result;
 }

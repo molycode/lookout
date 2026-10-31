@@ -1,7 +1,14 @@
 /* TF-PSA-Crypto 1.x as Lookout uses it: what a TLS 1.2/1.3 ECDHE client verifying RSA and ECDSA chains needs, and
  * SHA-256 for the downloads, which several threads hash. */
 #define MBEDTLS_THREADING_C
+/* Windows has no pthreads: Net::CCryptoThreading supplies the threading on SRW locks. */
+#if defined(_WIN32)
+#define MBEDTLS_THREADING_ALT
+#elif defined(__linux__)
 #define MBEDTLS_THREADING_PTHREAD
+#else
+#error "Unsupported platform"
+#endif /* defined(_WIN32) */
 #undef PSA_WANT_ALG_CBC_NO_PADDING
 #undef PSA_WANT_ALG_CBC_PKCS7
 #undef PSA_WANT_ALG_CCM

@@ -113,6 +113,12 @@ set(DISABLE_PACKAGE_CONFIG_AND_INSTALL ON CACHE BOOL "" FORCE)
 set(MBEDTLS_USER_CONFIG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/cmake/mbedtls/lookout_tls_config.h CACHE FILEPATH "" FORCE)
 set(TF_PSA_CRYPTO_USER_CONFIG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/cmake/mbedtls/lookout_crypto_config.h CACHE FILEPATH "" FORCE)
 
+# Mbed TLS includes threading_alt.h from its own private targets as well as from Lookout's files, so only a
+# directory-wide path reaches them all.
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+	include_directories(cmake/mbedtls/windows)
+endif()
+
 add_subdirectory(external/mbedtls EXCLUDE_FROM_ALL SYSTEM)
 
 foreach(lktMbedtlsTarget mbedtls mbedx509 tfpsacrypto builtin everest extras p256m)
