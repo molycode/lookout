@@ -48,6 +48,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           cmake -P scripts/init_submodules.cmake
 
+      # tge-core's own suites run here too: it has no CI of its own.
       - name: Configure
         run: |
           source "/opt/rh/$TOOLSET/enable"
@@ -55,12 +56,13 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/linux/gcc.cmake \
             -DLKT_STATIC_RUNTIME=ON \
-            -DLKT_AUTO_INIT_SUBMODULES=OFF
+            -DLKT_AUTO_INIT_SUBMODULES=OFF \
+            -DTGE_CORE_BUILD_TESTS=ON
 
       - name: Build
         run: |
           source "/opt/rh/$TOOLSET/enable"
-          cmake --build build
+          cmake --build build --target all TgeCoreUnitTests TgeCoreThreadingTests
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
@@ -73,16 +75,20 @@ jobs:
       matrix:
         include:
           - preset: windows-msvc-debug
+            dir: msvc-Debug
             static: OFF
           - preset: windows-msvc-release
+            dir: msvc-Release
             static: ON
           - preset: windows-clangcl-debug
+            dir: clangcl-Debug
             static: OFF
           - preset: windows-clangcl-release
+            dir: clangcl-Release
             static: ON
-    # Until the port reaches them, only the modules that build on Windows are built; the tests follow once all do.
+    # Only the modules that build on Windows so far, and tge-core's suites; Lookout's tests join once all of it builds.
     env:
-      TARGETS: LktQuery LktScript LktGeo TgeLogging TgeMemory TgeMath TgeThreading TgeIO TgeCommand TgeInit TgeModule TgeLifecycle SDL3-static imgui gtest
+      TARGETS: LktQuery LktScript LktGeo TgeLogging TgeMemory TgeMath TgeThreading TgeIO TgeCommand TgeInit TgeModule TgeLifecycle SDL3-static imgui gtest TgeCoreUnitTests TgeCoreThreadingTests
     defaults:
       run:
         shell: pwsh
@@ -107,5 +113,10 @@ jobs:
           $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * `
             -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           $vcvars = "$vs\VC\Auxiliary\Build\vcvars64.bat"
-          cmd /c "`"$vcvars`" && `"$env:LKT_CMAKE`" --preset ${{ matrix.preset }} -DLKT_STATIC_RUNTIME=${{ matrix.static }} && `"$env:LKT_CMAKE`" --build --preset ${{ matrix.preset }} --target $env:TARGETS"
+          cmd /c "`"$vcvars`" && `"$env:LKT_CMAKE`" --preset ${{ matrix.preset }} -DLKT_STATIC_RUNTIME=${{ matrix.static }} -DTGE_CORE_BUILD_TESTS=ON && `"$env:LKT_CMAKE`" --build --preset ${{ matrix.preset }} --target $env:TARGETS"
           if ($LASTEXITCODE -ne 0) { throw "build failed ($LASTEXITCODE)" }
+
+      - name: Test tge-core
+        run: |
+          & (Join-Path (Split-Path $env:LKT_CMAKE) ctest.exe) --test-dir build/${{ matrix.dir }} --tests-regex '^TgeCore' --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "tests failed ($LASTEXITCODE)" }
