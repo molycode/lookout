@@ -3,6 +3,7 @@
 #include "download/download_phase.hpp"
 #include "download/download_source.hpp"
 #include "download/game_offer.hpp"
+#include "download/pending_swap.hpp"
 #include "net/clock.hpp"
 #include "net/fetch_result.hpp"
 #include "net/https_fetcher.hpp"
@@ -23,7 +24,6 @@ namespace Lkt::Download
 {
 struct SGameIndex;
 struct SIndexFile;
-struct SPendingSwap;
 
 // Lists, downloads, updates and removes the games of a lookout-games repository in the downloaded folder of userDir,
 // which nothing else writes. Used from one thread: the callback only says that Update has something to take.

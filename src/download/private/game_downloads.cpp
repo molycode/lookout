@@ -3,7 +3,6 @@
 #include "game_index.hpp"
 #include "icon_cache.hpp"
 #include "loggers.hpp"
-#include "pending_swap.hpp"
 #include "read_index.hpp"
 #include "sha256.hpp"
 #include "games/game_files.hpp"
