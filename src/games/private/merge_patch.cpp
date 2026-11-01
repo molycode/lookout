@@ -1,5 +1,7 @@
 #include "merge_patch.hpp"
 #include "json_layout.hpp"
+#include "launch_layout.hpp"
+#include "games/game_format.hpp"
 #include "json/json.hpp"
 #include "json/syntax_error.hpp"
 #include <format>
@@ -70,15 +72,37 @@ JsonValue Diff(JsonValue const& from, JsonValue const& to)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
+// A change written while the download was format 1 is moved into format 3's layout once the download has it. Its
+// format 1 said only that the game fitted format 1 then, so the merged game decides whether it still does.
 std::expected<std::string, std::string> ApplyPatch(std::string_view baseText, std::string_view patchText)
 {
 	JsonValue game = JsonValue::parse(baseText, nullptr, AllowExceptions, IgnoreComments);
-	std::expected<JsonValue, std::string> const patch{ ParseObject(patchText, "a change to a downloaded game must be a JSON object") };
+	std::expected<JsonValue, std::string> patch{ ParseObject(patchText, "a change to a downloaded game must be a JSON object") };
 	std::expected<std::string, std::string> result{};
 
 	if (patch.has_value())
 	{
+		bool const isNested{ HasPlatformGroups(game) || HasPlatformGroups(*patch) };
+
+		if (isNested)
+		{
+			NestLinuxFacts(game);
+			NestLinuxFacts(*patch);
+		}
+
 		game.merge_patch(*patch);
+
+		bool const isFirstFormat{ isNested && game.is_object() && game.contains("format") && game["format"] == FirstGameFormat };
+
+		if (isFirstFormat && NeedsPlatformGroups(game))
+		{
+			game["format"] = GameFormat;
+		}
+		else if (isFirstFormat)
+		{
+			FlattenLinuxFacts(game);
+		}
+
 		result = WriteJsonLayout(game);
 	}
 	else
@@ -90,14 +114,21 @@ std::expected<std::string, std::string> ApplyPatch(std::string_view baseText, st
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Compared in one layout, so a change of format names only what changed rather than moving every Linux fact.
 std::expected<std::optional<std::string>, std::string> MakePatch(std::string_view baseText, std::string_view gameText)
 {
-	JsonValue const base = JsonValue::parse(baseText, nullptr, AllowExceptions, IgnoreComments);
-	std::expected<JsonValue, std::string> const game{ ParseObject(gameText, "it must hold a JSON object") };
+	JsonValue base = JsonValue::parse(baseText, nullptr, AllowExceptions, IgnoreComments);
+	std::expected<JsonValue, std::string> game{ ParseObject(gameText, "it must hold a JSON object") };
 	std::expected<std::optional<std::string>, std::string> result{};
 
 	if (game.has_value())
 	{
+		if (HasPlatformGroups(base) != HasPlatformGroups(*game))
+		{
+			NestLinuxFacts(base);
+			NestLinuxFacts(*game);
+		}
+
 		JsonValue const patch = Diff(base, *game);
 
 		result = patch.empty() ? std::nullopt : std::optional<std::string>{ WriteJsonLayout(patch) };

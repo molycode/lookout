@@ -1,6 +1,7 @@
 #include "fixtures.hpp"
 #include "script/script_fixture.hpp"
 #include "games/load_games.hpp"
+#include "json/json.hpp"
 #include "query/game_definition.hpp"
 #include "query/game_problem.hpp"
 #include "query/protocol_definition.hpp"
@@ -103,6 +104,30 @@ TEST_F(CLoadGamesTest, UserGameIsAdded)
 	EXPECT_TRUE(content.problems.empty());
 	ASSERT_NE(pGame, nullptr);
 	EXPECT_EQ(pGame->name, "My Game");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, FormatOneChangeAppliesOnceTheDownloadIsFormatThree)
+{
+	nlohmann::ordered_json game = nlohmann::ordered_json::parse(UserGame);
+	std::filesystem::path const protocols{ m_dir / "downloaded" / "protocols" };
+	std::error_code error{};
+
+	game["format"] = 3;
+	game["launch"] = nlohmann::ordered_json::parse(R"json({ "linux": { "installDir": "Games/MyGame", "program": "run-game.sh", "requiredFiles": [] },
+		"windows": { "steamAppId": 38430, "program": "game.exe", "requiredFiles": [] } })json");
+	WriteFile("downloaded/games/mygame/game.json", game.dump());
+	std::filesystem::create_directories(protocols, error);
+	std::filesystem::copy_file(std::filesystem::path{ LKT_LOOKOUT_GAMES_DIR } / "protocols" / "quake2.lua", protocols / "quake2.lua", error);
+	WriteFile("user/games/mygame/game.json", R"json({ "launch": { "installDir": "Games/Mine" } })json");
+
+	SGameContent const content{ LoadGames(m_dir / "downloaded", m_dir / "user") };
+	Query::SGameDefinition const* const pGame{ FindGame(content, "mygame") };
+
+	EXPECT_TRUE(content.problems.empty()) << content.problems.front().text;
+	ASSERT_NE(pGame, nullptr);
+	EXPECT_EQ(pGame->launch.onLinux.installDir, "Games/Mine");
+	EXPECT_EQ(pGame->launch.onWindows.steamAppId, 38430u);
 }
 
 //////////////////////////////////////////////////////////////////////////
