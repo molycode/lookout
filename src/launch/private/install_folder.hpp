@@ -1,12 +1,14 @@
 #pragma once
 
-#include "query/linux_launch_hints.hpp"
 #include <expected>
 #include <filesystem>
+#include <span>
 #include <string>
+#include <string_view>
 
 namespace Lkt::Launch
 {
 // The program to run, or a phrase for "'<folder>' cannot start <game>: <reason>".
-std::expected<std::filesystem::path, std::string> CheckInstallFolder(Query::SLinuxLaunchHints const& hints, std::filesystem::path const& folder);
+std::expected<std::filesystem::path, std::string> CheckInstallFolder(std::filesystem::path const& folder, std::string_view program,
+	std::span<std::string const> requiredFiles);
 } // namespace Lkt::Launch

@@ -28,7 +28,7 @@ std::expected<SLaunchOption, ELaunchError> MakeFolderOption(Query::SGameDefiniti
 
 	if (IsFolderInstallSupported(game))
 	{
-		std::expected<std::filesystem::path, std::string> const program{ CheckInstallFolder(game.launch.onLinux, std::filesystem::path{ folder }) };
+		std::expected<std::filesystem::path, std::string> const program{ CheckInstallFolder(std::filesystem::path{ folder }, game.launch.onLinux.program, game.launch.onLinux.requiredFiles) };
 
 		if (program.has_value())
 		{
