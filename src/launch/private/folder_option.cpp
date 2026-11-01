@@ -8,17 +8,26 @@
 
 namespace Lkt::Launch
 {
+namespace
+{
 //////////////////////////////////////////////////////////////////////////
-// The program game.json names is Linux's.
-bool IsFolderInstallSupported(Query::SGameDefinition const& game)
+// The program and the files that show the game is there, as this platform's launch facts name them.
+auto const& GetFolderFacts(Query::SGameDefinition const& game)
 {
 #if defined(TGE_PLATFORM_WINDOWS)
-	return false;
+	return game.launch.onWindows;
 #elif defined(TGE_PLATFORM_LINUX)
-	return !game.launch.onLinux.program.empty();
+	return game.launch.onLinux;
 #else
 #error "Unsupported platform"
 #endif // defined(TGE_PLATFORM_WINDOWS)
+}
+} // namespace
+
+//////////////////////////////////////////////////////////////////////////
+bool IsFolderInstallSupported(Query::SGameDefinition const& game)
+{
+	return !GetFolderFacts(game).program.empty();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -28,11 +37,15 @@ std::expected<SLaunchOption, ELaunchError> MakeFolderOption(Query::SGameDefiniti
 
 	if (IsFolderInstallSupported(game))
 	{
-		std::expected<std::filesystem::path, std::string> const program{ CheckInstallFolder(std::filesystem::path{ folder }, game.launch.onLinux.program, game.launch.onLinux.requiredFiles) };
+		std::expected<std::filesystem::path, std::string> const program{ CheckInstallFolder(std::filesystem::path{ folder }, GetFolderFacts(game).program,
+			GetFolderFacts(game).requiredFiles) };
 
 		if (program.has_value())
 		{
-			result = SLaunchOption{ {}, {}, {}, { program->string() }, std::string{ folder } };
+			std::filesystem::path preferred{ *program };
+
+			preferred.make_preferred();
+			result = SLaunchOption{ {}, {}, {}, { preferred.string() }, std::string{ folder } };
 		}
 		else
 		{

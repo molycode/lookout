@@ -13,7 +13,6 @@ struct SGameDefinition;
 
 namespace Launch
 {
-// Desktop entries first, then the default install folder; each rejected candidate is logged.
 std::vector<SLaunchOption> FindLaunchOptions(Query::SGameDefinition const& game, SLaunchEnvironment const& environment);
 } // namespace Launch
 } // namespace Lkt

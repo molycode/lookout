@@ -1,7 +1,10 @@
 #include "launch/launch_discovery.hpp"
 #include "desktop_entry_source.hpp"
+#include "folder_candidates_source.hpp"
+#include "gog_source.hpp"
 #include "hinted_discovery.hpp"
 #include "home_install_source.hpp"
+#include "steam_source.hpp"
 #include "query/game_definition.hpp"
 #include <tge/platform.hpp>
 #include <algorithm>
@@ -35,34 +38,45 @@ void AppendDistinct(std::vector<SLaunchOption> found, std::vector<SLaunchOption>
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-// Desktop entries may share a wrapper such as flatpak, so only the install folder is matched against them.
 std::vector<SLaunchOption> FindLaunchOptions(Query::SLaunchHints const& hints, std::string_view gameName, SLaunchEnvironment const& environment)
 {
+	std::vector<SLaunchOption> options{};
+
+#if defined(TGE_PLATFORM_WINDOWS)
+	CSteamSource steam{};
+	CGogSource gog{};
+	CFolderCandidatesSource folders{};
+
+	steam.Initialize(environment);
+	gog.Initialize(environment);
+	folders.Initialize(environment);
+	AppendDistinct(steam.Find(hints, gameName), options);
+	AppendDistinct(gog.Find(hints, gameName), options);
+	AppendDistinct(folders.Find(hints, gameName), options);
+	folders.Terminate();
+	gog.Terminate();
+	steam.Terminate();
+#elif defined(TGE_PLATFORM_LINUX)
 	CDesktopEntrySource desktopEntries{};
 	CHomeInstallSource homeInstall{};
 
 	desktopEntries.Initialize(environment);
 	homeInstall.Initialize(environment);
-
-	std::vector<SLaunchOption> options{ desktopEntries.Find(hints) };
-
+	// Desktop entries may share a wrapper such as flatpak, so only the install folder is matched against them.
+	options = desktopEntries.Find(hints);
 	AppendDistinct(homeInstall.Find(hints, gameName), options);
 	homeInstall.Terminate();
 	desktopEntries.Terminate();
+#else
+#error "Unsupported platform"
+#endif // defined(TGE_PLATFORM_WINDOWS)
 
 	return options;
 }
 
 //////////////////////////////////////////////////////////////////////////
-// game.json's launch facts are Linux's: Windows has nothing to look for until it knows its own.
 std::vector<SLaunchOption> FindLaunchOptions(Query::SGameDefinition const& game, SLaunchEnvironment const& environment)
 {
-#if defined(TGE_PLATFORM_WINDOWS)
-	return {};
-#elif defined(TGE_PLATFORM_LINUX)
 	return FindLaunchOptions(game.launch, game.name, environment);
-#else
-#error "Unsupported platform"
-#endif // defined(TGE_PLATFORM_WINDOWS)
 }
 } // namespace Lkt::Launch

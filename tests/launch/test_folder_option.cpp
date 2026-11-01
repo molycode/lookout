@@ -58,8 +58,42 @@ protected:
 	std::filesystem::path m_folder{};
 };
 
-// game.json's launch facts are Linux's, so Windows starts no game from a folder yet.
-#if defined(TGE_PLATFORM_LINUX)
+// Each platform starts the program its own launch facts name: lookout-games' Kingpin carries Linux's, and Windows' are
+// added here until it carries those too.
+#if defined(TGE_PLATFORM_WINDOWS)
+//////////////////////////////////////////////////////////////////////////
+Query::SGameDefinition MakeWindowsKingpin()
+{
+	Query::SGameDefinition game{ Fixtures::GetGameByKey("kingpin") };
+
+	game.launch.onWindows = Query::SWindowsLaunchHints{ 38430, 0, {}, "kingpin.exe", { "main/pak0.pak" } };
+
+	return game;
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CFolderOptionTest, CompleteFolderStartsItsWindowsProgram)
+{
+	WriteFile(m_folder / "kingpin.exe", "");
+
+	std::expected<SLaunchOption, ELaunchError> const option{ MakeFolderOption(MakeWindowsKingpin(), m_folder.string()) };
+
+	ASSERT_TRUE(option.has_value());
+	EXPECT_EQ(option->argv, (std::vector<std::string>{ (m_folder / "kingpin.exe").string() }));
+	EXPECT_EQ(option->workingDir, m_folder.string());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CFolderOptionTest, FolderMissingAWindowsFileIsBroken)
+{
+	CExpectedLog const expected{ LaunchChannel, 1, 0 };
+
+	WriteFile(m_folder / "kingpin.exe", "");
+	std::filesystem::remove(m_folder / "main" / "pak0.pak");
+
+	EXPECT_EQ(MakeFolderOption(MakeWindowsKingpin(), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::BrokenInstallFolder);
+}
+#elif defined(TGE_PLATFORM_LINUX)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CFolderOptionTest, CompleteFolderStartsItsProgram)
 {
@@ -89,7 +123,9 @@ TEST_F(CFolderOptionTest, ProgramThatIsNotExecutableIsBroken)
 
 	EXPECT_EQ(MakeFolderOption(Fixtures::GetGameByKey("kingpin"), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::BrokenInstallFolder);
 }
-#endif // defined(TGE_PLATFORM_LINUX)
+#else
+#error "Unsupported platform"
+#endif // defined(TGE_PLATFORM_WINDOWS)
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CFolderOptionTest, GameWithoutHintsCannotStartFromAFolder)

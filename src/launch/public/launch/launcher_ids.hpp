@@ -4,6 +4,7 @@
 
 namespace Lkt::Launch
 {
-// Any other non-empty id names a desktop file or one of the user's installs; an empty one means the first found.
 inline constexpr std::string_view InstallDirLauncherId{ "install-dir" };
+inline constexpr std::string_view SteamLauncherId{ "steam" };
+inline constexpr std::string_view GogLauncherId{ "gog" };
 } // namespace Lkt::Launch

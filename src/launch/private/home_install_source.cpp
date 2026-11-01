@@ -3,8 +3,8 @@
 #include "launch/home_path.hpp"
 #include "launch/launcher_ids.hpp"
 #include "loggers.hpp"
-#include <expected>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <system_error>
 
@@ -39,16 +39,12 @@ std::vector<SLaunchOption> CHomeInstallSource::Find(Query::SLaunchHints const& h
 		}
 		else if (std::filesystem::is_directory(folder, error))
 		{
-			std::expected<std::filesystem::path, std::string> const program{ CheckInstallFolder(folder, facts.program, facts.requiredFiles) };
+			std::optional<std::filesystem::path> const program{ FindInstallProgram(folder, facts.program, facts.requiredFiles, gameName) };
 
 			if (program.has_value())
 			{
 				options.emplace_back(std::string{ InstallDirLauncherId }, std::string{ gameName }, ShortenHome(folder.string(), m_pEnvironment->home),
 					std::vector<std::string>{ program->string() }, folder.string());
-			}
-			else
-			{
-				gLog.Warning("'{}' is not used to start {}: {}", folder.string(), gameName, program.error());
 			}
 		}
 		else if (error.value() != 0 && error != std::errc::no_such_file_or_directory)

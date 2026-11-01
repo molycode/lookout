@@ -15,4 +15,7 @@ target_link_libraries(LktLaunch
 	PRIVATE
 		Tge::IO
 		Tge::Logging
+		$<$<PLATFORM_ID:Windows>:advapi32>
+		$<$<PLATFORM_ID:Windows>:ole32>
+		$<$<PLATFORM_ID:Windows>:shell32>
 )
