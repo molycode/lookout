@@ -13,5 +13,6 @@ target_link_libraries(LktLaunch
 		Tge::Base
 		Tge::Process
 	PRIVATE
+		Tge::IO
 		Tge::Logging
 )
