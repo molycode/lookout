@@ -2,15 +2,23 @@
 #include "install_folder.hpp"
 #include "loggers.hpp"
 #include "query/game_definition.hpp"
+#include <tge/platform.hpp>
 #include <filesystem>
 #include <string>
 
 namespace Lkt::Launch
 {
 //////////////////////////////////////////////////////////////////////////
+// The program game.json names is Linux's.
 bool IsFolderInstallSupported(Query::SGameDefinition const& game)
 {
+#if defined(TGE_PLATFORM_WINDOWS)
+	return false;
+#elif defined(TGE_PLATFORM_LINUX)
 	return !game.launch.program.empty();
+#else
+#error "Unsupported platform"
+#endif // defined(TGE_PLATFORM_WINDOWS)
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -108,6 +108,7 @@ bool CBrowser::Start(std::function<void()> onEventsReady)
 void CBrowser::Terminate()
 {
 	m_engine.Terminate();
+	m_launcher.Terminate();
 	m_isStarted = false;
 	m_settingsStore.Save(m_settings);
 }

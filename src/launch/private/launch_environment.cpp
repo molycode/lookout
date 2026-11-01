@@ -1,10 +1,15 @@
 #include "launch/launch_environment.hpp"
+#include <tge/platform.hpp>
+
+#if defined(TGE_PLATFORM_LINUX)
 #include "path_list.hpp"
 #include <cstdlib>
 #include <string_view>
+#endif // defined(TGE_PLATFORM_LINUX)
 
 namespace Lkt::Launch
 {
+#if defined(TGE_PLATFORM_LINUX)
 namespace
 {
 constexpr std::string_view DefaultDataDirs{ "/usr/local/share:/usr/share" };
@@ -18,12 +23,16 @@ std::string_view GetEnvironment(char const* pName)
 	return (pValue != nullptr) ? std::string_view{ pValue } : std::string_view{};
 }
 } // namespace
+#endif // defined(TGE_PLATFORM_LINUX)
 
 //////////////////////////////////////////////////////////////////////////
-// The XDG Base Directory defaults, where an empty or relative value counts as unset.
+// The XDG Base Directory defaults, where an empty or relative value counts as unset. Only desktop entries and the
+// home install folder read them, which Windows does not look at.
 SLaunchEnvironment ReadLaunchEnvironment()
 {
 	SLaunchEnvironment environment{};
+
+#if defined(TGE_PLATFORM_LINUX)
 	std::filesystem::path const home{ GetEnvironment("HOME") };
 	std::filesystem::path const dataHome{ GetEnvironment("XDG_DATA_HOME") };
 	std::string_view const dataDirs{ GetEnvironment("XDG_DATA_DIRS") };
@@ -45,6 +54,7 @@ SLaunchEnvironment ReadLaunchEnvironment()
 
 	environment.dataDirs = SplitPathList(dataDirs.empty() ? DefaultDataDirs : dataDirs);
 	environment.searchPath = searchPath.empty() ? DefaultSearchPath : searchPath;
+#endif // defined(TGE_PLATFORM_LINUX)
 
 	return environment;
 }

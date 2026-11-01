@@ -1,27 +1,27 @@
 #include "program_path.hpp"
 #include "path_list.hpp"
-#include <sys/stat.h>
-#include <unistd.h>
+#include <tge/process/is_runnable.hpp>
+#include <system_error>
 #include <vector>
 
 namespace Lkt::Launch
 {
 //////////////////////////////////////////////////////////////////////////
-// access() alone also passes directories, which no exec can run.
 std::expected<void, EProgramError> CheckExecutable(std::filesystem::path const& path)
 {
 	std::expected<void, EProgramError> result{};
-	struct stat status{};
+	std::error_code error{};
+	std::filesystem::file_status const status{ std::filesystem::status(path, error) };
 
-	if (::stat(path.c_str(), &status) != 0)
+	if (!std::filesystem::exists(status))
 	{
 		result = std::unexpected{ EProgramError::NotFound };
 	}
-	else if (!S_ISREG(status.st_mode))
+	else if (!std::filesystem::is_regular_file(status))
 	{
 		result = std::unexpected{ EProgramError::NotRegularFile };
 	}
-	else if (::access(path.c_str(), X_OK) != 0)
+	else if (!Tge::Process::IsRunnable(path))
 	{
 		result = std::unexpected{ EProgramError::NotExecutable };
 	}

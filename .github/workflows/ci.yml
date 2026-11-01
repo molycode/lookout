@@ -62,7 +62,7 @@ jobs:
       - name: Build
         run: |
           source "/opt/rh/$TOOLSET/enable"
-          cmake --build build --target all TgeCoreUnitTests TgeCoreThreadingTests TgeCoreNetTests TgeCoreIOTests
+          cmake --build build --target all TgeCoreUnitTests TgeCoreThreadingTests TgeCoreNetTests TgeCoreIOTests TgeCoreProcessTests
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
@@ -88,7 +88,7 @@ jobs:
             static: ON
     # Only the modules that build on Windows so far, and tge-core's suites; Lookout's tests join once all of it builds.
     env:
-      TARGETS: LktQuery LktScript LktGeo LktNet LktJson LktConfig LktGames LktDownload TgeLogging TgeMemory TgeMath TgeThreading TgeIO TgeNet TgeCommand TgeInit TgeModule TgeLifecycle SDL3-static imgui gtest TgeCoreUnitTests TgeCoreThreadingTests TgeCoreNetTests TgeCoreIOTests
+      TARGETS: LktQuery LktScript LktGeo LktNet LktJson LktConfig LktGames LktDownload TgeLogging TgeMemory TgeMath TgeThreading TgeIO TgeNet TgeCommand TgeInit TgeModule TgeLifecycle SDL3-static imgui gtest TgeCoreUnitTests TgeCoreThreadingTests TgeCoreNetTests TgeCoreIOTests TgeCoreProcessTests
     defaults:
       run:
         shell: pwsh

@@ -8,6 +8,7 @@
 #include "loggers.hpp"
 #include "program_path.hpp"
 #include "query/game_definition.hpp"
+#include <tge/platform.hpp>
 #include <algorithm>
 #include <cerrno>
 #include <expected>
@@ -275,8 +276,15 @@ std::vector<SLaunchOption> FindLaunchOptions(Query::SLaunchHints const& hints, s
 }
 
 //////////////////////////////////////////////////////////////////////////
+// game.json's launch facts are Linux's: Windows has nothing to look for until it knows its own.
 std::vector<SLaunchOption> FindLaunchOptions(Query::SGameDefinition const& game, SLaunchEnvironment const& environment)
 {
+#if defined(TGE_PLATFORM_WINDOWS)
+	return {};
+#elif defined(TGE_PLATFORM_LINUX)
 	return FindLaunchOptions(game.launch, game.name, environment);
+#else
+#error "Unsupported platform"
+#endif // defined(TGE_PLATFORM_WINDOWS)
 }
 } // namespace Lkt::Launch

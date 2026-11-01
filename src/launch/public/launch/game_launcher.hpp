@@ -5,8 +5,10 @@
 #include "launch/launch_error.hpp"
 #include "launch/launch_option.hpp"
 #include <tge/non_copyable.hpp>
+#include <cstddef>
 #include <expected>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -20,7 +22,6 @@ struct SGameDefinition;
 
 namespace Launch
 {
-// A game outlives Lookout: it runs in a session of its own and is never stopped.
 class CGameLauncher final : private Tge::SNoCopyNoMove
 {
 public:
@@ -29,15 +30,16 @@ public:
 	~CGameLauncher() = default;
 
 	void Initialize(std::string_view logsDir);
+	void Terminate();
 	std::expected<void, ELaunchError> Launch(Query::SGameDefinition const& game, SLaunchOption const& option, SConnectRequest const& request);
-	void ReapFinished();
+	size_t ReapFinished();
 
 private:
 
 	std::expected<void, ELaunchError> Spawn(Query::SGameDefinition const& game, SLaunchOption const& option, SConnectRequest const& request, std::vector<std::string> const& arguments);
 
 	std::filesystem::path m_logsDir{};
-	std::vector<SChildProcess> m_children{};
+	std::vector<std::unique_ptr<SChildProcess>> m_children{};
 };
 } // namespace Launch
 } // namespace Lkt

@@ -1,13 +1,13 @@
 #pragma once
 
+#include <tge/process/child_process.hpp>
 #include <string>
-#include <sys/types.h>
 
 namespace Lkt::Launch
 {
 struct SChildProcess final
 {
-	pid_t pid{ 0 };
+	Tge::Process::CChildProcess process{};
 	std::string gameName{};
 	std::string logPath{};
 };
