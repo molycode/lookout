@@ -4,6 +4,7 @@ list(FILTER LKT_TEST_SOURCES EXCLUDE REGEX "/fake_game/")
 add_subdirectory(fake_game)
 
 LktApp(LookoutTests ${LKT_TEST_SOURCES})
+LktAddWindowsManifest(LookoutTests)
 
 target_compile_definitions(LookoutTests PRIVATE LKT_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
 	LKT_TEST_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/scripts" LKT_TEST_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"

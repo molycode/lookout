@@ -14,6 +14,7 @@ add_subdirectory(cli)
 file(GLOB LKT_APP_SOURCES CONFIGURE_DEPENDS "*.cpp" "*.hpp")
 
 LktApp(lookout ${LKT_APP_SOURCES})
+LktAddWindowsResources(lookout "Lookout" lookout.exe)
 
 target_link_libraries(lookout PRIVATE
 	Lkt::Browser
