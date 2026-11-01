@@ -14,8 +14,8 @@ struct STextStyle final
 	ETextEncoding encoding{ ETextEncoding::Utf8OrWindows1252 };
 	EColorCodes codes{ EColorCodes::None };
 	char escape{ '\0' };
-	std::vector<Tge::SColor> palette;
-	std::vector<SHexColorCode> hexCodes;
+	std::vector<Tge::SColor> palette{};
+	std::vector<SHexColorCode> hexCodes{};
 
 	bool operator==(STextStyle const&) const = default;
 };

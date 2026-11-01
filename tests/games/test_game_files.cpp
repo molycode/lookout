@@ -99,8 +99,8 @@ protected:
 		return game.dump(1, '\t');
 	}
 
-	Lkt::Fixtures::CTempDir m_tempDir;
-	std::filesystem::path m_dir;
+	Lkt::Fixtures::CTempDir m_tempDir{};
+	std::filesystem::path m_dir{};
 };
 
 //////////////////////////////////////////////////////////////////////////

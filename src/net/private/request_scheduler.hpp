@@ -44,8 +44,8 @@ private:
 	SInFlightRequest* Find(SServerRequest const& request);
 	bool IsLeased(Query::SServerAddress const& address) const;
 
-	std::deque<SServerRequest> m_pending;
-	std::vector<SInFlightRequest> m_inFlight;
+	std::deque<SServerRequest> m_pending{};
+	std::vector<SInFlightRequest> m_inFlight{};
 	Clock::time_point m_nextSendAt{};
 };
 } // namespace Lkt::Net

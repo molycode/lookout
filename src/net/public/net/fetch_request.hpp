@@ -8,7 +8,7 @@ namespace Lkt::Net
 struct SFetchRequest final
 {
 	// Absolute on the origin, as "/molycode/lookout-games/main/index.json".
-	std::string path;
+	std::string path{};
 	// A larger reply fails before its body is read.
 	size_t maxSize{ 0 };
 };

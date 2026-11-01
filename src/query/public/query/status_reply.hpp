@@ -11,10 +11,10 @@ namespace Lkt::Query
 {
 struct SStatusReply final
 {
-	std::vector<SRule> rules;
-	std::vector<SPlayer> players;
+	std::vector<SRule> rules{};
+	std::vector<SPlayer> players{};
 	uint32_t numMalformedPlayerLines{ 0 };
-	std::optional<uint16_t> joinPort;
+	std::optional<uint16_t> joinPort{};
 	std::optional<uint32_t> maxPlayers{};
 };
 

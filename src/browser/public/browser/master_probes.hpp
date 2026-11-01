@@ -42,15 +42,15 @@ private:
 	void StartRun(std::span<Query::SProtocolDefinition const> protocols);
 	void StopRun();
 
-	std::function<void()> m_wake;
-	std::vector<SMasterProbeRequest> m_wanted;
-	std::map<std::string, Net::Clock::time_point, std::less<>> m_wantedSince;
-	std::map<std::string, SMasterProbeResult, std::less<>> m_results;
-	Net::CQueryEngine m_engine;
-	std::vector<std::string> m_runKeys;
-	std::vector<Query::SGameDefinition> m_runGames;
-	std::vector<Query::SProtocolDefinition> m_runProtocols;
-	std::vector<Net::SQueryEvent> m_events;
+	std::function<void()> m_wake{};
+	std::vector<SMasterProbeRequest> m_wanted{};
+	std::map<std::string, Net::Clock::time_point, std::less<>> m_wantedSince{};
+	std::map<std::string, SMasterProbeResult, std::less<>> m_results{};
+	Net::CQueryEngine m_engine{};
+	std::vector<std::string> m_runKeys{};
+	std::vector<Query::SGameDefinition> m_runGames{};
+	std::vector<Query::SProtocolDefinition> m_runProtocols{};
+	std::vector<Net::SQueryEvent> m_events{};
 	Net::Clock::time_point m_lastNow{};
 	bool m_isRunning{ false };
 	bool m_isCleared{ false };

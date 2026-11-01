@@ -74,8 +74,8 @@ protected:
 		return (content.problems.size() == 1) ? content.problems.front().text : std::string{};
 	}
 
-	Lkt::Fixtures::CTempDir m_tempDir;
-	std::filesystem::path m_dir;
+	Lkt::Fixtures::CTempDir m_tempDir{};
+	std::filesystem::path m_dir{};
 };
 
 //////////////////////////////////////////////////////////////////////////

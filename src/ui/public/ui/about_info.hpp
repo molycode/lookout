@@ -6,8 +6,8 @@ namespace Lkt::Ui
 {
 struct SAboutInfo final
 {
-	std::string_view version;
-	std::string_view configDir;
-	std::string_view logsDir;
+	std::string_view version{};
+	std::string_view configDir{};
+	std::string_view logsDir{};
 };
 } // namespace Lkt::Ui

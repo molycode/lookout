@@ -127,10 +127,10 @@ protected:
 		return isFinished;
 	}
 
-	Fixtures::CLoopbackServer m_status;
-	Fixtures::CLoopbackServer m_master;
-	Fixtures::CEventCollector m_collector;
-	CQueryEngine m_engine;
+	Fixtures::CLoopbackServer m_status{};
+	Fixtures::CLoopbackServer m_master{};
+	Fixtures::CEventCollector m_collector{};
+	CQueryEngine m_engine{};
 };
 
 //////////////////////////////////////////////////////////////////////////

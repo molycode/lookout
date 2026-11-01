@@ -12,9 +12,9 @@ namespace Lkt::Query
 // the protocol reports about a player, in its order.
 struct SPlayer final
 {
-	std::string name;
-	std::optional<int32_t> score;
-	std::optional<uint32_t> ping;
-	std::vector<SRule> fields;
+	std::string name{};
+	std::optional<int32_t> score{};
+	std::optional<uint32_t> ping{};
+	std::vector<SRule> fields{};
 };
 } // namespace Lkt::Query

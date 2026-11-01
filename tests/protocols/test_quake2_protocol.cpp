@@ -59,7 +59,7 @@ protected:
 		return started.has_value() ? started->send : std::vector<std::vector<std::byte>>{};
 	}
 
-	Script::CProtocolScript m_script;
+	Script::CProtocolScript m_script{};
 };
 
 //////////////////////////////////////////////////////////////////////////

@@ -27,9 +27,9 @@ private:
 	void ReadHeaders(std::string_view headers);
 	void Fail(std::string error);
 
-	std::string m_headers;
-	std::string m_body;
-	std::string m_error;
+	std::string m_headers{};
+	std::string m_body{};
+	std::string m_error{};
 	size_t m_maxBodySize{ 0 };
 	size_t m_bodySize{ 0 };
 	EHttpReadState m_state{ EHttpReadState::Headers };

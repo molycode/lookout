@@ -10,6 +10,6 @@ struct SMasterProbeResult final
 {
 	EProbeState state{ EProbeState::Probing };
 	uint32_t numServers{ 0 };
-	std::string failure;
+	std::string failure{};
 };
 } // namespace Lkt::Browser

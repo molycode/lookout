@@ -48,13 +48,13 @@ private:
 	mbedtls_ssl_config m_config{};
 	mbedtls_x509_crt m_certificate{};
 	mbedtls_pk_context m_key{};
-	Tge::Net::CStreamListener m_listener;
+	Tge::Net::CStreamListener m_listener{};
 	uint16_t m_port{ 0 };
-	std::thread m_thread;
+	std::thread m_thread{};
 	std::atomic<bool> m_isStopping{ false };
 	std::atomic<size_t> m_numConnections{ 0 };
 	std::atomic<size_t> m_numRequests{ 0 };
-	mutable std::mutex m_mutex;
-	std::map<std::string, SHttpsReply, std::less<>> m_replies;
+	mutable std::mutex m_mutex{};
+	std::map<std::string, SHttpsReply, std::less<>> m_replies{};
 };
 } // namespace Lkt::Fixtures

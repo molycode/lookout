@@ -16,12 +16,12 @@ namespace Lkt::Net
 // for another's. Only the socket its transport needs is opened.
 struct SMasterConversation final
 {
-	SConversationRecord record;
-	Query::SServerAddress address;
-	Tge::Net::CUdpSocket datagramSocket;
-	Tge::Net::CStreamSocket streamSocket;
-	std::optional<Tge::Threading::SWatchId> watch;
-	std::unordered_set<uint64_t> listed;
+	SConversationRecord record{};
+	Query::SServerAddress address{};
+	Tge::Net::CUdpSocket datagramSocket{};
+	Tge::Net::CStreamSocket streamSocket{};
+	std::optional<Tge::Threading::SWatchId> watch{};
+	std::unordered_set<uint64_t> listed{};
 	size_t numStreamBytes{ 0 };
 	bool isStream{ false };
 };

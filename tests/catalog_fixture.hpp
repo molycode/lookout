@@ -35,8 +35,8 @@ private:
 
 	void Install();
 
-	std::vector<Query::SProtocolDefinition> m_protocols;
-	std::vector<Query::SGameDefinition> m_games;
+	std::vector<Query::SProtocolDefinition> m_protocols{};
+	std::vector<Query::SGameDefinition> m_games{};
 	size_t m_numLoadedProtocols{ 0 };
 	size_t m_numLoadedGames{ 0 };
 };

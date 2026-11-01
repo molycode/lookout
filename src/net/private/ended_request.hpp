@@ -8,7 +8,7 @@ namespace Lkt::Net
 // A conversation the clock ended: a step that never got an answer, a quiet period, or the overall deadline.
 struct SEndedRequest final
 {
-	SServerRequest request;
+	SServerRequest request{};
 	Clock::duration roundTrip{};
 	bool hasAnswered{ false };
 };

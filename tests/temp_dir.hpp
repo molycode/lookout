@@ -20,6 +20,6 @@ public:
 
 private:
 
-	std::filesystem::path m_path;
+	std::filesystem::path m_path{};
 };
 } // namespace Lkt::Fixtures

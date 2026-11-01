@@ -36,8 +36,8 @@ private:
 
 	std::expected<void, ELaunchError> Spawn(Query::SGameDefinition const& game, SLaunchOption const& option, SConnectRequest const& request, std::vector<std::string> const& arguments);
 
-	std::filesystem::path m_logsDir;
-	std::vector<SChildProcess> m_children;
+	std::filesystem::path m_logsDir{};
+	std::vector<SChildProcess> m_children{};
 };
 } // namespace Launch
 } // namespace Lkt

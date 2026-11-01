@@ -16,6 +16,6 @@ struct SRunRequest final
 {
 	Query::SGameDefinition const* pListGame{ nullptr };
 	// Set for --download; no keys means every game that is missing or has an update.
-	std::optional<std::vector<std::string>> downloadKeys;
+	std::optional<std::vector<std::string>> downloadKeys{};
 };
 } // namespace Lkt

@@ -91,12 +91,12 @@ protected:
 		return FindLaunchOptions(m_hints, GameName, m_environment);
 	}
 
-	Query::SLaunchHints m_hints;
-	Lkt::Fixtures::CTempDir m_tempDir;
-	std::filesystem::path m_root;
-	std::filesystem::path m_game;
-	std::filesystem::path m_program;
-	SLaunchEnvironment m_environment;
+	Query::SLaunchHints m_hints{};
+	Lkt::Fixtures::CTempDir m_tempDir{};
+	std::filesystem::path m_root{};
+	std::filesystem::path m_game{};
+	std::filesystem::path m_program{};
+	SLaunchEnvironment m_environment{};
 };
 
 //////////////////////////////////////////////////////////////////////////

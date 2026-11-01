@@ -32,6 +32,6 @@ public:
 
 private:
 
-	std::unique_ptr<CFetchPump> m_pPump;
+	std::unique_ptr<CFetchPump> m_pPump{};
 };
 } // namespace Lkt::Net

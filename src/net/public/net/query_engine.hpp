@@ -36,7 +36,7 @@ public:
 
 private:
 
-	std::unique_ptr<CQueryPump> m_pPump;
+	std::unique_ptr<CQueryPump> m_pPump{};
 	uint32_t m_lastRefreshId{ 0 };
 };
 } // namespace Lkt::Net

@@ -134,11 +134,11 @@ protected:
 		return listed;
 	}
 
-	Fixtures::CLoopbackServer m_status;
-	Fixtures::CLoopbackServer m_firstMaster;
-	Fixtures::CLoopbackServer m_secondMaster;
-	Fixtures::CEventCollector m_collector;
-	CQueryEngine m_engine;
+	Fixtures::CLoopbackServer m_status{};
+	Fixtures::CLoopbackServer m_firstMaster{};
+	Fixtures::CLoopbackServer m_secondMaster{};
+	Fixtures::CEventCollector m_collector{};
+	CQueryEngine m_engine{};
 };
 
 //////////////////////////////////////////////////////////////////////////

@@ -130,13 +130,13 @@ protected:
 		return m_launcher.Launch(Fixtures::GetGameByKey("kingpin"), MakeOption(), SConnectRequest{ Server, std::move(password) });
 	}
 
-	Lkt::Fixtures::CTempDir m_tempDir;
-	std::filesystem::path m_root;
-	std::filesystem::path m_logs;
-	std::filesystem::path m_work;
-	std::filesystem::path m_script;
-	std::filesystem::path m_report;
-	CGameLauncher m_launcher;
+	Lkt::Fixtures::CTempDir m_tempDir{};
+	std::filesystem::path m_root{};
+	std::filesystem::path m_logs{};
+	std::filesystem::path m_work{};
+	std::filesystem::path m_script{};
+	std::filesystem::path m_report{};
+	CGameLauncher m_launcher{};
 };
 
 //////////////////////////////////////////////////////////////////////////

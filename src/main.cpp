@@ -186,7 +186,7 @@ int main(int argc, char* argv[])
 	}
 	else if (valid)
 	{
-		Lkt::CLookout lookout;
+		Lkt::CLookout lookout{};
 
 		result = lookout.Run(request, userDir, content.problems) ? EXIT_SUCCESS : EXIT_FAILURE;
 	}

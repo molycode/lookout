@@ -28,6 +28,6 @@ public:
 
 private:
 
-	std::vector<std::optional<Net::Clock::time_point>> m_startedAt;
+	std::vector<std::optional<Net::Clock::time_point>> m_startedAt{};
 };
 } // namespace Lkt::Browser

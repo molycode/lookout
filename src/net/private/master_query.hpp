@@ -7,7 +7,7 @@ namespace Lkt::Net
 {
 struct SMasterQuery final
 {
-	SMasterId master;
-	Query::SServerAddress address;
+	SMasterId master{};
+	Query::SServerAddress address{};
 };
 } // namespace Lkt::Net

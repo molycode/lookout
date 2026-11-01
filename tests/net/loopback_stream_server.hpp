@@ -35,11 +35,11 @@ private:
 	void Serve();
 	void Converse(Tge::Net::CStreamSocket const& connection);
 
-	Tge::Net::CStreamListener m_listener;
+	Tge::Net::CStreamListener m_listener{};
 	uint16_t m_port{ 0 };
-	SLoopbackStream m_stream;
+	SLoopbackStream m_stream{};
 	std::atomic<bool> m_isServing{ false };
 	std::atomic<uint32_t> m_numConnections{ 0 };
-	std::thread m_thread;
+	std::thread m_thread{};
 };
 } // namespace Lkt::Fixtures

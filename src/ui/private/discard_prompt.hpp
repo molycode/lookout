@@ -23,9 +23,9 @@ private:
 
 	void Discard(std::filesystem::path const& userDir, std::string& message) const;
 
-	std::string m_key;
-	std::string m_name;
-	std::string m_question;
+	std::string m_key{};
+	std::string m_name{};
+	std::string m_question{};
 	EDiscardKind m_kind{ EDiscardKind::Changes };
 	bool m_shouldOpen{ false };
 };

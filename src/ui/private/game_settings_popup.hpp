@@ -51,7 +51,7 @@ private:
 	void OpenDialog(EFileDialogPurpose purpose, uint32_t installId, std::string const& startFolder);
 
 	SDL_Window* m_pWindow{ nullptr };
-	std::vector<SInstallEdit> m_edits;
+	std::vector<SInstallEdit> m_edits{};
 	Query::EGame m_game{ Query::NoGame };
 	Query::EGame m_dialogGame{ Query::NoGame };
 	uint32_t m_dialogInstallId{ 0 };

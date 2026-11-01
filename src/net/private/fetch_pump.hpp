@@ -62,29 +62,29 @@ private:
 	void OnDeadline();
 	std::string Explain(std::string_view reason) const;
 
-	SHttpsOrigin m_origin;
-	std::function<void()> m_onResults;
+	SHttpsOrigin m_origin{};
+	std::function<void()> m_onResults{};
 	std::atomic<bool> m_isNotified{ false };
-	std::string m_setUpError;
+	std::string m_setUpError{};
 
-	Tge::Threading::CEventLoop m_loop;
-	Tge::Threading::CMpscQueue<SFetchResult> m_results;
+	Tge::Threading::CEventLoop m_loop{};
+	Tge::Threading::CMpscQueue<SFetchResult> m_results{};
 	mbedtls_ssl_config m_config{};
 	mbedtls_x509_crt m_caChain{};
 	bool m_isTlsReady{ false };
 
-	std::deque<SFetchRequest> m_requests;
+	std::deque<SFetchRequest> m_requests{};
 	EFetchState m_state{ EFetchState::Idle };
-	Tge::Net::CAddressLookup m_lookup;
-	Tge::Net::CStreamSocket m_socket;
-	CTlsConnection m_tls;
-	std::optional<Tge::Threading::SWatchId> m_watch;
-	std::optional<Tge::Threading::STimerId> m_pollTimer;
-	std::optional<Tge::Threading::STimerId> m_deadlineTimer;
-	CHttpResponseReader m_reader;
-	std::string m_request;
+	Tge::Net::CAddressLookup m_lookup{};
+	Tge::Net::CStreamSocket m_socket{};
+	CTlsConnection m_tls{};
+	std::optional<Tge::Threading::SWatchId> m_watch{};
+	std::optional<Tge::Threading::STimerId> m_pollTimer{};
+	std::optional<Tge::Threading::STimerId> m_deadlineTimer{};
+	CHttpResponseReader m_reader{};
+	std::string m_request{};
 	size_t m_numSent{ 0 };
-	std::vector<std::byte> m_buffer;
+	std::vector<std::byte> m_buffer{};
 	bool m_isReused{ false };
 	bool m_hasRetried{ false };
 	bool m_hasReceived{ false };

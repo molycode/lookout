@@ -120,10 +120,10 @@ protected:
 		return isTested;
 	}
 
-	CMasterProbes m_probes;
-	Fixtures::CLoopbackServer m_master;
-	std::mutex m_mutex;
-	std::condition_variable m_wake;
+	CMasterProbes m_probes{};
+	Fixtures::CLoopbackServer m_master{};
+	std::mutex m_mutex{};
+	std::condition_variable m_wake{};
 	bool m_hasEvents{ false };
 };
 

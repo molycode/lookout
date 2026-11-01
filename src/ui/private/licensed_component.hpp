@@ -7,8 +7,8 @@ namespace Lkt::Ui
 {
 struct SLicensedComponent final
 {
-	std::string_view name;
-	std::string_view licence;
-	std::span<unsigned char const> text;
+	std::string_view name{};
+	std::string_view licence{};
+	std::span<unsigned char const> text{};
 };
 } // namespace Lkt::Ui

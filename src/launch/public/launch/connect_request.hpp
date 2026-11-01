@@ -7,7 +7,7 @@ namespace Lkt::Launch
 {
 struct SConnectRequest final
 {
-	Query::SServerAddress address;
-	std::string password;
+	Query::SServerAddress address{};
+	std::string password{};
 };
 } // namespace Lkt::Launch

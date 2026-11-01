@@ -57,11 +57,11 @@ protected:
 		m_tracker.Update(when, m_queries, m_outcomes);
 	}
 
-	std::vector<Query::SMasterEndpoint> m_masters;
-	std::vector<Query::SMasterEndpoint> m_twoMasters;
-	CMasterTracker m_tracker;
-	std::vector<SMasterQuery> m_queries;
-	std::vector<SMasterOutcome> m_outcomes;
+	std::vector<Query::SMasterEndpoint> m_masters{};
+	std::vector<Query::SMasterEndpoint> m_twoMasters{};
+	CMasterTracker m_tracker{};
+	std::vector<SMasterQuery> m_queries{};
+	std::vector<SMasterOutcome> m_outcomes{};
 };
 
 //////////////////////////////////////////////////////////////////////////

@@ -32,7 +32,7 @@ public:
 
 private:
 
-	std::string m_search;
+	std::string m_search{};
 	Query::EGame m_game{ Query::NoGame };
 	bool m_hasGame{ false };
 	bool m_shouldFocusSearch{ false };

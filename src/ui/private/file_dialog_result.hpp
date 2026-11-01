@@ -8,6 +8,6 @@ namespace Lkt::Ui
 struct SFileDialogResult final
 {
 	EFileDialogState state{ EFileDialogState::Closed };
-	std::string text;
+	std::string text{};
 };
 } // namespace Lkt::Ui

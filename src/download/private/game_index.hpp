@@ -10,8 +10,8 @@ namespace Lkt::Download
 // lookout-games' index.json: the commit it describes, from which every file is fetched.
 struct SGameIndex final
 {
-	std::string commit;
-	std::vector<SIndexGame> games;
-	std::vector<SIndexProtocol> protocols;
+	std::string commit{};
+	std::vector<SIndexGame> games{};
+	std::vector<SIndexProtocol> protocols{};
 };
 } // namespace Lkt::Download

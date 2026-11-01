@@ -46,9 +46,9 @@ protected:
 		m_scheduler.TakeEnded(when, m_ended);
 	}
 
-	CRequestScheduler m_scheduler;
-	std::vector<SServerRequest> m_due;
-	std::vector<SEndedRequest> m_ended;
+	CRequestScheduler m_scheduler{};
+	std::vector<SServerRequest> m_due{};
+	std::vector<SEndedRequest> m_ended{};
 };
 
 //////////////////////////////////////////////////////////////////////////

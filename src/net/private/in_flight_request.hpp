@@ -11,11 +11,11 @@ namespace Lkt::Net
 // request.numAttempts counts the sends of the current step.
 struct SInFlightRequest final
 {
-	SServerRequest request;
+	SServerRequest request{};
 	Clock::time_point startedAt{};
 	Clock::time_point stepSentAt{};
 	Clock::time_point lastDatagramAt{};
-	std::optional<Clock::duration> quiet;
+	std::optional<Clock::duration> quiet{};
 	Clock::duration roundTrip{};
 	uint32_t numDatagrams{ 0 };
 	size_t numBytes{ 0 };

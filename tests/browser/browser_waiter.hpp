@@ -29,8 +29,8 @@ public:
 
 private:
 
-	std::mutex m_mutex;
-	std::condition_variable m_wake;
+	std::mutex m_mutex{};
+	std::condition_variable m_wake{};
 	bool m_hasEvents{ false };
 };
 } // namespace Fixtures

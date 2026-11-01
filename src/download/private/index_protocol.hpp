@@ -9,10 +9,10 @@ namespace Lkt::Download
 {
 struct SIndexProtocol final
 {
-	std::string name;
+	std::string name{};
 	int64_t api{ 0 };
 	std::optional<uint64_t> version{};
 	// Named <name>.lua.
-	SIndexFile file;
+	SIndexFile file{};
 };
 } // namespace Lkt::Download

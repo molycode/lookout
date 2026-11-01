@@ -78,8 +78,8 @@ protected:
 		EXPECT_TRUE(file.good()) << path;
 	}
 
-	Lkt::Fixtures::CTempDir m_tempDir;
-	std::filesystem::path m_dir;
+	Lkt::Fixtures::CTempDir m_tempDir{};
+	std::filesystem::path m_dir{};
 };
 
 //////////////////////////////////////////////////////////////////////////

@@ -26,8 +26,8 @@ public:
 
 private:
 
-	std::string m_text;
-	std::string m_error;
+	std::string m_text{};
+	std::string m_error{};
 	bool m_shouldOpen{ false };
 	bool m_shouldFocus{ false };
 };

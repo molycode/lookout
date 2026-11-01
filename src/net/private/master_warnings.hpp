@@ -23,6 +23,6 @@ public:
 
 private:
 
-	std::map<std::pair<Query::EGame, size_t>, std::string> m_failures;
+	std::map<std::pair<Query::EGame, size_t>, std::string> m_failures{};
 };
 } // namespace Lkt::Net

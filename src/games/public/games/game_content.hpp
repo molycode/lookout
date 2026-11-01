@@ -10,8 +10,8 @@ namespace Lkt::Games
 // Problems are reported by the caller: loading runs before logging reaches its file.
 struct SGameContent final
 {
-	std::vector<Query::SProtocolDefinition> protocols;
-	std::vector<Query::SGameDefinition> games;
-	std::vector<Query::SGameProblem> problems;
+	std::vector<Query::SProtocolDefinition> protocols{};
+	std::vector<Query::SGameDefinition> games{};
+	std::vector<Query::SGameProblem> problems{};
 };
 } // namespace Lkt::Games

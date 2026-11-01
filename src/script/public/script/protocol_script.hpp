@@ -57,8 +57,8 @@ private:
 		std::map<std::string, std::string> const* pOptions);
 
 	lua_State* m_pState{ nullptr };
-	std::vector<Query::SProtocolOption> m_options;
-	std::optional<uint64_t> m_version;
+	std::vector<Query::SProtocolOption> m_options{};
+	std::optional<uint64_t> m_version{};
 	std::chrono::steady_clock::time_point m_deadline{};
 	size_t m_numBytes{ 0 };
 	uint64_t m_lastConversationId{ 0 };

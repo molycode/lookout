@@ -10,12 +10,12 @@ inline constexpr uint32_t NoPingLimit{ std::numeric_limits<uint32_t>::max() };
 
 struct SServerFilter final
 {
-	std::string search;
+	std::string search{};
 	bool showEmpty{ true };
 	bool showFull{ true };
 	uint32_t maxPingMs{ NoPingLimit };
-	std::string mod;
-	std::string country;
+	std::string mod{};
+	std::string country{};
 
 	bool operator==(SServerFilter const&) const = default;
 };

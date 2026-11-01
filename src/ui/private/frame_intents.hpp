@@ -15,17 +15,17 @@ namespace Lkt::Ui
 // browser changes under it mid-frame.
 struct SFrameIntents final
 {
-	std::optional<Query::EGame> selectGame;
-	std::optional<Query::EGame> hideGame;
-	std::optional<Query::EGame> showGame;
-	std::optional<SGameMove> moveGame;
-	std::optional<Query::EGame> openGameSettings;
+	std::optional<Query::EGame> selectGame{};
+	std::optional<Query::EGame> hideGame{};
+	std::optional<Query::EGame> showGame{};
+	std::optional<SGameMove> moveGame{};
+	std::optional<Query::EGame> openGameSettings{};
 	// By key: a game whose description has a problem may not be in the catalog.
-	std::optional<std::string> editGame;
-	std::optional<Config::SServerFilter> filter;
-	std::optional<Config::SSortOrder> sort;
-	std::optional<uint32_t> autoRefreshSeconds;
-	SServerAction action;
+	std::optional<std::string> editGame{};
+	std::optional<Config::SServerFilter> filter{};
+	std::optional<Config::SSortOrder> sort{};
+	std::optional<uint32_t> autoRefreshSeconds{};
+	SServerAction action{};
 	bool refresh{ false };
 	bool openAddServer{ false };
 	bool openAddGame{ false };

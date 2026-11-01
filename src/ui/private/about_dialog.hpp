@@ -28,9 +28,9 @@ private:
 	void DrawLicences(ImVec2 const& pageSize);
 
 	SDL_Window* m_pWindow{ nullptr };
-	SAboutInfo m_about;
-	std::string m_systemInfo;
-	std::string m_result;
+	SAboutInfo m_about{};
+	std::string m_systemInfo{};
+	std::string m_result{};
 	size_t m_licenceIndex{ 0 };
 	bool m_isResultError{ false };
 	bool m_shouldOpen{ false };

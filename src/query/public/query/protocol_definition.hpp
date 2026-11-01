@@ -12,9 +12,9 @@ namespace Lkt::Query
 // A protocol script's source and the options it declares; each thread that runs it builds its own state.
 struct SProtocolDefinition final
 {
-	std::string name;
-	std::string source;
-	std::vector<SProtocolOption> options;
+	std::string name{};
+	std::string source{};
+	std::vector<SProtocolOption> options{};
 	EProtocolOrigin origin{ EProtocolOrigin::Downloaded };
 	std::optional<uint64_t> downloadedVersion{};
 

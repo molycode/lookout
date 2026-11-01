@@ -11,10 +11,10 @@ namespace Lkt::Config
 struct SGameSettings final
 {
 	bool isListed{ true };
-	SServerFilter filter;
-	SSortOrder sort;
-	std::vector<SGameInstall> installs;
-	std::vector<Query::SServerAddress> favourites;
+	SServerFilter filter{};
+	SSortOrder sort{};
+	std::vector<SGameInstall> installs{};
+	std::vector<Query::SServerAddress> favourites{};
 
 	bool operator==(SGameSettings const&) const = default;
 };

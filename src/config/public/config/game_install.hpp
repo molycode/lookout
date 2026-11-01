@@ -9,9 +9,9 @@ namespace Lkt::Config
 struct SGameInstall final
 {
 	uint32_t id{ 0 };
-	std::string name;
+	std::string name{};
 	EInstallKind kind{ EInstallKind::Folder };
-	std::string location;
+	std::string location{};
 
 	bool operator==(SGameInstall const&) const = default;
 };

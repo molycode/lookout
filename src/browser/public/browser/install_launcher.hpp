@@ -9,9 +9,9 @@ namespace Lkt::Browser
 {
 struct SInstallLauncher final
 {
-	std::string id;
-	std::string name;
-	std::string location;
+	std::string id{};
+	std::string name{};
+	std::string location{};
 	std::expected<Launch::SLaunchOption, Launch::ELaunchError> option{ std::unexpected{ Launch::ELaunchError::NoLauncher } };
 };
 } // namespace Lkt::Browser

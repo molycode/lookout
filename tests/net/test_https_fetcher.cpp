@@ -102,10 +102,10 @@ protected:
 		return WaitForResults(count);
 	}
 
-	Fixtures::CLoopbackHttpsServer m_server;
-	CHttpsFetcher m_fetcher;
-	std::mutex m_mutex;
-	std::condition_variable m_wake;
+	Fixtures::CLoopbackHttpsServer m_server{};
+	CHttpsFetcher m_fetcher{};
+	std::mutex m_mutex{};
+	std::condition_variable m_wake{};
 	bool m_hasResults{ false };
 };
 

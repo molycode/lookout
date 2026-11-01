@@ -29,9 +29,9 @@ public:
 
 private:
 
-	std::mutex m_mutex;
-	std::condition_variable m_wake;
+	std::mutex m_mutex{};
+	std::condition_variable m_wake{};
 	bool m_hasEvents{ false };
-	std::vector<Net::SQueryEvent> m_events;
+	std::vector<Net::SQueryEvent> m_events{};
 };
 } // namespace Lkt::Fixtures

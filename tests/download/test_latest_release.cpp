@@ -83,10 +83,10 @@ protected:
 		}
 	}
 
-	Fixtures::CLoopbackHttpsServer m_server;
-	CLatestRelease m_release;
-	std::mutex m_mutex;
-	std::condition_variable m_wake;
+	Fixtures::CLoopbackHttpsServer m_server{};
+	CLatestRelease m_release{};
+	std::mutex m_mutex{};
+	std::condition_variable m_wake{};
 	bool m_hasResults{ false };
 	Net::Clock::time_point const m_start{ Net::Clock::now() };
 };

@@ -32,14 +32,14 @@ private:
 	void ReadChanges();
 	void ScheduleSettle();
 
-	Tge::Threading::CEventLoop m_loop;
-	Tge::IO::CDirectoryWatch m_watch;
-	std::filesystem::path m_userDir;
-	std::filesystem::path m_watchedFolder;
+	Tge::Threading::CEventLoop m_loop{};
+	Tge::IO::CDirectoryWatch m_watch{};
+	std::filesystem::path m_userDir{};
+	std::filesystem::path m_watchedFolder{};
 	std::chrono::milliseconds m_settleTime{ 0 };
-	std::function<void()> m_onChanged;
-	std::optional<Tge::Threading::SWatchId> m_watchId;
-	std::optional<Tge::Threading::STimerId> m_settleTimer;
+	std::function<void()> m_onChanged{};
+	std::optional<Tge::Threading::SWatchId> m_watchId{};
+	std::optional<Tge::Threading::STimerId> m_settleTimer{};
 	bool m_isRunning{ false };
 };
 } // namespace Lkt::Games

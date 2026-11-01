@@ -81,12 +81,12 @@ protected:
 		return m_numWakes;
 	}
 
-	Lkt::Fixtures::CTempDir m_tempDir;
-	std::filesystem::path m_root;
-	std::filesystem::path m_userDir;
-	CFolderWatcher m_watcher;
-	std::mutex m_mutex;
-	std::condition_variable m_wake;
+	Lkt::Fixtures::CTempDir m_tempDir{};
+	std::filesystem::path m_root{};
+	std::filesystem::path m_userDir{};
+	CFolderWatcher m_watcher{};
+	std::mutex m_mutex{};
+	std::condition_variable m_wake{};
 	int m_numWakes{ 0 };
 };
 

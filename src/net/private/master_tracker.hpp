@@ -55,6 +55,6 @@ private:
 	SMasterRecord* Find(SMasterId const& master);
 	void End(SMasterRecord& record, std::string failure, std::vector<SMasterOutcome>& outcomes);
 
-	std::vector<SMasterRecord> m_records;
+	std::vector<SMasterRecord> m_records{};
 };
 } // namespace Lkt::Net

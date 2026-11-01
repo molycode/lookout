@@ -9,12 +9,12 @@ namespace Lkt::Query
 // numPlayers, the players are counted from the list.
 struct SServerKeys final
 {
-	std::string hostname;
-	std::string map;
-	std::string numPlayers;
-	std::string maxPlayers;
-	std::string password;
-	std::vector<std::string> mods;
+	std::string hostname{};
+	std::string map{};
+	std::string numPlayers{};
+	std::string maxPlayers{};
+	std::string password{};
+	std::vector<std::string> mods{};
 
 	bool operator==(SServerKeys const&) const = default;
 };

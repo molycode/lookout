@@ -142,15 +142,15 @@ protected:
 		return pFound;
 	}
 
-	Lkt::Fixtures::CTempDir m_tempDir;
-	std::filesystem::path m_root;
-	std::filesystem::path m_configDir;
-	std::filesystem::path m_logsDir;
-	std::filesystem::path m_game;
-	Launch::SLaunchEnvironment m_environment;
-	Fixtures::CLoopbackServer m_server;
-	Fixtures::CBrowserWaiter m_waiter;
-	CBrowser m_browser;
+	Lkt::Fixtures::CTempDir m_tempDir{};
+	std::filesystem::path m_root{};
+	std::filesystem::path m_configDir{};
+	std::filesystem::path m_logsDir{};
+	std::filesystem::path m_game{};
+	Launch::SLaunchEnvironment m_environment{};
+	Fixtures::CLoopbackServer m_server{};
+	Fixtures::CBrowserWaiter m_waiter{};
+	CBrowser m_browser{};
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -533,9 +533,9 @@ protected:
 		}, Patience);
 	}
 
-	std::vector<Query::SProtocolDefinition> m_protocols;
-	std::vector<Query::SGameDefinition> m_savedGames;
-	std::vector<Query::SGameDefinition> m_games;
+	std::vector<Query::SProtocolDefinition> m_protocols{};
+	std::vector<Query::SGameDefinition> m_savedGames{};
+	std::vector<Query::SGameDefinition> m_games{};
 };
 
 //////////////////////////////////////////////////////////////////////////

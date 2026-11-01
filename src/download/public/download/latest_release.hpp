@@ -32,10 +32,10 @@ private:
 
 	void TakeAnswer(Net::SFetchResult const& result, Net::Clock::time_point now);
 
-	Net::CHttpsFetcher m_fetcher;
-	std::optional<Net::Clock::time_point> m_nextCheck;
+	Net::CHttpsFetcher m_fetcher{};
+	std::optional<Net::Clock::time_point> m_nextCheck{};
 	bool m_isChecking{ false };
-	std::string m_version;
-	std::string m_problem;
+	std::string m_version{};
+	std::string m_problem{};
 };
 } // namespace Lkt::Download

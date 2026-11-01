@@ -11,7 +11,7 @@ namespace Lkt::Net
 struct SServersListed final
 {
 	Query::EGame game{ Query::NoGame };
-	std::vector<Query::SServerAddress> servers;
+	std::vector<Query::SServerAddress> servers{};
 	uint32_t refreshId{ 0 };
 };
 } // namespace Lkt::Net

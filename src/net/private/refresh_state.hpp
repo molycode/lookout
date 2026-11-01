@@ -14,7 +14,7 @@ struct SRefreshState final
 	ERefreshKind kind{ ERefreshKind::Full };
 	uint32_t generation{ 0 };
 	Clock::time_point startedAt{};
-	std::unordered_set<uint64_t> knownServers;
-	SRefreshStats stats;
+	std::unordered_set<uint64_t> knownServers{};
+	SRefreshStats stats{};
 };
 } // namespace Lkt::Net

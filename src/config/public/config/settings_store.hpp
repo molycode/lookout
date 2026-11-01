@@ -28,9 +28,9 @@ private:
 	void KeepBackup(std::string_view problem);
 	void MoveAside(std::string_view reason);
 
-	std::filesystem::path m_path;
-	std::string m_kept;
-	std::optional<SSettings> m_written;
+	std::filesystem::path m_path{};
+	std::string m_kept{};
+	std::optional<SSettings> m_written{};
 	bool m_canSave{ false };
 };
 } // namespace Lkt::Config

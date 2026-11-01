@@ -42,15 +42,15 @@ private:
 	void ReportStartupProblems() const;
 	void PruneLogs() const;
 
-	std::string m_logsDir;
-	std::string m_configDir;
-	std::vector<std::string> m_startupProblems;
-	std::filesystem::path m_userDir;
-	std::filesystem::path m_cacheDir;
-	std::vector<Query::SGameProblem> m_gameProblems;
-	Games::CFolderWatcher m_watcher;
-	Net::CQueryEngine m_engine;
-	Browser::CBrowser m_browser;
-	Ui::CApplication m_application;
+	std::string m_logsDir{};
+	std::string m_configDir{};
+	std::vector<std::string> m_startupProblems{};
+	std::filesystem::path m_userDir{};
+	std::filesystem::path m_cacheDir{};
+	std::vector<Query::SGameProblem> m_gameProblems{};
+	Games::CFolderWatcher m_watcher{};
+	Net::CQueryEngine m_engine{};
+	Browser::CBrowser m_browser{};
+	Ui::CApplication m_application{};
 };
 } // namespace Lkt

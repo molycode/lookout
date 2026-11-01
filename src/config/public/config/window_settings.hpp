@@ -12,7 +12,7 @@ struct SWindowSettings final
 	uint32_t height{ 800 };
 	bool isMaximized{ false };
 	uint32_t detailsWidth{ 288 };
-	std::string layout;
+	std::string layout{};
 
 	bool operator==(SWindowSettings const&) const = default;
 };

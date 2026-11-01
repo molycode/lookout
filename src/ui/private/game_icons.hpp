@@ -25,7 +25,7 @@ public:
 
 private:
 
-	std::vector<std::vector<SIconLevel>> m_levels;
+	std::vector<std::vector<SIconLevel>> m_levels{};
 };
 
 extern CGameIcons gGameIcons;

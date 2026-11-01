@@ -31,6 +31,6 @@ public:
 
 private:
 
-	std::string m_error;
+	std::string m_error{};
 };
 } // namespace Lkt::Json

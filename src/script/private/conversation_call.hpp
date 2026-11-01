@@ -20,9 +20,9 @@ struct SConversationCall final
 	int states{ 0 };
 	int function{ 0 };
 	std::map<std::string, std::string> const* pOptions{ nullptr };
-	std::span<std::byte const> data;
-	SScriptAction action;
-	std::string unknownField;
-	std::string problem;
+	std::span<std::byte const> data{};
+	SScriptAction action{};
+	std::string unknownField{};
+	std::string problem{};
 };
 } // namespace Lkt::Script

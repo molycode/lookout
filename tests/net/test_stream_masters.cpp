@@ -128,10 +128,10 @@ protected:
 		return Fixtures::CollectEvents<SServerAnswered>(m_collector.GetEvents()).size();
 	}
 
-	Fixtures::CLoopbackServer m_status;
-	Fixtures::CLoopbackStreamServer m_master;
-	Fixtures::CEventCollector m_collector;
-	CQueryEngine m_engine;
+	Fixtures::CLoopbackServer m_status{};
+	Fixtures::CLoopbackStreamServer m_master{};
+	Fixtures::CEventCollector m_collector{};
+	CQueryEngine m_engine{};
 };
 
 //////////////////////////////////////////////////////////////////////////

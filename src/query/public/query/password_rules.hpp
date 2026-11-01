@@ -10,8 +10,8 @@ namespace Lkt::Query
 struct SPasswordRules final
 {
 	uint32_t maxLength{ 0 };
-	std::string refusedCharacters;
-	std::vector<std::string> refusedSequences;
+	std::string refusedCharacters{};
+	std::vector<std::string> refusedSequences{};
 
 	bool operator==(SPasswordRules const&) const = default;
 };

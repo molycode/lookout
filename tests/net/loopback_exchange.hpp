@@ -11,8 +11,8 @@ namespace Lkt::Fixtures
 // Each reply waits the interval first.
 struct SLoopbackExchange final
 {
-	std::vector<std::byte> request;
-	std::vector<std::vector<std::byte>> replies;
+	std::vector<std::byte> request{};
+	std::vector<std::vector<std::byte>> replies{};
 	uint32_t numIgnored{ 0 };
 	std::chrono::milliseconds replyInterval{ 0 };
 };

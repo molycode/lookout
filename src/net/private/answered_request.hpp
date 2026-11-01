@@ -8,7 +8,7 @@ namespace Lkt::Net
 // A datagram from a server in flight; the round trip is that of its first datagram.
 struct SAnsweredRequest final
 {
-	SServerRequest request;
+	SServerRequest request{};
 	Clock::duration roundTrip{};
 	bool isOverCap{ false };
 };

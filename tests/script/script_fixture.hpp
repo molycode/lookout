@@ -26,6 +26,6 @@ protected:
 	std::expected<Script::SScriptAction, std::string> Start(Script::EConversationKind kind);
 	std::expected<Script::SScriptAction, std::string> Receive(Script::EConversationKind kind, std::string_view data);
 
-	Script::CProtocolScript m_script;
+	Script::CProtocolScript m_script{};
 };
 } // namespace Lkt::Fixtures

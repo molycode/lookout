@@ -96,11 +96,11 @@ protected:
 		return isFinished;
 	}
 
-	Fixtures::CLoopbackServer m_server;
-	Fixtures::CLoopbackServer m_secondServer;
-	Fixtures::CLoopbackStreamServer m_master;
-	Fixtures::CEventCollector m_collector;
-	CQueryEngine m_engine;
+	Fixtures::CLoopbackServer m_server{};
+	Fixtures::CLoopbackServer m_secondServer{};
+	Fixtures::CLoopbackStreamServer m_master{};
+	Fixtures::CEventCollector m_collector{};
+	CQueryEngine m_engine{};
 };
 
 //////////////////////////////////////////////////////////////////////////

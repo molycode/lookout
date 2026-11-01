@@ -9,11 +9,11 @@ namespace Lkt::Download
 {
 struct SGameOffer final
 {
-	std::string key;
-	std::string name;
+	std::string key{};
+	std::string name{};
 	EOfferState state{ EOfferState::NotInstalled };
-	std::string iconSha256;
-	std::string protocol;
+	std::string iconSha256{};
+	std::string protocol{};
 	std::optional<uint64_t> protocolVersion{};
 	bool isDownloaded{ false };
 };

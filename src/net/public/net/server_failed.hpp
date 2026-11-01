@@ -10,7 +10,7 @@ namespace Lkt::Net
 struct SServerFailed final
 {
 	Query::EGame game{ Query::NoGame };
-	Query::SServerAddress address;
+	Query::SServerAddress address{};
 	EServerFailure failure{ EServerFailure::NoAnswer };
 	uint32_t refreshId{ 0 };
 };

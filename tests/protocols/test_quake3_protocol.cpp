@@ -98,7 +98,7 @@ protected:
 		return action;
 	}
 
-	Script::CProtocolScript m_script;
+	Script::CProtocolScript m_script{};
 };
 
 //////////////////////////////////////////////////////////////////////////

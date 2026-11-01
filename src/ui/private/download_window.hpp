@@ -56,9 +56,9 @@ private:
 
 	Download::CGameDownloads* m_pDownloads{ nullptr };
 	Download::CLatestRelease const* m_pLatestRelease{ nullptr };
-	std::map<std::string, std::vector<SIconLevel>, std::less<>> m_icons;
-	std::string m_search;
-	std::string m_version;
+	std::map<std::string, std::vector<SIconLevel>, std::less<>> m_icons{};
+	std::string m_search{};
+	std::string m_version{};
 	SDL_Renderer* m_pRenderer{ nullptr };
 	bool m_isOpen{ false };
 	bool m_shouldFocus{ false };

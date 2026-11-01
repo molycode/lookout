@@ -11,7 +11,7 @@ namespace Lkt::Net
 struct SConversationRecord final
 {
 	Query::EGame game{ Query::NoGame };
-	Script::SConversation conversation;
-	std::vector<std::vector<std::byte>> send;
+	Script::SConversation conversation{};
+	std::vector<std::vector<std::byte>> send{};
 };
 } // namespace Lkt::Net

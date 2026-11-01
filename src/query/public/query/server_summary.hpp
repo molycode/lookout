@@ -10,10 +10,10 @@ namespace Lkt::Query
 {
 struct SServerSummary final
 {
-	SStyledText name;
-	std::string map;
-	std::string mod;
-	std::string mode;
+	SStyledText name{};
+	std::string map{};
+	std::string mod{};
+	std::string mode{};
 	uint32_t numPlayers{ 0 };
 	uint32_t maxPlayers{ 0 };
 	bool hasPassword{ false };

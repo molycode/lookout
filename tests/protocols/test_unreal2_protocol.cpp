@@ -109,7 +109,7 @@ protected:
 		return Fixtures::ReadStatusDatagrams(m_script, datagrams);
 	}
 
-	Script::CProtocolScript m_script;
+	Script::CProtocolScript m_script{};
 };
 
 //////////////////////////////////////////////////////////////////////////

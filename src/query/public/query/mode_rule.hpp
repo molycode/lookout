@@ -7,8 +7,8 @@ namespace Lkt::Query
 {
 struct SModeRule final
 {
-	SKeyMatch match;
-	std::string label;
+	SKeyMatch match{};
+	std::string label{};
 
 	bool operator==(SModeRule const&) const = default;
 };

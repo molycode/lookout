@@ -19,7 +19,7 @@ protected:
 
 private:
 
-	std::vector<Query::SProtocolDefinition> m_protocols;
-	std::vector<Query::SGameDefinition> m_games;
+	std::vector<Query::SProtocolDefinition> m_protocols{};
+	std::vector<Query::SGameDefinition> m_games{};
 };
 } // namespace Lkt::Fixtures

@@ -254,13 +254,13 @@ protected:
 		return (it != offers.end()) ? it->state : EOfferState::NotInstalled;
 	}
 
-	Lkt::Fixtures::CTempDir m_tempDir;
-	std::filesystem::path m_dir;
-	std::map<std::string, std::string> m_files;
-	Fixtures::CLoopbackHttpsServer m_server;
-	CGameDownloads m_downloads;
-	std::mutex m_mutex;
-	std::condition_variable m_wake;
+	Lkt::Fixtures::CTempDir m_tempDir{};
+	std::filesystem::path m_dir{};
+	std::map<std::string, std::string> m_files{};
+	Fixtures::CLoopbackHttpsServer m_server{};
+	CGameDownloads m_downloads{};
+	std::mutex m_mutex{};
+	std::condition_variable m_wake{};
 	bool m_hasResults{ false };
 };
 

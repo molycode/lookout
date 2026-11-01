@@ -9,7 +9,7 @@ namespace Lkt::Download
 // <repository>/<branch or commit>/ on the origin.
 struct SDownloadSource final
 {
-	Net::SHttpsOrigin origin;
-	std::string repository;
+	Net::SHttpsOrigin origin{};
+	std::string repository{};
 };
 } // namespace Lkt::Download

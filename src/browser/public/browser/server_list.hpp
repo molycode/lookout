@@ -47,11 +47,11 @@ private:
 	void Remove(Query::SServerAddress const& address);
 	void RebuildIndex();
 
-	std::vector<SServerEntry> m_entries;
-	std::unordered_map<uint64_t, size_t> m_indexByKey;
+	std::vector<SServerEntry> m_entries{};
+	std::unordered_map<uint64_t, size_t> m_indexByKey{};
 	uint32_t m_acceptedRefreshId{ 0 };
 	uint32_t m_sweepRefreshId{ 0 };
-	std::vector<Net::SMasterFailed> m_failedMasters;
+	std::vector<Net::SMasterFailed> m_failedMasters{};
 };
 } // namespace Browser
 } // namespace Lkt

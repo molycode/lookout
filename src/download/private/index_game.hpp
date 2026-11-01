@@ -9,10 +9,10 @@ namespace Lkt::Download
 {
 struct SIndexGame final
 {
-	std::string key;
-	std::string name;
+	std::string key{};
+	std::string name{};
 	uint64_t format{ 0 };
-	std::string protocol;
-	std::vector<SIndexFile> files;
+	std::string protocol{};
+	std::vector<SIndexFile> files{};
 };
 } // namespace Lkt::Download

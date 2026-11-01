@@ -20,19 +20,19 @@ namespace Lkt::Query
 struct SGameDefinition final
 {
 	EGame game{ NoGame };
-	std::string key;
-	std::string name;
+	std::string key{};
+	std::string name{};
 	EProtocol protocol{ NoProtocol };
-	STextStyle text;
-	std::vector<SMasterEndpoint> masters;
-	std::map<std::string, std::string> protocolOptions;
+	STextStyle text{};
+	std::vector<SMasterEndpoint> masters{};
+	std::map<std::string, std::string> protocolOptions{};
 	int32_t queryPortOffset{ 0 };
-	SServerKeys keys;
-	std::vector<SModeRule> modes;
-	std::vector<SKeyMatch> foreignServers;
-	SLaunchHints launch;
-	SJoinCommand join;
-	std::vector<std::byte> icon;
+	SServerKeys keys{};
+	std::vector<SModeRule> modes{};
+	std::vector<SKeyMatch> foreignServers{};
+	SLaunchHints launch{};
+	SJoinCommand join{};
+	std::vector<std::byte> icon{};
 
 	bool operator==(SGameDefinition const&) const = default;
 };

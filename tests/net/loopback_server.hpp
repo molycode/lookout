@@ -40,15 +40,15 @@ private:
 
 	void Serve();
 
-	Tge::Net::CUdpSocket m_socket;
+	Tge::Net::CUdpSocket m_socket{};
 	uint16_t m_port{ 0 };
-	std::vector<SLoopbackExchange> m_exchanges;
-	std::vector<uint32_t> m_numMatches;
+	std::vector<SLoopbackExchange> m_exchanges{};
+	std::vector<uint32_t> m_numMatches{};
 	std::atomic<bool> m_isServing{ false };
 	std::atomic<uint32_t> m_numRequests{ 0 };
 	std::array<std::byte, MaxRequestSize> m_firstRequest{};
 	size_t m_firstRequestSize{ 0 };
 	std::atomic<bool> m_areRequestsAlike{ true };
-	std::thread m_thread;
+	std::thread m_thread{};
 };
 } // namespace Lkt::Fixtures

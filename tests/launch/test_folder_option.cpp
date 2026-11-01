@@ -53,8 +53,8 @@ protected:
 	}
 	// ~testing::Test
 
-	Lkt::Fixtures::CTempDir m_tempDir;
-	std::filesystem::path m_folder;
+	Lkt::Fixtures::CTempDir m_tempDir{};
+	std::filesystem::path m_folder{};
 };
 
 //////////////////////////////////////////////////////////////////////////

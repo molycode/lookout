@@ -6,7 +6,7 @@ namespace Lkt::Geo
 {
 struct SCountry final
 {
-	std::string_view code;
-	std::string_view name;
+	std::string_view code{};
+	std::string_view name{};
 };
 } // namespace Lkt::Geo

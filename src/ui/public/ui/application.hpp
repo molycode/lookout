@@ -56,10 +56,10 @@ private:
 
 	SDL_Window* m_pWindow{ nullptr };
 	SDL_Renderer* m_pRenderer{ nullptr };
-	Config::SWindowSettings m_window;
-	SAboutInfo m_about;
-	std::filesystem::path m_userDir;
-	std::filesystem::path m_cacheDir;
+	Config::SWindowSettings m_window{};
+	SAboutInfo m_about{};
+	std::filesystem::path m_userDir{};
+	std::filesystem::path m_cacheDir{};
 	float m_scale{ 1.0f };
 	uint32_t m_wakeEventType{ 0 };
 	bool m_hasVsync{ false };

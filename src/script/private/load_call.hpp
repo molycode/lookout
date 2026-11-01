@@ -13,8 +13,8 @@ namespace Lkt::Script
 // A function the script leaves out stays 0, which no registry reference is.
 struct SLoadCall final
 {
-	std::string_view source;
-	std::string chunkName;
+	std::string_view source{};
+	std::string chunkName{};
 	int masterStart{ 0 };
 	int masterReceive{ 0 };
 	int serverStart{ 0 };
@@ -23,9 +23,9 @@ struct SLoadCall final
 	int states{ 0 };
 	EMasterTransport masterTransport{ EMasterTransport::Udp };
 	int64_t api{ 0 };
-	std::optional<uint64_t> version;
-	std::vector<Query::SProtocolOption> options;
-	std::string unknownField;
-	std::string problem;
+	std::optional<uint64_t> version{};
+	std::vector<Query::SProtocolOption> options{};
+	std::string unknownField{};
+	std::string problem{};
 };
 } // namespace Lkt::Script

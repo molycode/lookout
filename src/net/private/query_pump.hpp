@@ -97,28 +97,28 @@ private:
 
 	std::atomic<bool> m_isNotified{ false };
 	bool m_hasNewEvents{ false };
-	std::function<void()> m_onEventsReady;
-	SQueryCatalog m_catalog;
+	std::function<void()> m_onEventsReady{};
+	SQueryCatalog m_catalog{};
 
-	Tge::Threading::CEventLoop m_loop;
-	Tge::Threading::STimerId m_timer;
-	Tge::Net::CUdpSocket m_socket;
-	Tge::Threading::CMpscQueue<SQueryEvent> m_events;
+	Tge::Threading::CEventLoop m_loop{};
+	Tge::Threading::STimerId m_timer{};
+	Tge::Net::CUdpSocket m_socket{};
+	Tge::Threading::CMpscQueue<SQueryEvent> m_events{};
 
-	std::vector<std::unique_ptr<SDnsLookup>> m_lookups;
-	CRequestScheduler m_scheduler;
-	CMasterTracker m_masters;
-	CMasterWarnings m_masterWarnings;
-	std::vector<SRefreshState> m_refreshes;
-	std::vector<Script::CProtocolScript> m_scripts;
-	std::unordered_map<uint64_t, SConversationRecord> m_serverConversations;
-	std::unordered_map<uint64_t, SMasterConversation> m_masterConversations;
+	std::vector<std::unique_ptr<SDnsLookup>> m_lookups{};
+	CRequestScheduler m_scheduler{};
+	CMasterTracker m_masters{};
+	CMasterWarnings m_masterWarnings{};
+	std::vector<SRefreshState> m_refreshes{};
+	std::vector<Script::CProtocolScript> m_scripts{};
+	std::unordered_map<uint64_t, SConversationRecord> m_serverConversations{};
+	std::unordered_map<uint64_t, SMasterConversation> m_masterConversations{};
 
-	std::vector<std::byte> m_buffer;
-	std::vector<SMasterQuery> m_masterQueries;
-	std::vector<SMasterOutcome> m_masterOutcomes;
-	std::vector<SServerRequest> m_requests;
-	std::vector<SEndedRequest> m_endedRequests;
-	std::vector<Query::SServerAddress> m_listed;
+	std::vector<std::byte> m_buffer{};
+	std::vector<SMasterQuery> m_masterQueries{};
+	std::vector<SMasterOutcome> m_masterOutcomes{};
+	std::vector<SServerRequest> m_requests{};
+	std::vector<SEndedRequest> m_endedRequests{};
+	std::vector<Query::SServerAddress> m_listed{};
 };
 } // namespace Lkt::Net

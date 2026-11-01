@@ -26,11 +26,11 @@ public:
 
 private:
 
-	std::string m_serverName;
-	std::string m_launcherId;
-	std::string m_password;
-	std::string m_error;
-	Query::SServerAddress m_joinAddress;
+	std::string m_serverName{};
+	std::string m_launcherId{};
+	std::string m_password{};
+	std::string m_error{};
+	Query::SServerAddress m_joinAddress{};
 	bool m_shouldOpen{ false };
 	bool m_shouldFocus{ false };
 };
