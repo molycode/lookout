@@ -1,4 +1,5 @@
 #include "game_json.hpp"
+#include "format_problem.hpp"
 #include "games/game_fields.hpp"
 #include "games/game_format.hpp"
 #include "games/read_game_fields.hpp"
@@ -7,10 +8,12 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cctype>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <limits>
 #include <map>
 #include <optional>
 #include <span>
@@ -38,10 +41,23 @@ constexpr size_t MaxPaletteSize{ 256 };
 constexpr std::array<std::string_view, 2> EncodingNames{ "ascii7", "utf8OrWindows1252" };
 constexpr std::array<std::string_view, 3> ColourCodeNames{ "alphanumeric", "printable", "rgb" };
 
+constexpr std::string_view LaunchPath{ "launch" };
+constexpr std::string_view LinuxPath{ "launch.linux" };
+constexpr std::string_view WindowsPath{ "launch.windows" };
+constexpr std::array<std::string_view, 3> InstallFields{ "installDir", "program", "requiredFiles" };
+constexpr std::array<std::string_view, 2> ProgramExtensions{ ".exe", ".com" };
+
+constexpr std::array<std::pair<std::string_view, Query::EInstallDirBase>, 4> InstallDirBases{ {
+	{ "{programFiles}", Query::EInstallDirBase::ProgramFiles },
+	{ "{programFilesX86}", Query::EInstallDirBase::ProgramFilesX86 },
+	{ "{localAppData}", Query::EInstallDirBase::LocalAppData },
+	{ "{systemDrive}", Query::EInstallDirBase::SystemDrive }
+} };
+
 using enum EGameFieldKind;
 
-constexpr std::array<SGameField, 41> Fields{ {
-	{ "", "format", "Format", Version, true, {}, "The version of this format: 1." },
+constexpr std::array<SGameField, 48> Fields{ {
+	{ "", "format", "Format", Version, true, {}, "The format of this file: 1, or 3 for launch facts per platform." },
 	{ "", "name", "Name", Text, true, {}, "The game's name in the game list." },
 	{ "", "protocol", "Protocol", Protocol, true, {}, "The protocol script that queries the game's masters and servers, by name." },
 	{ "", "protocolOptions", "Protocol options", ProtocolOptions, false, {},
@@ -88,11 +104,25 @@ constexpr std::array<SGameField, 41> Fields{ {
 	{ "join.password", "maxLength", "Longest", Number, true, {}, "The longest password, 1 to 1024 characters." },
 	{ "join.password", "refusedCharacters", "Refused characters", Characters, false, {}, "Optional: characters a password cannot hold." },
 	{ "join.password", "refusedSequences", "Refused sequences", TextList, false, {}, "Optional: character sequences a password cannot hold." },
-	{ "", "launch", "Installed game", Group, false, {}, "Optional: how to find the installed game, to join with it." },
-	{ "launch", "desktopFiles", "Desktop files", TextList, true, {}, "Desktop entries that start the game, by file name, in order of preference." },
-	{ "launch", "installDir", "Install folder", Text, true, {}, "The game's usual install folder, under the home folder." },
-	{ "launch", "program", "Program", Text, true, {}, "The program to run, inside the install folder." },
-	{ "launch", "requiredFiles", "Required files", TextList, true, {}, "Files inside the install folder that show the game is there." }
+	{ "", "launch", "Installed game", Group, false, {}, "Optional: how Lookout finds the installed game on Linux, on Windows or both, to join with it." },
+	{ "launch", "linux", "Linux", Group, false, {},
+		"Optional: the game on Linux, found through its desktop entries, its install folder under the home folder, or both." },
+	{ "launch.linux", "desktopFiles", "Desktop files", TextList, false, {}, "Optional: desktop entries that start the game, by file name, in order of preference." },
+	{ "launch.linux", "installDir", "Install folder", Text, false, {},
+		"Optional, with Program and Required files: the game's usual install folder, under the home folder." },
+	{ "launch.linux", "program", "Program", Text, false, {}, "Optional, with Install folder and Required files: the program to run, inside the install folder." },
+	{ "launch.linux", "requiredFiles", "Required files", TextList, false, {},
+		"Optional, with Install folder and Program: files inside the install folder that show the game is there." },
+	{ "launch", "windows", "Windows", Group, false, {},
+		"Optional: the game on Windows, found through Steam, GOG or its usual install folders; at least one of the three." },
+	{ "launch.windows", "steamAppId", "Steam app id", Number, false, {}, "Optional: the game's Steam app id, such as 38430; Lookout looks in every Steam library." },
+	{ "launch.windows", "gogId", "GOG game id", Number, false, {}, "Optional: the game's GOG id, as GOG's installers register it." },
+	{ "launch.windows", "installDirs", "Install folders", TextList, false, {},
+		"Optional: usual install folders, each {programFiles}, {programFilesX86}, {localAppData} or {systemDrive}, then / and the folder, such as "
+		"{programFilesX86}/Kingpin." },
+	{ "launch.windows", "program", "Program", Text, true, {}, "The program to run, an .exe or .com inside the install folder, with / between folders." },
+	{ "launch.windows", "requiredFiles", "Required files", TextList, true, {},
+		"Files inside the install folder that show the game is there, with / between folders." }
 } };
 
 constexpr std::array<std::pair<std::string_view, Query::ETextEncoding>, 2> Encodings{ {
@@ -181,14 +211,12 @@ std::string ToParent(std::string_view path)
 
 //////////////////////////////////////////////////////////////////////////
 // A field the file's format does not know is a typo or a later format's, so it is never skipped silently.
-void CheckFields(JsonValue const& object, std::string_view path, uint64_t format, SFieldProblem& problem)
+void CheckFieldsAs(JsonValue const& object, std::string_view path, std::string_view schemaParent, uint64_t format, SFieldProblem& problem)
 {
-	std::string const parent{ ToParent(path) };
-
 	for (auto const& item : object.items())
 	{
 		std::string_view const key{ item.key() };
-		bool const isField{ std::ranges::any_of(Fields, [&parent, key](SGameField const& field) { return field.parent == parent && field.name == key; }) };
+		bool const isField{ std::ranges::any_of(Fields, [schemaParent, key](SGameField const& field) { return field.parent == schemaParent && field.name == key; }) };
 
 		if (IsComment(key))
 		{
@@ -199,6 +227,12 @@ void CheckFields(JsonValue const& object, std::string_view path, uint64_t format
 			Fail(problem, JoinPath(path, key), std::format("is not a field of format {}", format));
 		}
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CheckFields(JsonValue const& object, std::string_view path, uint64_t format, SFieldProblem& problem)
+{
+	CheckFieldsAs(object, path, ToParent(path), format, problem);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -361,13 +395,13 @@ std::optional<uint64_t> ReadFormat(JsonValue const& root, SFieldProblem& problem
 	{
 		Fail(problem, "format", "is missing");
 	}
-	else if (it->is_number_unsigned() && it->get<uint64_t>() > GameFormat)
+	else if (!it->is_number_unsigned())
 	{
-		Fail(problem, "format", std::format("is {}, which needs a newer Lookout", it->get<uint64_t>()));
+		Fail(problem, "format", std::format("must be {} or {}", FirstGameFormat, GameFormat));
 	}
-	else if (!it->is_number_unsigned() || it->get<uint64_t>() != GameFormat)
+	else if (std::optional<std::string> const reason{ DescribeUnreadableFormat(it->get<uint64_t>()) }; reason.has_value())
 	{
-		Fail(problem, "format", std::format("must be {}", GameFormat));
+		Fail(problem, "format", *reason);
 	}
 	else
 	{
@@ -441,18 +475,195 @@ void ReadForeignServers(JsonValue const& root, std::vector<Query::SKeyMatch>& ma
 }
 
 //////////////////////////////////////////////////////////////////////////
-// All or nothing: an install folder without its program would be probed and rejected on every start.
+// Inside the install folder: no drive, root, backslash, or "." and ".." that would leave it.
+bool IsInsidePath(std::string_view path)
+{
+	bool isInside{ !path.empty() && !path.starts_with('/') && !path.contains('\\') && !path.contains(':') };
+
+	for (size_t start{ 0 }; isInside && start <= path.size(); )
+	{
+		size_t const end{ std::min(path.find('/', start), path.size()) };
+		std::string_view const segment{ path.substr(start, end - start) };
+
+		isInside = !segment.empty() && segment != "." && segment != "..";
+		start = end + 1;
+	}
+
+	return isInside;
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool HasProgramExtension(std::string_view program)
+{
+	return std::ranges::any_of(ProgramExtensions, [program](std::string_view extension)
+	{
+		return program.size() > extension.size() && std::ranges::equal(program.substr(program.size() - extension.size()), extension, [](char lhs, char rhs)
+		{
+			return std::tolower(static_cast<unsigned char>(lhs)) == rhs;
+		});
+	});
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A whole number from 1 to max, or nothing with the problem set.
+std::optional<uint64_t> ReadId(JsonValue const& object, std::string_view key, uint64_t max, std::string_view range, SFieldProblem& problem)
+{
+	JsonValue::const_iterator const it{ object.find(key) };
+	std::optional<uint64_t> id{};
+
+	if (it != object.cend() && it->is_number_unsigned() && it->get<uint64_t>() >= 1 && it->get<uint64_t>() <= max)
+	{
+		id = it->get<uint64_t>();
+	}
+	else if (it != object.cend())
+	{
+		Fail(problem, JoinPath(WindowsPath, key), std::format("must be a whole number {}", range));
+	}
+
+	return id;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadInstallDirs(JsonValue const& json, std::vector<Query::SInstallDirCandidate>& installDirs, SFieldProblem& problem)
+{
+	std::string const path{ JoinPath(WindowsPath, "installDirs") };
+	std::vector<std::string> entries{};
+
+	ReadStrings(json, path, entries, problem);
+
+	for (size_t index{ 0 }; index < entries.size(); ++index)
+	{
+		std::string_view const entry{ entries[index] };
+		auto const base{ std::ranges::find_if(InstallDirBases, [entry](std::pair<std::string_view, Query::EInstallDirBase> const& candidate)
+		{
+			return entry.starts_with(candidate.first) && entry.substr(candidate.first.size()).starts_with('/');
+		}) };
+		std::string_view const folder{ (base != InstallDirBases.end()) ? entry.substr(base->first.size() + 1) : std::string_view{} };
+
+		if (base == InstallDirBases.end())
+		{
+			Fail(problem, std::format("{}[{}]", path, index), "must start with {programFiles}, {programFilesX86}, {localAppData} or {systemDrive}, then /");
+		}
+		else if (!IsInsidePath(folder))
+		{
+			Fail(problem, std::format("{}[{}]", path, index), "must name a folder after its placeholder, with / between folders and no . or ..");
+		}
+		else
+		{
+			installDirs.emplace_back(base->second, std::string{ folder });
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Desktop entries may stand alone; an install folder needs its program and the files that show the game is there.
+void ReadLinuxLaunch(JsonValue const& object, Query::SLinuxLaunchHints& facts, uint64_t format, SFieldProblem& problem)
+{
+	JsonValue::const_iterator const desktopFiles{ object.find("desktopFiles") };
+	bool const hasInstallFolder{ std::ranges::any_of(InstallFields, [&object](std::string_view key) { return object.contains(key); }) };
+
+	CheckFields(object, LinuxPath, format, problem);
+
+	if (desktopFiles != object.cend())
+	{
+		ReadStrings(*desktopFiles, JoinPath(LinuxPath, "desktopFiles"), facts.desktopFiles, problem);
+	}
+
+	for (std::string_view const key : InstallFields)
+	{
+		if (hasInstallFolder && !object.contains(key))
+		{
+			Fail(problem, JoinPath(LinuxPath, key), "is missing; installDir, program and requiredFiles go together");
+		}
+	}
+
+	if (hasInstallFolder)
+	{
+		ReadRequiredString(object, LinuxPath, "installDir", facts.installDir, problem);
+		ReadRequiredString(object, LinuxPath, "program", facts.program, problem);
+		ReadRequiredStrings(object, LinuxPath, "requiredFiles", facts.requiredFiles, problem);
+	}
+	else if (desktopFiles == object.cend())
+	{
+		Fail(problem, LinuxPath, "must hold desktopFiles, or installDir with program and requiredFiles");
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadWindowsLaunch(JsonValue const& object, Query::SWindowsLaunchHints& facts, uint64_t format, SFieldProblem& problem)
+{
+	JsonValue::const_iterator const installDirs{ object.find("installDirs") };
+
+	CheckFields(object, WindowsPath, format, problem);
+
+	std::optional<uint64_t> const steamAppId{ ReadId(object, "steamAppId", std::numeric_limits<uint32_t>::max(), "from 1 to 4294967295", problem) };
+	std::optional<uint64_t> const gogId{ ReadId(object, "gogId", std::numeric_limits<uint64_t>::max(), "from 1", problem) };
+
+	facts.steamAppId = static_cast<uint32_t>(steamAppId.value_or(0));
+	facts.gogId = gogId.value_or(0);
+
+	if (installDirs != object.cend())
+	{
+		ReadInstallDirs(*installDirs, facts.installDirs, problem);
+	}
+
+	ReadRequiredString(object, WindowsPath, "program", facts.program, problem);
+	ReadRequiredStrings(object, WindowsPath, "requiredFiles", facts.requiredFiles, problem);
+
+	if (!facts.program.empty() && (!IsInsidePath(facts.program) || !HasProgramExtension(facts.program)))
+	{
+		Fail(problem, JoinPath(WindowsPath, "program"), "must be an .exe or .com inside the install folder, with / between folders");
+	}
+
+	for (size_t index{ 0 }; index < facts.requiredFiles.size(); ++index)
+	{
+		if (!IsInsidePath(facts.requiredFiles[index]))
+		{
+			Fail(problem, std::format("{}.requiredFiles[{}]", WindowsPath, index), "must be a path inside the install folder, with / between folders");
+		}
+	}
+
+	if (!steamAppId.has_value() && !gogId.has_value() && facts.installDirs.empty())
+	{
+		Fail(problem, WindowsPath, "must name steamAppId, gogId or installDirs");
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Format 1 holds Linux's facts in launch itself, all four or none; format 3 gives each platform an object of its own.
 void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, uint64_t format, SFieldProblem& problem)
 {
-	JsonValue const* const pLaunch{ FindObject(root, {}, "launch", false, problem) };
+	JsonValue const* const pLaunch{ FindObject(root, {}, LaunchPath, false, problem) };
 
-	if (pLaunch != nullptr)
+	if (pLaunch != nullptr && format == FirstGameFormat)
 	{
-		CheckFields(*pLaunch, "launch", format, problem);
-		ReadRequiredStrings(*pLaunch, "launch", "desktopFiles", launch.onLinux.desktopFiles, problem);
-		ReadRequiredString(*pLaunch, "launch", "installDir", launch.onLinux.installDir, problem);
-		ReadRequiredString(*pLaunch, "launch", "program", launch.onLinux.program, problem);
-		ReadRequiredStrings(*pLaunch, "launch", "requiredFiles", launch.onLinux.requiredFiles, problem);
+		CheckFieldsAs(*pLaunch, LaunchPath, LinuxPath, format, problem);
+		ReadRequiredStrings(*pLaunch, LaunchPath, "desktopFiles", launch.onLinux.desktopFiles, problem);
+		ReadRequiredString(*pLaunch, LaunchPath, "installDir", launch.onLinux.installDir, problem);
+		ReadRequiredString(*pLaunch, LaunchPath, "program", launch.onLinux.program, problem);
+		ReadRequiredStrings(*pLaunch, LaunchPath, "requiredFiles", launch.onLinux.requiredFiles, problem);
+	}
+	else if (pLaunch != nullptr)
+	{
+		CheckFields(*pLaunch, LaunchPath, format, problem);
+
+		JsonValue const* const pLinux{ FindObject(*pLaunch, LaunchPath, "linux", false, problem) };
+		JsonValue const* const pWindows{ FindObject(*pLaunch, LaunchPath, "windows", false, problem) };
+
+		if (pLinux != nullptr)
+		{
+			ReadLinuxLaunch(*pLinux, launch.onLinux, format, problem);
+		}
+
+		if (pWindows != nullptr)
+		{
+			ReadWindowsLaunch(*pWindows, launch.onWindows, format, problem);
+		}
+
+		if (!pLaunch->contains("linux") && !pLaunch->contains("windows"))
+		{
+			Fail(problem, LaunchPath, "must hold linux, windows or both");
+		}
 	}
 }
 

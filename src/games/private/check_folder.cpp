@@ -1,8 +1,11 @@
 #include "games/check_folder.hpp"
+#include "launch_layout.hpp"
 #include "layer_name.hpp"
 #include "user_file_size.hpp"
 #include "games/game_files.hpp"
+#include "games/game_format.hpp"
 #include "games/load_games.hpp"
+#include "json/json.hpp"
 #include <tge/io/read_whole_file.hpp>
 #include <algorithm>
 #include <array>
@@ -82,6 +85,22 @@ void CheckIcon(std::filesystem::path const& path, std::string_view shownAs, std:
 }
 
 //////////////////////////////////////////////////////////////////////////
+// A higher format than the game needs shuts out every older Lookout for nothing.
+void CheckFormat(std::filesystem::path const& path, std::string_view shownAs, std::vector<Query::SGameProblem>& problems)
+{
+	constexpr bool AllowExceptions{ false };
+	constexpr bool IgnoreComments{ false };
+	std::expected<std::string, std::error_code> const text{ Tge::IO::ReadWholeFile(path, MaxUserFileSize) };
+	nlohmann::ordered_json const game = text.has_value() ? nlohmann::ordered_json::parse(*text, nullptr, AllowExceptions, IgnoreComments) : nlohmann::ordered_json{};
+	nlohmann::ordered_json::const_iterator const format{ game.is_object() ? game.find("format") : game.cend() };
+
+	if (format != game.cend() && format->is_number_unsigned() && format->get<uint64_t>() == GameFormat && !NeedsPlatformGroups(game))
+	{
+		problems.emplace_back(Query::SGameProblem{ std::format("{}: format: is {}, but nothing in it needs more than {}", shownAs, GameFormat, FirstGameFormat), {} });
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 void CheckGameFiles(std::filesystem::path const& gameFolder, std::string_view shownAs, std::vector<Query::SGameProblem>& problems)
 {
 	std::error_code error{};
@@ -111,6 +130,8 @@ void CheckGameFiles(std::filesystem::path const& gameFolder, std::string_view sh
 	{
 		CheckIcon(gameFolder / "icon.png", std::format("{}/icon.png", shownAs), problems);
 	}
+
+	CheckFormat(gameFolder / "game.json", std::format("{}/game.json", shownAs), problems);
 }
 } // namespace
 

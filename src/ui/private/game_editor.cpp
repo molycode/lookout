@@ -391,7 +391,9 @@ void CGameEditor::Check()
 		m_scriptSignature = signature;
 	}
 
-	m_problem = fields.has_value() ? m_scriptProblem : std::optional<Games::SFieldProblem>{ fields.error() };
+	// A game the form writes in format 1 names its launch facts where format 1 places them.
+	m_problem = fields.has_value() ? m_scriptProblem
+		: std::optional<Games::SFieldProblem>{ Games::SFieldProblem{ Games::ToFormPath(fields.error().path), fields.error().reason } };
 	m_saveError.clear();
 	MakeProbeRequests(fields.has_value() ? &*fields : nullptr, protocols);
 }

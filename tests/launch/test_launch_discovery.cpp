@@ -300,6 +300,34 @@ TEST_F(CLaunchDiscoveryTest, MissingHomeIsReported)
 
 	EXPECT_TRUE(Find().empty());
 }
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLaunchDiscoveryTest, DesktopFilesAloneFindTheirEntry)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 0 };
+
+	WriteEntry(m_environment.dataHome, ValidKeys("Kingpin"));
+	m_hints.onLinux = Query::SLinuxLaunchHints{ { std::string{ DesktopId } }, {}, {}, {} };
+
+	std::vector<SLaunchOption> const options{ Find() };
+
+	ASSERT_EQ(options.size(), 1u);
+	EXPECT_EQ(options.front().id, DesktopId);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLaunchDiscoveryTest, InstallFolderWithoutDesktopFilesIsFound)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 0 };
+
+	WriteInstallFolder();
+	m_hints.onLinux.desktopFiles.clear();
+
+	std::vector<SLaunchOption> const options{ Find() };
+
+	ASSERT_EQ(options.size(), 1u);
+	EXPECT_EQ(options.front().id, InstallDirLauncherId);
+}
 #endif // defined(TGE_PLATFORM_LINUX)
 } // namespace
 } // namespace Lkt::Launch

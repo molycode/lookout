@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <expected>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Lkt::Games
@@ -35,6 +36,20 @@ JsonValue MakeMinimalGame()
 		"join": { "arguments": [ "+connect", "{address}" ], "passwordArguments": [ "+password", "{password}", "+connect", "{address}" ],
 			"password": { "maxLength": 63 } }
 	})json");
+}
+
+constexpr std::string_view FormatOneLaunch{ R"json({ "desktopFiles": [ "kingpin-native.desktop" ], "installDir": "Games/Kingpin",
+	"program": "run-game.sh", "requiredFiles": [ "kingpin.x86", "main/pak0.pak" ] })json" };
+
+//////////////////////////////////////////////////////////////////////////
+JsonValue MakeLaunchGame(std::string_view launch)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["format"] = 3;
+	game["launch"] = JsonValue::parse(launch);
+
+	return game;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -144,9 +159,19 @@ TEST(GameJson, NewerFormatAsksForANewerLookout)
 {
 	JsonValue game = MakeMinimalGame();
 
+	game["format"] = 4;
+
+	EXPECT_EQ(ReadProblem(game), "format: is 4, which needs a newer Lookout");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, SpentFormatTwoIsRefused)
+{
+	JsonValue game = MakeMinimalGame();
+
 	game["format"] = 2;
 
-	EXPECT_EQ(ReadProblem(game), "format: is 2, which needs a newer Lookout");
+	EXPECT_EQ(ReadProblem(game), "format: is 2, which only Lookout 1.4 read");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -156,7 +181,7 @@ TEST(GameJson, FormatZeroIsRejected)
 
 	game["format"] = 0;
 
-	EXPECT_EQ(ReadProblem(game), "format: must be 1");
+	EXPECT_EQ(ReadProblem(game), "format: must be 1 or 3");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -265,6 +290,200 @@ TEST(GameJson, UnknownFieldIsRejected)
 	game["keys"]["maxplayers"] = "sv_maxclients";
 
 	EXPECT_EQ(ReadProblem(game), "keys.maxplayers: is not a field of format 1");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, UnknownFieldNamesTheFilesFormat)
+{
+	JsonValue game = MakeLaunchGame(R"json({ "windows": { "steamAppId": 38430, "program": "kingpin.exe", "requiredFiles": [] } })json");
+
+	game["keys"]["maxplayers"] = "sv_maxclients";
+
+	EXPECT_EQ(ReadProblem(game), "keys.maxplayers: is not a field of format 3");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatOneLaunchIsTheLinuxFacts)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["launch"] = JsonValue::parse(FormatOneLaunch);
+
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->launch.onLinux.desktopFiles, std::vector<std::string>{ "kingpin-native.desktop" });
+	EXPECT_EQ(read->launch.onLinux.installDir, "Games/Kingpin");
+	EXPECT_EQ(read->launch.onLinux.program, "run-game.sh");
+	EXPECT_TRUE(read->launch.onWindows.program.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatOneLaunchTakesNoWindowsFacts)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["launch"] = JsonValue::parse(FormatOneLaunch);
+	game["launch"]["windows"] = JsonValue::parse(R"json({ "steamAppId": 38430, "program": "kingpin.exe", "requiredFiles": [] })json");
+
+	EXPECT_EQ(ReadProblem(game), "launch.windows: is not a field of format 1");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatOneLaunchTakesNoLinuxGroup)
+{
+	JsonValue game = MakeMinimalGame();
+
+	game["launch"] = JsonValue::parse(R"json({ "linux": { "desktopFiles": [ "kingpin-native.desktop" ] } })json");
+
+	EXPECT_EQ(ReadProblem(game), "launch.linux: is not a field of format 1");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatThreeReadsLinuxAndWindowsFacts)
+{
+	JsonValue const game = MakeLaunchGame(R"json({
+		"linux": { "desktopFiles": [ "kingpin-native.desktop" ], "installDir": "Games/Kingpin", "program": "run-game.sh", "requiredFiles": [ "kingpin.x86" ] },
+		"windows": { "steamAppId": 38430, "gogId": 1207658912, "installDirs": [ "{programFilesX86}/Xatrix/Kingpin" ], "program": "kingpin.exe",
+			"requiredFiles": [ "main/pak0.pak" ] }
+	})json");
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->launch.onLinux.program, "run-game.sh");
+	EXPECT_EQ(read->launch.onWindows.steamAppId, 38430u);
+	EXPECT_EQ(read->launch.onWindows.gogId, 1207658912u);
+	EXPECT_EQ(read->launch.onWindows.installDirs,
+		(std::vector<Query::SInstallDirCandidate>{ Query::SInstallDirCandidate{ Query::EInstallDirBase::ProgramFilesX86, "Xatrix/Kingpin" } }));
+	EXPECT_EQ(read->launch.onWindows.program, "kingpin.exe");
+	EXPECT_EQ(read->launch.onWindows.requiredFiles, std::vector<std::string>{ "main/pak0.pak" });
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatThreeLaunchTakesNoLinuxFieldsOfItsOwn)
+{
+	JsonValue game = MakeLaunchGame(FormatOneLaunch);
+
+	EXPECT_EQ(ReadProblem(game), "launch.desktopFiles: is not a field of format 3");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatThreeLaunchNeedsAPlatform)
+{
+	EXPECT_EQ(ReadProblem(MakeLaunchGame("{}")), "launch: must hold linux, windows or both");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, DesktopFilesMayStandAlone)
+{
+	JsonValue const game = MakeLaunchGame(R"json({ "linux": { "desktopFiles": [ "net.warsow.Warsow.desktop" ] } })json");
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->launch.onLinux.desktopFiles, std::vector<std::string>{ "net.warsow.Warsow.desktop" });
+	EXPECT_TRUE(read->launch.onLinux.installDir.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, InstallFolderMayStandAlone)
+{
+	JsonValue const game = MakeLaunchGame(R"json({ "linux": { "installDir": "Games/Kingpin", "program": "run-game.sh", "requiredFiles": [] } })json");
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_TRUE(read->launch.onLinux.desktopFiles.empty());
+	EXPECT_EQ(read->launch.onLinux.installDir, "Games/Kingpin");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, PartialInstallFolderIsRejected)
+{
+	JsonValue const game = MakeLaunchGame(R"json({ "linux": { "installDir": "Games/Kingpin", "requiredFiles": [] } })json");
+
+	EXPECT_EQ(ReadProblem(game), "launch.linux.program: is missing; installDir, program and requiredFiles go together");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, LinuxGroupNeedsDesktopFilesOrAnInstallFolder)
+{
+	EXPECT_EQ(ReadProblem(MakeLaunchGame(R"json({ "linux": {} })json")), "launch.linux: must hold desktopFiles, or installDir with program and requiredFiles");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, WindowsFactsNeedASource)
+{
+	JsonValue const game = MakeLaunchGame(R"json({ "windows": { "installDirs": [], "program": "kingpin.exe", "requiredFiles": [] } })json");
+
+	EXPECT_EQ(ReadProblem(game), "launch.windows: must name steamAppId, gogId or installDirs");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, WindowsProgramMustBeAnExeOrCom)
+{
+	JsonValue const game = MakeLaunchGame(R"json({ "windows": { "steamAppId": 38430, "program": "kingpin.bat", "requiredFiles": [] } })json");
+
+	EXPECT_EQ(ReadProblem(game), "launch.windows.program: must be an .exe or .com inside the install folder, with / between folders");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, WindowsProgramExtensionIgnoresCase)
+{
+	JsonValue const game = MakeLaunchGame(R"json({ "windows": { "steamAppId": 38430, "program": "System/KINGPIN.EXE", "requiredFiles": [] } })json");
+
+	EXPECT_EQ(ReadProblem(game), "");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, WindowsPathsMustStayInsideTheFolder)
+{
+	for (std::string_view const path : { "../kingpin.x86", "/main/pak0.pak", "C:/main/pak0.pak", "main\\pak0.pak", "main//pak0.pak", "main/./pak0.pak", "main/" })
+	{
+		JsonValue game = MakeLaunchGame(R"json({ "windows": { "steamAppId": 38430, "program": "kingpin.exe", "requiredFiles": [] } })json");
+
+		game["launch"]["windows"]["requiredFiles"].emplace_back(path);
+
+		EXPECT_EQ(ReadProblem(game), "launch.windows.requiredFiles[0]: must be a path inside the install folder, with / between folders") << path;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, InstallDirNeedsAKnownPlaceholder)
+{
+	for (std::string_view const folder : { "Kingpin", "{home}/Kingpin", "{programFiles}Kingpin", "C:/Kingpin" })
+	{
+		JsonValue game = MakeLaunchGame(R"json({ "windows": { "installDirs": [], "program": "kingpin.exe", "requiredFiles": [] } })json");
+
+		game["launch"]["windows"]["installDirs"].emplace_back(folder);
+
+		EXPECT_EQ(ReadProblem(game), "launch.windows.installDirs[0]: must start with {programFiles}, {programFilesX86}, {localAppData} or {systemDrive}, then /")
+			<< folder;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, InstallDirStaysUnderItsPlaceholder)
+{
+	for (std::string_view const folder : { "{systemDrive}/", "{systemDrive}/../Kingpin", "{localAppData}/Programs//Kingpin" })
+	{
+		JsonValue game = MakeLaunchGame(R"json({ "windows": { "installDirs": [], "program": "kingpin.exe", "requiredFiles": [] } })json");
+
+		game["launch"]["windows"]["installDirs"].emplace_back(folder);
+
+		EXPECT_EQ(ReadProblem(game), "launch.windows.installDirs[0]: must name a folder after its placeholder, with / between folders and no . or ..") << folder;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, SteamAppIdMustBeAWholeNumberFromOne)
+{
+	for (uint64_t const id : { uint64_t{ 0 }, uint64_t{ 4294967296 } })
+	{
+		JsonValue game = MakeLaunchGame(R"json({ "windows": { "program": "kingpin.exe", "requiredFiles": [] } })json");
+
+		game["launch"]["windows"]["steamAppId"] = id;
+
+		EXPECT_EQ(ReadProblem(game), "launch.windows.steamAppId: must be a whole number from 1 to 4294967295") << id;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////

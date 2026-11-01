@@ -9,6 +9,7 @@ namespace Lkt::Games
 {
 std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text);
 std::string WriteGameForm(SGameFormNode const& form);
+std::string ToFormPath(std::string_view path);
 SGameFormNode MakeGameForm();
 SGameFormNode MakeGameFormItem(std::string_view listPath);
 SGameFormNode const* FindFormField(SGameFormNode const& node, std::string_view name);

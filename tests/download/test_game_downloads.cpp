@@ -409,12 +409,25 @@ TEST_F(CGameDownloadsTest, NewerFormatNeedsANewerLookout)
 {
 	JsonValue index = MakeIndex();
 
-	index["games"]["kingpin"]["format"] = 2;
+	index["games"]["kingpin"]["format"] = 4;
 	Serve(index);
 	Start();
 	ReadIndex();
 
 	EXPECT_EQ(GetState("kingpin"), EOfferState::NeedsNewerLookout);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, FormatThreeIsOffered)
+{
+	JsonValue index = MakeIndex();
+
+	index["games"]["kingpin"]["format"] = 3;
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	EXPECT_EQ(GetState("kingpin"), EOfferState::NotInstalled);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -506,7 +519,7 @@ TEST_F(CGameDownloadsTest, DownloadedGameThatNeedsANewerLookoutIsStillOnDisk)
 	Start();
 	ReadIndex();
 	Download("kingpin");
-	index["games"]["kingpin"]["format"] = 2;
+	index["games"]["kingpin"]["format"] = 4;
 	Serve(index);
 	ReadIndex();
 

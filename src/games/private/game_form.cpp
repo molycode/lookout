@@ -1,5 +1,7 @@
 #include "games/game_form.hpp"
+#include "format_problem.hpp"
 #include "json_layout.hpp"
+#include "launch_layout.hpp"
 #include "games/game_fields.hpp"
 #include "games/game_format.hpp"
 #include "json/json.hpp"
@@ -26,6 +28,11 @@ constexpr std::string_view PaletteField{ "palette" };
 constexpr std::string_view HexCodesField{ "hexCodes" };
 constexpr std::string_view CodesField{ "codes" };
 constexpr std::string_view RgbCodes{ "rgb" };
+constexpr std::string_view LaunchField{ "launch" };
+constexpr std::string_view LinuxSchema{ "launch.linux" };
+constexpr std::string_view InstallDirField{ "installDir" };
+constexpr std::string_view ProgramField{ "program" };
+constexpr std::string_view RequiredFilesField{ "requiredFiles" };
 constexpr int HexBase{ 16 };
 constexpr size_t HexDigits{ 4 };
 constexpr unsigned char FirstPrintable{ 0x20 };
@@ -221,7 +228,7 @@ void ReadNotes(JsonValue const& object, std::string_view path, SGameFormNode& no
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, SGameFormNode& node, std::string& problem);
+void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, uint64_t format, SGameFormNode& node, std::string& problem);
 
 //////////////////////////////////////////////////////////////////////////
 void ReadOptions(JsonValue const& object, std::string_view path, SGameFormNode& node, std::string& problem)
@@ -242,7 +249,8 @@ void ReadOptions(JsonValue const& object, std::string_view path, SGameFormNode& 
 }
 
 //////////////////////////////////////////////////////////////////////////
-SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::string_view path, std::string& problem)
+// A missing or zero format is tolerated: the form writes its own.
+SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::string_view path, uint64_t format, std::string& problem)
 {
 	SGameFormNode node{};
 
@@ -252,9 +260,14 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 	switch (field.kind)
 	{
 		case EGameFieldKind::Version:
-			if (value.is_number_unsigned() && value.get<uint64_t>() > GameFormat)
+			if (value.is_number_unsigned() && value.get<uint64_t>() != 0)
 			{
-				Fail(problem, path, std::format("is {}, which needs a newer Lookout", value.get<uint64_t>()));
+				std::optional<std::string> const reason{ DescribeUnreadableFormat(value.get<uint64_t>()) };
+
+				if (reason.has_value())
+				{
+					Fail(problem, path, *reason);
+				}
 			}
 
 			node.text = ToText(value);
@@ -285,7 +298,7 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 		case EGameFieldKind::Group:
 			if (value.is_object())
 			{
-				ReadFields(value, ToSchemaPath(field), path, node, problem);
+				ReadFields(value, ToSchemaPath(field), path, format, node, problem);
 			}
 			else
 			{
@@ -307,7 +320,7 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 
 					if (entry.is_object())
 					{
-						ReadFields(entry, ToSchemaPath(field), entryPath, item, problem);
+						ReadFields(entry, ToSchemaPath(field), entryPath, format, item, problem);
 					}
 					else
 					{
@@ -341,7 +354,7 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 
 //////////////////////////////////////////////////////////////////////////
 // In the file's order, so a description written back unchanged makes no patch; the fields it lacks follow.
-void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, SGameFormNode& node, std::string& problem)
+void ReadFields(JsonValue const& object, std::string_view schemaParent, std::string_view path, uint64_t format, SGameFormNode& node, std::string& problem)
 {
 	for (auto const& item : object.items())
 	{
@@ -350,11 +363,11 @@ void ReadFields(JsonValue const& object, std::string_view schemaParent, std::str
 
 		if (pField != nullptr)
 		{
-			node.children.emplace_back(ReadField(item.value(), *pField, JoinPath(path, key), problem));
+			node.children.emplace_back(ReadField(item.value(), *pField, JoinPath(path, key), format, problem));
 		}
 		else if (!key.starts_with(CommentPrefix))
 		{
-			Fail(problem, JoinPath(path, key), "is not a field of format 1");
+			Fail(problem, JoinPath(path, key), std::format("is not a field of format {}", format));
 		}
 	}
 
@@ -402,6 +415,18 @@ bool IsUnusedByRgbCodes(SGameField const& field, SGameFormNode const& siblings)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Emptied, the required files would vanish and leave the install folder without them, which the reader refuses.
+bool IsNeededByTheInstallFolder(SGameField const& field, SGameFormNode const& siblings)
+{
+	SGameFormNode const* const pInstallDir{ FindFormField(siblings, InstallDirField) };
+	SGameFormNode const* const pProgram{ FindFormField(siblings, ProgramField) };
+
+	return field.parent == LinuxSchema && field.name == RequiredFilesField
+		&& ((pInstallDir != nullptr && HasText(*pInstallDir)) || (pProgram != nullptr && HasText(*pProgram)));
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The format is only held in place here: the whole form decides which one it needs.
 std::optional<JsonValue> WriteField(SGameFormNode const& node, SGameField const& field, SGameFormNode const& siblings)
 {
 	std::optional<JsonValue> value{};
@@ -435,7 +460,7 @@ std::optional<JsonValue> WriteField(SGameFormNode const& node, SGameField const&
 
 			break;
 		case EGameFieldKind::TextList:
-			if ((field.isRequired || node.isPresent || !node.texts.empty()) && !IsUnusedByRgbCodes(field, siblings))
+			if ((field.isRequired || node.isPresent || !node.texts.empty() || IsNeededByTheInstallFolder(field, siblings)) && !IsUnusedByRgbCodes(field, siblings))
 			{
 				JsonValue list = JsonValue::array();
 
@@ -523,9 +548,10 @@ JsonValue WriteFields(SGameFormNode const& node, std::string_view schemaParent)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
+// Format 1's launch facts open in the Linux group, as the form holds every format in format 3's layout.
 std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text)
 {
-	JsonValue const root = JsonValue::parse(text, nullptr, AllowExceptions, IgnoreComments);
+	JsonValue root = JsonValue::parse(text, nullptr, AllowExceptions, IgnoreComments);
 	SGameFormNode form{};
 	std::string problem{};
 
@@ -541,7 +567,20 @@ std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text)
 	}
 	else
 	{
-		ReadFields(root, {}, {}, form, problem);
+		JsonValue::const_iterator const it{ root.find("format") };
+		bool const isReadable{ it != root.cend() && it->is_number_unsigned() && IsReadableGameFormat(it->get<uint64_t>()) };
+		uint64_t const format{ isReadable ? it->get<uint64_t>() : GameFormat };
+		bool const isFlat{ !HasPlatformGroups(root) };
+		std::string const nestedPrefix{ std::format("{}.", LinuxSchema) };
+
+		NestLinuxFacts(root);
+		ReadFields(root, {}, {}, format, form, problem);
+
+		// The text is fixed in an editor, so a problem names the field where the file keeps it.
+		if (isFlat && problem.starts_with(nestedPrefix))
+		{
+			problem.replace(0, nestedPrefix.size(), std::format("{}.", LaunchField));
+		}
 	}
 
 	std::expected<SGameFormNode, std::string> result{ std::move(form) };
@@ -555,9 +594,40 @@ std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// The lowest format that holds the game, so a description older Lookouts read stays readable to them.
 std::string WriteGameForm(SGameFormNode const& form)
 {
-	return WriteJsonLayout(WriteFields(form, {}));
+	JsonValue game = WriteFields(form, {});
+	bool const isFirstFormat{ !NeedsPlatformGroups(game) };
+
+	if (isFirstFormat)
+	{
+		FlattenLinuxFacts(game);
+	}
+
+	game["format"] = isFirstFormat ? FirstGameFormat : GameFormat;
+
+	return WriteJsonLayout(game);
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::string ToFormPath(std::string_view path)
+{
+	std::string formPath{ path };
+	std::string const launchPrefix{ std::format("{}.", LaunchField) };
+
+	if (path.starts_with(launchPrefix))
+	{
+		std::string_view const rest{ path.substr(launchPrefix.size()) };
+		std::string_view const name{ rest.substr(0, rest.find_first_of(".[")) };
+
+		if (FindField(LinuxSchema, name) != nullptr)
+		{
+			formPath = std::format("{}.{}", LinuxSchema, rest);
+		}
+	}
+
+	return formPath;
 }
 
 //////////////////////////////////////////////////////////////////////////

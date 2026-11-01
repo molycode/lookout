@@ -1,10 +1,12 @@
 #include "games/check_folder.hpp"
+#include "json/json.hpp"
 #include "temp_dir.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -85,6 +87,34 @@ TEST(CheckFolder, LookoutGamesPassesIt)
 
 	EXPECT_TRUE(content.problems.empty()) << content.problems.front().text;
 	EXPECT_FALSE(content.games.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CCheckFolderTest, FormatHigherThanTheGameNeedsIsAProblem)
+{
+	std::ifstream file{ m_dir / "games" / "mygame" / "game.json", std::ios::binary };
+	nlohmann::ordered_json game = nlohmann::ordered_json::parse(std::string{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} });
+
+	file.close();
+	game["format"] = 3;
+	WriteFile("games/mygame/game.json", game.dump());
+
+	EXPECT_TRUE(CheckForOneProblem().ends_with("/games/mygame/game.json: format: is 3, but nothing in it needs more than 1"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Format 1 holds an install folder with an empty list of desktop files, so format 3 is not needed for one.
+TEST_F(CCheckFolderTest, InstallFolderAloneNeedsNoFormatThree)
+{
+	std::ifstream file{ m_dir / "games" / "mygame" / "game.json", std::ios::binary };
+	nlohmann::ordered_json game = nlohmann::ordered_json::parse(std::string{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} });
+
+	file.close();
+	game["format"] = 3;
+	game["launch"] = nlohmann::ordered_json::parse(R"json({ "linux": { "installDir": "Games/Quake2", "program": "quake2", "requiredFiles": [] } })json");
+	WriteFile("games/mygame/game.json", game.dump());
+
+	EXPECT_TRUE(CheckForOneProblem().ends_with("/games/mygame/game.json: format: is 3, but nothing in it needs more than 1"));
 }
 
 //////////////////////////////////////////////////////////////////////////

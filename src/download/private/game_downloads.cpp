@@ -40,7 +40,7 @@ constexpr size_t MaxSwapTries{ 20 };
 //////////////////////////////////////////////////////////////////////////
 bool IsSupported(SIndexGame const& game, SIndexProtocol const& protocol)
 {
-	return game.format <= Games::GameFormat && protocol.api <= Script::ScriptApi;
+	return Games::IsReadableGameFormat(game.format) && protocol.api <= Script::ScriptApi;
 }
 
 //////////////////////////////////////////////////////////////////////////

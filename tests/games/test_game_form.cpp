@@ -239,7 +239,158 @@ TEST(GameForm, NoteThatIsNotTextCannotBeShown)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, NewerFormatCannotBeShown)
 {
-	EXPECT_EQ(ProblemOf(R"json({ "format": 2, "name": "Mine" })json"), "format: is 2, which needs a newer Lookout");
+	EXPECT_EQ(ProblemOf(R"json({ "format": 4, "name": "Mine" })json"), "format: is 4, which needs a newer Lookout");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, SpentFormatCannotBeShown)
+{
+	EXPECT_EQ(ProblemOf(R"json({ "format": 2, "name": "Mine" })json"), "format: is 2, which only Lookout 1.4 read");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, FormatOneLaunchOpensAsTheLinuxGroup)
+{
+	SGameFormNode const form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode const* const pLinux{ FindFormField(*FindFormField(form, "launch"), "linux") };
+
+	ASSERT_NE(pLinux, nullptr);
+	EXPECT_TRUE(pLinux->isPresent);
+	EXPECT_EQ(FindFormField(*pLinux, "program")->text, "run-game.sh");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, EditedFormatOneGameStaysFormatOne)
+{
+	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+
+	GetFormField(form, "name").text = "Kingpin, mine";
+
+	JsonValue written = JsonValue::parse(WriteGameForm(form));
+
+	EXPECT_EQ(written["format"], 1);
+	EXPECT_EQ(written["launch"]["program"], "run-game.sh");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, WindowsFactsMakeFormatThree)
+{
+	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode& windows{ GetFormField(GetFormField(form, "launch"), "windows") };
+
+	windows.isPresent = true;
+	GetFormField(windows, "steamAppId").text = "38430";
+	GetFormField(windows, "program").text = "kingpin.exe";
+	GetFormField(windows, "requiredFiles").texts = { "main/pak0.pak" };
+
+	JsonValue written = JsonValue::parse(WriteGameForm(form));
+
+	EXPECT_EQ(written["format"], 3);
+	EXPECT_EQ(written["launch"]["linux"]["program"], "run-game.sh");
+	EXPECT_EQ(written["launch"]["windows"]["steamAppId"], 38430);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, DesktopFilesAloneMakeFormatThree)
+{
+	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode& facts{ GetFormField(GetFormField(form, "launch"), "linux") };
+	SGameFormNode& requiredFiles{ GetFormField(facts, "requiredFiles") };
+
+	GetFormField(facts, "installDir").text.clear();
+	GetFormField(facts, "program").text.clear();
+	requiredFiles.texts.clear();
+	requiredFiles.isPresent = false;
+
+	JsonValue written = JsonValue::parse(WriteGameForm(form));
+
+	EXPECT_EQ(written["format"], 3);
+	EXPECT_EQ(written["launch"]["linux"]["desktopFiles"], JsonValue::parse(R"json([ "kingpin-native.desktop" ])json"));
+	EXPECT_FALSE(written["launch"]["linux"].contains("installDir"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, CompleteLinuxFactsAloneAreFormatOne)
+{
+	SGameFormNode form{ MakeGameForm() };
+	SGameFormNode& launch{ GetFormField(form, "launch") };
+	SGameFormNode& facts{ GetFormField(launch, "linux") };
+
+	launch.isPresent = true;
+	facts.isPresent = true;
+	GetFormField(facts, "desktopFiles").texts = { "kingpin-native.desktop" };
+	GetFormField(facts, "installDir").text = "Games/Kingpin";
+	GetFormField(facts, "program").text = "run-game.sh";
+	GetFormField(facts, "requiredFiles").texts = { "kingpin.x86" };
+
+	JsonValue written = JsonValue::parse(WriteGameForm(form));
+
+	EXPECT_EQ(written["format"], 1);
+	EXPECT_EQ(written["launch"]["installDir"], "Games/Kingpin");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, EmptiedRequiredFilesStayWithTheInstallFolder)
+{
+	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode& requiredFiles{ GetFormField(GetFormField(GetFormField(form, "launch"), "linux"), "requiredFiles") };
+
+	requiredFiles.texts.clear();
+	requiredFiles.isPresent = false;
+
+	JsonValue written = JsonValue::parse(WriteGameForm(form));
+
+	ASSERT_TRUE(written["launch"].contains("requiredFiles"));
+	EXPECT_TRUE(written["launch"]["requiredFiles"].empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, EmptiedDesktopFilesKeepFormatOne)
+{
+	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode& desktopFiles{ GetFormField(GetFormField(GetFormField(form, "launch"), "linux"), "desktopFiles") };
+
+	desktopFiles.texts.clear();
+	desktopFiles.isPresent = false;
+
+	JsonValue written = JsonValue::parse(WriteGameForm(form));
+
+	EXPECT_EQ(written["format"], 1);
+	EXPECT_EQ(written["launch"]["desktopFiles"], JsonValue::array());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, InstallFolderAloneIsFormatOne)
+{
+	SGameFormNode form{ MakeGameForm() };
+	SGameFormNode& launch{ GetFormField(form, "launch") };
+	SGameFormNode& facts{ GetFormField(launch, "linux") };
+
+	launch.isPresent = true;
+	facts.isPresent = true;
+	GetFormField(facts, "installDir").text = "Games/Kingpin";
+	GetFormField(facts, "program").text = "run-game.sh";
+
+	JsonValue written = JsonValue::parse(WriteGameForm(form));
+
+	EXPECT_EQ(written["format"], 1);
+	EXPECT_EQ(written["launch"], JsonValue::parse(R"json({ "desktopFiles": [], "installDir": "Games/Kingpin", "program": "run-game.sh", "requiredFiles": [] })json"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, ProblemInAFormatOneLaunchNamesTheFilesField)
+{
+	EXPECT_EQ(ProblemOf(R"json({ "format": 1, "launch": { "desktopFiles": "kingpin.desktop", "installDir": "Games/Kingpin", "program": "run-game.sh",
+		"requiredFiles": [] } })json"), "launch.desktopFiles: must be an array");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, FlatLaunchPathsMapIntoTheLinuxGroup)
+{
+	EXPECT_EQ(ToFormPath("launch.desktopFiles[1]"), "launch.linux.desktopFiles[1]");
+	EXPECT_EQ(ToFormPath("launch.program"), "launch.linux.program");
+	EXPECT_EQ(ToFormPath("launch.windows.program"), "launch.windows.program");
+	EXPECT_EQ(ToFormPath("keys.map"), "keys.map");
 }
 } // namespace
 } // namespace Lkt::Games
