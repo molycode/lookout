@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <format>
 #include <map>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -179,8 +180,8 @@ std::string ToParent(std::string_view path)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A field format 1 does not know is a typo or a later format's, so it is never skipped silently.
-void CheckFields(JsonValue const& object, std::string_view path, SFieldProblem& problem)
+// A field the file's format does not know is a typo or a later format's, so it is never skipped silently.
+void CheckFields(JsonValue const& object, std::string_view path, uint64_t format, SFieldProblem& problem)
 {
 	std::string const parent{ ToParent(path) };
 
@@ -195,7 +196,7 @@ void CheckFields(JsonValue const& object, std::string_view path, SFieldProblem& 
 		}
 		else if (!isField)
 		{
-			Fail(problem, JoinPath(path, key), "is not a field of format 1");
+			Fail(problem, JoinPath(path, key), std::format("is not a field of format {}", format));
 		}
 	}
 }
@@ -301,7 +302,7 @@ JsonValue const* FindObject(JsonValue const& object, std::string_view parent, st
 
 //////////////////////////////////////////////////////////////////////////
 template<typename TRead>
-void ReadObjects(JsonValue const& json, std::string_view path, SFieldProblem& problem, TRead&& read)
+void ReadObjects(JsonValue const& json, std::string_view path, uint64_t format, SFieldProblem& problem, TRead&& read)
 {
 	if (json.is_array())
 	{
@@ -313,7 +314,7 @@ void ReadObjects(JsonValue const& json, std::string_view path, SFieldProblem& pr
 
 			if (element.is_object())
 			{
-				CheckFields(element, elementPath, problem);
+				CheckFields(element, elementPath, format, problem);
 				read(element, elementPath);
 			}
 			else
@@ -351,9 +352,10 @@ void ReadPort(JsonValue const& object, std::string_view parent, uint16_t& port, 
 
 //////////////////////////////////////////////////////////////////////////
 // Read before anything else: a newer format's fields would otherwise only be reported as unknown.
-bool ReadFormat(JsonValue const& root, SFieldProblem& problem)
+std::optional<uint64_t> ReadFormat(JsonValue const& root, SFieldProblem& problem)
 {
 	JsonValue::const_iterator const it{ root.find("format") };
+	std::optional<uint64_t> format{};
 
 	if (it == root.cend())
 	{
@@ -367,18 +369,22 @@ bool ReadFormat(JsonValue const& root, SFieldProblem& problem)
 	{
 		Fail(problem, "format", std::format("must be {}", GameFormat));
 	}
+	else
+	{
+		format = it->get<uint64_t>();
+	}
 
-	return problem.reason.empty();
+	return format;
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadKeys(JsonValue const& root, Query::SServerKeys& keys, SFieldProblem& problem)
+void ReadKeys(JsonValue const& root, Query::SServerKeys& keys, uint64_t format, SFieldProblem& problem)
 {
 	JsonValue const* const pKeys{ FindObject(root, {}, "keys", true, problem) };
 
 	if (pKeys != nullptr)
 	{
-		CheckFields(*pKeys, "keys", problem);
+		CheckFields(*pKeys, "keys", format, problem);
 		ReadRequiredString(*pKeys, "keys", "hostname", keys.hostname, problem);
 		ReadRequiredString(*pKeys, "keys", "map", keys.map, problem);
 		ReadRequiredString(*pKeys, "keys", "maxPlayers", keys.maxPlayers, problem);
@@ -400,13 +406,13 @@ void ReadKeys(JsonValue const& root, Query::SServerKeys& keys, SFieldProblem& pr
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadModes(JsonValue const& root, std::vector<Query::SModeRule>& modes, SFieldProblem& problem)
+void ReadModes(JsonValue const& root, std::vector<Query::SModeRule>& modes, uint64_t format, SFieldProblem& problem)
 {
 	JsonValue::const_iterator const it{ root.find("modes") };
 
 	if (it != root.cend())
 	{
-		ReadObjects(*it, "modes", problem, [&modes, &problem](JsonValue const& object, std::string_view path)
+		ReadObjects(*it, "modes", format, problem, [&modes, &problem](JsonValue const& object, std::string_view path)
 		{
 			Query::SModeRule& mode{ modes.emplace_back() };
 
@@ -418,13 +424,13 @@ void ReadModes(JsonValue const& root, std::vector<Query::SModeRule>& modes, SFie
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadForeignServers(JsonValue const& root, std::vector<Query::SKeyMatch>& matches, SFieldProblem& problem)
+void ReadForeignServers(JsonValue const& root, std::vector<Query::SKeyMatch>& matches, uint64_t format, SFieldProblem& problem)
 {
 	JsonValue::const_iterator const it{ root.find("foreignServers") };
 
 	if (it != root.cend())
 	{
-		ReadObjects(*it, "foreignServers", problem, [&matches, &problem](JsonValue const& object, std::string_view path)
+		ReadObjects(*it, "foreignServers", format, problem, [&matches, &problem](JsonValue const& object, std::string_view path)
 		{
 			Query::SKeyMatch& match{ matches.emplace_back() };
 
@@ -436,13 +442,13 @@ void ReadForeignServers(JsonValue const& root, std::vector<Query::SKeyMatch>& ma
 
 //////////////////////////////////////////////////////////////////////////
 // All or nothing: an install folder without its program would be probed and rejected on every start.
-void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, SFieldProblem& problem)
+void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, uint64_t format, SFieldProblem& problem)
 {
 	JsonValue const* const pLaunch{ FindObject(root, {}, "launch", false, problem) };
 
 	if (pLaunch != nullptr)
 	{
-		CheckFields(*pLaunch, "launch", problem);
+		CheckFields(*pLaunch, "launch", format, problem);
 		ReadRequiredStrings(*pLaunch, "launch", "desktopFiles", launch.desktopFiles, problem);
 		ReadRequiredString(*pLaunch, "launch", "installDir", launch.installDir, problem);
 		ReadRequiredString(*pLaunch, "launch", "program", launch.program, problem);
@@ -535,7 +541,7 @@ void ReadHexCodes(JsonValue const& json, char escape, std::vector<Query::SHexCol
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadColourCodes(JsonValue const& text, Query::STextStyle& style, SFieldProblem& problem)
+void ReadColourCodes(JsonValue const& text, Query::STextStyle& style, uint64_t format, SFieldProblem& problem)
 {
 	constexpr std::string_view Path{ "text.colourCodes" };
 	JsonValue::const_iterator const it{ text.find("colourCodes") };
@@ -548,7 +554,7 @@ void ReadColourCodes(JsonValue const& text, Query::STextStyle& style, SFieldProb
 	{
 		std::string escape{};
 
-		CheckFields(*it, Path, problem);
+		CheckFields(*it, Path, format, problem);
 		ReadRequiredString(*it, Path, "escape", escape, problem);
 
 		if (escape.size() == 1 && static_cast<unsigned char>(escape.front()) < 0x80)
@@ -585,15 +591,15 @@ void ReadColourCodes(JsonValue const& text, Query::STextStyle& style, SFieldProb
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadText(JsonValue const& root, Query::STextStyle& style, SFieldProblem& problem)
+void ReadText(JsonValue const& root, Query::STextStyle& style, uint64_t format, SFieldProblem& problem)
 {
 	JsonValue const* const pText{ FindObject(root, {}, "text", true, problem) };
 
 	if (pText != nullptr)
 	{
-		CheckFields(*pText, "text", problem);
+		CheckFields(*pText, "text", format, problem);
 		ReadName(*pText, "text", "encoding", Encodings, style.encoding, problem);
-		ReadColourCodes(*pText, style, problem);
+		ReadColourCodes(*pText, style, format, problem);
 	}
 }
 
@@ -633,7 +639,7 @@ void CheckPlaceholders(std::vector<std::string> const& arguments, std::string_vi
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadPasswordRules(JsonValue const& join, Query::SPasswordRules& rules, SFieldProblem& problem)
+void ReadPasswordRules(JsonValue const& join, Query::SPasswordRules& rules, uint64_t format, SFieldProblem& problem)
 {
 	constexpr std::string_view Path{ "join.password" };
 	JsonValue::const_iterator const it{ join.find("password") };
@@ -648,7 +654,7 @@ void ReadPasswordRules(JsonValue const& join, Query::SPasswordRules& rules, SFie
 		JsonValue::const_iterator const refusedCharacters{ it->find("refusedCharacters") };
 		JsonValue::const_iterator const refusedSequences{ it->find("refusedSequences") };
 
-		CheckFields(*it, Path, problem);
+		CheckFields(*it, Path, format, problem);
 
 		if (maxLength != it->cend() && maxLength->is_number_unsigned() && maxLength->get<uint64_t>() >= 1 && maxLength->get<uint64_t>() <= MaxPasswordLength)
 		{
@@ -672,18 +678,18 @@ void ReadPasswordRules(JsonValue const& join, Query::SPasswordRules& rules, SFie
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadJoin(JsonValue const& root, Query::SJoinCommand& join, SFieldProblem& problem)
+void ReadJoin(JsonValue const& root, Query::SJoinCommand& join, uint64_t format, SFieldProblem& problem)
 {
 	JsonValue const* const pJoin{ FindObject(root, {}, "join", true, problem) };
 
 	if (pJoin != nullptr)
 	{
-		CheckFields(*pJoin, "join", problem);
+		CheckFields(*pJoin, "join", format, problem);
 		ReadRequiredStrings(*pJoin, "join", "arguments", join.arguments, problem);
 		ReadRequiredStrings(*pJoin, "join", "passwordArguments", join.passwordArguments, problem);
 		CheckPlaceholders(join.arguments, "join.arguments", false, problem);
 		CheckPlaceholders(join.passwordArguments, "join.passwordArguments", true, problem);
-		ReadPasswordRules(*pJoin, join.password, problem);
+		ReadPasswordRules(*pJoin, join.password, format, problem);
 	}
 }
 
@@ -780,13 +786,13 @@ void ReadPortOffset(JsonValue const& object, std::string_view parent, std::strin
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadMasters(JsonValue const& root, Query::SGameDefinition& game, SFieldProblem& problem)
+void ReadMasters(JsonValue const& root, Query::SGameDefinition& game, uint64_t format, SFieldProblem& problem)
 {
 	JsonValue::const_iterator const it{ root.find("masters") };
 
 	if (it != root.cend())
 	{
-		ReadObjects(*it, "masters", problem, [&game, &problem](JsonValue const& object, std::string_view path)
+		ReadObjects(*it, "masters", format, problem, [&game, &problem](JsonValue const& object, std::string_view path)
 		{
 			Query::SMasterEndpoint& master{ game.masters.emplace_back() };
 
@@ -806,9 +812,9 @@ void ReadMasters(JsonValue const& root, Query::SGameDefinition& game, SFieldProb
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, Query::SGameDefinition& game, SFieldProblem& problem)
+void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const> protocols, uint64_t format, Query::SGameDefinition& game, SFieldProblem& problem)
 {
-	CheckFields(root, {}, problem);
+	CheckFields(root, {}, format, problem);
 	ReadRequiredString(root, {}, "name", game.name, problem);
 
 	Query::SProtocolDefinition const* const pProtocol{ ReadProtocol(root, {}, protocols, game.protocol, problem) };
@@ -819,13 +825,13 @@ void ReadGame(JsonValue const& root, std::span<Query::SProtocolDefinition const>
 	}
 
 	ReadPortOffset(root, {}, "queryPortOffset", game.queryPortOffset, problem);
-	ReadMasters(root, game, problem);
-	ReadKeys(root, game.keys, problem);
-	ReadModes(root, game.modes, problem);
-	ReadForeignServers(root, game.foreignServers, problem);
-	ReadText(root, game.text, problem);
-	ReadJoin(root, game.join, problem);
-	ReadLaunch(root, game.launch, problem);
+	ReadMasters(root, game, format, problem);
+	ReadKeys(root, game.keys, format, problem);
+	ReadModes(root, game.modes, format, problem);
+	ReadForeignServers(root, game.foreignServers, format, problem);
+	ReadText(root, game.text, format, problem);
+	ReadJoin(root, game.join, format, problem);
+	ReadLaunch(root, game.launch, format, problem);
 }
 } // namespace
 
@@ -852,9 +858,9 @@ std::expected<Query::SGameDefinition, SFieldProblem> ReadGameFields(std::string_
 	{
 		problem.reason = "it must hold a JSON object";
 	}
-	else if (ReadFormat(root, problem))
+	else if (std::optional<uint64_t> const format{ ReadFormat(root, problem) }; format.has_value())
 	{
-		ReadGame(root, protocols, game, problem);
+		ReadGame(root, protocols, *format, game, problem);
 	}
 
 	std::expected<Query::SGameDefinition, SFieldProblem> result{ std::move(game) };
