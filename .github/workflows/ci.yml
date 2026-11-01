@@ -59,13 +59,22 @@ jobs:
             -DLKT_AUTO_INIT_SUBMODULES=OFF \
             -DTGE_CORE_BUILD_TESTS=ON
 
+      # Before Lookout's own build, so tge-core, which other projects share, is checked even when that build fails.
+      - name: Build tge-core
+        run: |
+          source "/opt/rh/$TOOLSET/enable"
+          cmake --build build --target TgeCoreUnitTests TgeCoreThreadingTests TgeCoreNetTests TgeCoreIOTests TgeCoreProcessTests
+
+      - name: Test tge-core
+        run: ctest --test-dir build --tests-regex '^TgeCore' --output-on-failure
+
       - name: Build
         run: |
           source "/opt/rh/$TOOLSET/enable"
-          cmake --build build --target all TgeCoreUnitTests TgeCoreThreadingTests TgeCoreNetTests TgeCoreIOTests TgeCoreProcessTests
+          cmake --build build --target all
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --tests-regex '^LookoutTests$' --output-on-failure
 
   windows:
     name: Windows (${{ matrix.preset }})
@@ -86,9 +95,9 @@ jobs:
           - preset: windows-clangcl-release
             dir: clangcl-Release
             static: ON
-    # Only the modules that build on Windows so far, and tge-core's suites; Lookout's tests join once all of it builds.
+    # tge-core's suites are named: all leaves them out.
     env:
-      TARGETS: LktQuery LktScript LktGeo LktNet LktJson LktConfig LktGames LktDownload TgeLogging TgeMemory TgeMath TgeThreading TgeIO TgeNet TgeCommand TgeInit TgeModule TgeLifecycle SDL3-static imgui gtest TgeCoreUnitTests TgeCoreThreadingTests TgeCoreNetTests TgeCoreIOTests TgeCoreProcessTests
+      TARGETS: all LookoutTests TgeCoreUnitTests TgeCoreThreadingTests TgeCoreNetTests TgeCoreIOTests TgeCoreProcessTests
     defaults:
       run:
         shell: pwsh
@@ -116,7 +125,7 @@ jobs:
           cmd /c "`"$vcvars`" && `"$env:LKT_CMAKE`" --preset ${{ matrix.preset }} -DLKT_STATIC_RUNTIME=${{ matrix.static }} -DTGE_CORE_BUILD_TESTS=ON && `"$env:LKT_CMAKE`" --build --preset ${{ matrix.preset }} --target $env:TARGETS"
           if ($LASTEXITCODE -ne 0) { throw "build failed ($LASTEXITCODE)" }
 
-      - name: Test tge-core
+      - name: Test
         run: |
-          & (Join-Path (Split-Path $env:LKT_CMAKE) ctest.exe) --test-dir build/${{ matrix.dir }} --tests-regex '^TgeCore' --output-on-failure
+          & (Join-Path (Split-Path $env:LKT_CMAKE) ctest.exe) --test-dir build/${{ matrix.dir }} --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw "tests failed ($LASTEXITCODE)" }
