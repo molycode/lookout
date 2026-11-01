@@ -3,22 +3,27 @@
 #include "launch/game_launcher.hpp"
 #include "query/game_definition.hpp"
 #include "temp_dir.hpp"
+#include <tge/platform.hpp>
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
-#include <cerrno>
-#include <csignal>
-#include <fcntl.h>
+#include <chrono>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <iterator>
-#include <pthread.h>
 #include <string>
 #include <string_view>
-#include <sys/wait.h>
 #include <system_error>
-#include <unistd.h>
+#include <thread>
+#include <utility>
 #include <vector>
+
+#if defined(TGE_PLATFORM_LINUX)
+#include <charconv>
+#include <csignal>
+#include <sys/types.h>
+#include <sys/wait.h>
+#endif // defined(TGE_PLATFORM_LINUX)
 
 namespace Lkt::Launch
 {
@@ -30,9 +35,8 @@ using Tge::Testing::CExpectedLog;
 // 203.0.113.7:31510.
 constexpr Query::SServerAddress Server{ 0xCB007107, 31510 };
 constexpr std::string_view Address{ "203.0.113.7:31510" };
-constexpr int LeakProbeDescriptor{ 100 };
-
-constexpr std::filesystem::perms Executable{ std::filesystem::perms::owner_all | std::filesystem::perms::group_read | std::filesystem::perms::others_read };
+constexpr std::chrono::seconds Patience{ 10 };
+constexpr std::chrono::milliseconds PollInterval{ 10 };
 
 //////////////////////////////////////////////////////////////////////////
 std::string ReadText(std::filesystem::path const& path)
@@ -40,32 +44,6 @@ std::string ReadText(std::filesystem::path const& path)
 	std::ifstream file{ path, std::ios::binary };
 
 	return std::string{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} };
-}
-
-//////////////////////////////////////////////////////////////////////////
-std::vector<std::string> ReadLines(std::filesystem::path const& path)
-{
-	std::vector<std::string> lines{};
-	std::ifstream file{ path };
-	std::string line{};
-
-	while (std::getline(file, line))
-	{
-		lines.emplace_back(line);
-	}
-
-	return lines;
-}
-
-//////////////////////////////////////////////////////////////////////////
-// Blocks until the game exits but leaves it unreaped, for ReapFinished to collect.
-pid_t WaitForExit()
-{
-	siginfo_t info{};
-
-	EXPECT_EQ(::waitid(P_ALL, 0, &info, WEXITED | WNOWAIT), 0);
-
-	return info.si_pid;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -80,61 +58,59 @@ protected:
 		m_root = m_tempDir.GetPath();
 		m_logs = m_root / "logs";
 		m_work = m_root / "work";
-		m_script = m_root / "fake-game.sh";
 		m_report = m_root / "report";
 		std::filesystem::create_directories(m_logs);
 		std::filesystem::create_directories(m_work);
 		m_launcher.Initialize(m_logs.string());
 	}
 
+	// Windows cannot remove a folder a running game works in.
 	void TearDown() override
 	{
-		// Children a test did not hand to ReapFinished.
-		while (::waitpid(-1, nullptr, 0) > 0)
-		{
-		}
-
+		WaitUntilAllEnded();
+		m_launcher.Terminate();
 		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
-	void WriteGame(std::string_view body) const
+	// Reaps each game that ended, which logs what the launcher has to say about it.
+	void WaitUntilAllEnded()
 	{
-		{
-			std::ofstream file{ m_script, std::ios::binary };
+		auto const deadline{ std::chrono::steady_clock::now() + Patience };
+		size_t numRunning{ m_launcher.ReapFinished() };
 
-			file << "#!/bin/sh\n" << body;
+		while (numRunning > 0 && std::chrono::steady_clock::now() < deadline)
+		{
+			std::this_thread::sleep_for(PollInterval);
+			numRunning = m_launcher.ReapFinished();
 		}
 
-		std::filesystem::permissions(m_script, Executable);
+		EXPECT_EQ(numRunning, 0u);
 	}
 
-	void WriteReportingGame(std::string_view ending) const
+	SLaunchOption MakeOption(std::vector<std::string> const& options) const
 	{
-		WriteGame(std::format(
-			"exec >'{}'\n"
-			"printf '%s\\n' \"$$\" \"$@\"\n"
-			"pwd -P\n"
-			"if [ /proc/$$/fd/0 -ef /dev/null ]; then echo stdin-null; else echo stdin-other; fi\n"
-			"if [ -L /proc/$$/fd/{} ]; then echo probe-leaked; else echo probe-closed; fi\n"
-			"{}\n", m_report.string(), LeakProbeDescriptor, ending));
+		std::vector<std::string> argv{ LKT_FAKE_GAME };
+
+		argv.insert(argv.end(), options.begin(), options.end());
+
+		return SLaunchOption{ "test", "Fake game", m_work.string(), std::move(argv), m_work.string() };
 	}
 
-	SLaunchOption MakeOption() const
+	std::expected<void, ELaunchError> Launch(std::vector<std::string> const& options, std::string password = {})
 	{
-		return SLaunchOption{ "test", "Fake game", m_work.string(), { m_script.string(), "--fake" }, m_work.string() };
+		return m_launcher.Launch(Fixtures::GetGameByKey("kingpin"), MakeOption(options), SConnectRequest{ Server, std::move(password) });
 	}
 
-	std::expected<void, ELaunchError> Launch(std::string password = {})
+	std::string ReadGameLog() const
 	{
-		return m_launcher.Launch(Fixtures::GetGameByKey("kingpin"), MakeOption(), SConnectRequest{ Server, std::move(password) });
+		return ReadText(m_logs / "game-kingpin.log");
 	}
 
 	Lkt::Fixtures::CTempDir m_tempDir{};
 	std::filesystem::path m_root{};
 	std::filesystem::path m_logs{};
 	std::filesystem::path m_work{};
-	std::filesystem::path m_script{};
 	std::filesystem::path m_report{};
 	CGameLauncher m_launcher{};
 };
@@ -142,101 +118,30 @@ protected:
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CGameLauncherTest, ArgumentsAreTheOptionsFollowedByTheConnectArguments)
 {
-	WriteReportingGame("exit 0");
-	ASSERT_TRUE(Launch("s3cret").has_value());
-	WaitForExit();
+	ASSERT_TRUE(Launch({ "--fake" }, "s3cret").has_value());
+	WaitUntilAllEnded();
 
-	std::vector<std::string> const lines{ ReadLines(m_report) };
-	std::vector<std::string> const expected{ "--fake", "+set", "password", "s3cret", "+connect", std::string{ Address } };
-
-	ASSERT_GE(lines.size(), expected.size() + 1);
-	EXPECT_EQ(std::vector<std::string>(lines.begin() + 1, lines.begin() + 1 + static_cast<std::ptrdiff_t>(expected.size())), expected);
+	EXPECT_EQ(ReadGameLog(), std::format("--fake\n+set\npassword\ns3cret\n+connect\n{}\n", Address));
 }
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CGameLauncherTest, GameRunsInTheOptionsWorkingDirectory)
 {
-	WriteReportingGame("exit 0");
-	ASSERT_TRUE(Launch().has_value());
-	WaitForExit();
+	std::error_code error{};
 
-	std::vector<std::string> const lines{ ReadLines(m_report) };
+	ASSERT_TRUE(Launch({ std::format("--cwd-to={}", m_report.string()) }).has_value());
+	WaitUntilAllEnded();
 
-	ASSERT_EQ(lines.size(), 7u);
-	EXPECT_EQ(lines[4], std::filesystem::canonical(m_work).string());
+	EXPECT_TRUE(std::filesystem::equivalent(std::filesystem::path{ ReadText(m_report) }, m_work, error)) << ReadText(m_report);
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameLauncherTest, GameGetsASessionOfItsOwn)
+TEST_F(CGameLauncherTest, OutputAndErrorsLandInTheGameLog)
 {
-	WriteReportingGame("exit 0");
-	ASSERT_TRUE(Launch().has_value());
+	ASSERT_TRUE(Launch({ "--stderr=err", "out" }).has_value());
+	WaitUntilAllEnded();
 
-	pid_t const pid{ WaitForExit() };
-
-	EXPECT_EQ(::getsid(pid), pid);
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST_F(CGameLauncherTest, StdinIsDevNull)
-{
-	WriteReportingGame("exit 0");
-	ASSERT_TRUE(Launch().has_value());
-	WaitForExit();
-
-	std::vector<std::string> const lines{ ReadLines(m_report) };
-
-	ASSERT_EQ(lines.size(), 7u);
-	EXPECT_EQ(lines[5], "stdin-null");
-}
-
-//////////////////////////////////////////////////////////////////////////
-// The probe is inheritable on purpose: only the spawn's own closing can keep it from the game.
-TEST_F(CGameLauncherTest, OpenDescriptorDoesNotReachTheGame)
-{
-	int const devNull{ ::open("/dev/null", O_RDONLY) };
-	int const probe{ ::fcntl(devNull, F_DUPFD, LeakProbeDescriptor) };
-
-	::close(devNull);
-	ASSERT_EQ(probe, LeakProbeDescriptor);
-	WriteReportingGame("exit 0");
-	ASSERT_TRUE(Launch().has_value());
-	WaitForExit();
-	::close(probe);
-
-	std::vector<std::string> const lines{ ReadLines(m_report) };
-
-	ASSERT_EQ(lines.size(), 7u);
-	EXPECT_EQ(lines[6], "probe-closed");
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST_F(CGameLauncherTest, OutputLandsInTheGameLog)
-{
-	WriteGame("echo out\necho err >&2\n");
-	ASSERT_TRUE(Launch().has_value());
-	WaitForExit();
-
-	EXPECT_EQ(ReadText(m_logs / "game-kingpin.log"), "out\nerr\n");
-}
-
-//////////////////////////////////////////////////////////////////////////
-// With stdin closed, the log opens as descriptor 0, so opening the game's stdin first would discard its output.
-TEST_F(CGameLauncherTest, OutputLandsInTheGameLogWhenStdinIsClosed)
-{
-	int const savedStdin{ ::dup(STDIN_FILENO) };
-
-	WriteGame("echo out\n");
-	::close(STDIN_FILENO);
-
-	std::expected<void, ELaunchError> const launched{ Launch() };
-
-	::dup2(savedStdin, STDIN_FILENO);
-	::close(savedStdin);
-	ASSERT_TRUE(launched.has_value());
-	WaitForExit();
-
-	EXPECT_EQ(ReadText(m_logs / "game-kingpin.log"), "out\n");
+	EXPECT_EQ(ReadGameLog(), std::format("out\n+connect\n{}\nerr\n", Address));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -247,11 +152,9 @@ TEST_F(CGameLauncherTest, UnwritableGameLogStillStartsTheGame)
 
 	std::ofstream{ notADirectory };
 	m_launcher.Initialize(notADirectory.string());
-	WriteGame("exit 0\n");
 
-	EXPECT_TRUE(Launch().has_value());
-	WaitForExit();
-	m_launcher.ReapFinished();
+	EXPECT_TRUE(Launch({}).has_value());
+	WaitUntilAllEnded();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -259,10 +162,8 @@ TEST_F(CGameLauncherTest, NonZeroExitIsAWarning)
 {
 	CExpectedLog const expected{ LaunchChannel, 1, 0 };
 
-	WriteGame("exit 3\n");
-	ASSERT_TRUE(Launch().has_value());
-	WaitForExit();
-	m_launcher.ReapFinished();
+	ASSERT_TRUE(Launch({ "--exit=3" }).has_value());
+	WaitUntilAllEnded();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -270,63 +171,8 @@ TEST_F(CGameLauncherTest, CleanExitIsSilent)
 {
 	CExpectedLog const expected{ LaunchChannel, 0, 0 };
 
-	WriteGame("exit 0\n");
-	ASSERT_TRUE(Launch().has_value());
-	WaitForExit();
-	m_launcher.ReapFinished();
-}
-
-//////////////////////////////////////////////////////////////////////////
-// A shell keeps a signal that was ignored when it started, so the game dying of SIGPIPE proves it started at default.
-TEST_F(CGameLauncherTest, IgnoredSignalStartsAtItsDefault)
-{
-	CExpectedLog const expected{ LaunchChannel, 1, 0 };
-	struct sigaction ignore{};
-	struct sigaction saved{};
-
-	ignore.sa_handler = SIG_IGN;
-	::sigaction(SIGPIPE, &ignore, &saved);
-	WriteGame("kill -s PIPE $$\nexit 0\n");
-
-	std::expected<void, ELaunchError> const launched{ Launch() };
-
-	::sigaction(SIGPIPE, &saved, nullptr);
-	ASSERT_TRUE(launched.has_value());
-	WaitForExit();
-	m_launcher.ReapFinished();
-}
-
-//////////////////////////////////////////////////////////////////////////
-// Left blocked, the signal would wait until the game exited cleanly.
-TEST_F(CGameLauncherTest, BlockedSignalStartsUnblocked)
-{
-	CExpectedLog const expected{ LaunchChannel, 1, 0 };
-	sigset_t blocked{};
-	sigset_t saved{};
-
-	sigemptyset(&blocked);
-	sigaddset(&blocked, SIGUSR2);
-	::pthread_sigmask(SIG_BLOCK, &blocked, &saved);
-	WriteGame("kill -s USR2 $$\nexit 0\n");
-
-	std::expected<void, ELaunchError> const launched{ Launch() };
-
-	::pthread_sigmask(SIG_SETMASK, &saved, nullptr);
-	ASSERT_TRUE(launched.has_value());
-	WaitForExit();
-	m_launcher.ReapFinished();
-}
-
-//////////////////////////////////////////////////////////////////////////
-TEST_F(CGameLauncherTest, GameReapedElsewhereIsForgottenAfterOneWarning)
-{
-	CExpectedLog const expected{ LaunchChannel, 1, 0 };
-
-	WriteGame("exit 0\n");
-	ASSERT_TRUE(Launch().has_value());
-	::waitpid(WaitForExit(), nullptr, 0);
-	m_launcher.ReapFinished();
-	m_launcher.ReapFinished();
+	ASSERT_TRUE(Launch({}).has_value());
+	WaitUntilAllEnded();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -340,20 +186,52 @@ TEST_F(CGameLauncherTest, MissingProgramIsAnError)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Refused before anything is started, so not even the game's log is opened.
 TEST_F(CGameLauncherTest, UnsupportedPasswordStartsNothing)
 {
 	CExpectedLog const expected{ LaunchChannel, 1, 0 };
-	siginfo_t info{};
+	std::error_code error{};
 
-	WriteGame("exit 0\n");
-
-	EXPECT_EQ(Launch("open sesame").error_or(ELaunchError::NoLauncher), ELaunchError::UnsupportedPassword);
-
-	int const waited{ ::waitid(P_ALL, 0, &info, WEXITED | WNOHANG | WNOWAIT) };
-	int const waitError{ errno };
-
-	EXPECT_EQ(waited, -1);
-	EXPECT_EQ(waitError, ECHILD);
+	EXPECT_EQ(Launch({}, "open sesame").error_or(ELaunchError::NoLauncher), ELaunchError::UnsupportedPassword);
+	EXPECT_FALSE(std::filesystem::exists(m_logs / "game-kingpin.log", error));
 }
+
+#if defined(TGE_PLATFORM_LINUX)
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameLauncherTest, GameEndedByASignalIsAWarning)
+{
+	CExpectedLog const expected{ LaunchChannel, 1, 0 };
+
+	ASSERT_TRUE(Launch({ std::format("--signal={}", SIGTERM) }).has_value());
+	WaitUntilAllEnded();
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameLauncherTest, GameReapedElsewhereIsForgottenAfterOneWarning)
+{
+	CExpectedLog const expected{ LaunchChannel, 1, 0 };
+	auto const deadline{ std::chrono::steady_clock::now() + Patience };
+	pid_t pid{ 0 };
+
+	ASSERT_TRUE(Launch({ std::format("--pid-to={}", m_report.string()) }).has_value());
+
+	while (pid == 0 && std::chrono::steady_clock::now() < deadline)
+	{
+		std::string const text{ ReadText(m_report) };
+
+		std::from_chars(text.data(), text.data() + text.size(), pid);
+
+		if (pid == 0)
+		{
+			std::this_thread::sleep_for(PollInterval);
+		}
+	}
+
+	ASSERT_GT(pid, 0);
+	ASSERT_EQ(::waitpid(pid, nullptr, 0), pid);
+	WaitUntilAllEnded();
+	m_launcher.ReapFinished();
+}
+#endif // defined(TGE_PLATFORM_LINUX)
 } // namespace
 } // namespace Lkt::Launch

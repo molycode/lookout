@@ -2,6 +2,8 @@
 #include "browser/browser_waiter.hpp"
 #include "channels.hpp"
 #include "fixtures.hpp"
+#include "json/json.hpp"
+#include "launch/quote_argument.hpp"
 #include "net/loopback_server.hpp"
 #include "settings_json.hpp"
 #include "query/game_catalog.hpp"
@@ -21,8 +23,8 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <sys/wait.h>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 namespace Lkt::Browser
@@ -35,8 +37,7 @@ using Fixtures::LaunchChannel;
 using Tge::Testing::CExpectedLog;
 
 constexpr std::chrono::milliseconds Patience{ 5s };
-
-constexpr std::filesystem::perms Executable{ std::filesystem::perms::owner_all | std::filesystem::perms::group_read | std::filesystem::perms::others_read };
+constexpr std::chrono::milliseconds PollInterval{ 10 };
 
 //////////////////////////////////////////////////////////////////////////
 std::string ReadText(std::filesystem::path const& path)
@@ -67,30 +68,24 @@ protected:
 		m_root = m_tempDir.GetPath();
 		m_configDir = m_root / "config";
 		m_logsDir = m_root / "logs";
-		m_game = m_root / "fake-game.sh";
+		m_game = std::filesystem::path{ LKT_FAKE_GAME };
 		m_environment.dataHome = m_root / "data";
 		m_environment.home = m_root / "home";
 		m_environment.searchPath = (m_root / "bin").string();
 		std::filesystem::create_directories(m_configDir);
 		std::filesystem::create_directories(m_logsDir);
 		std::filesystem::create_directories(m_environment.home);
-		WriteText(m_game, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
-		std::filesystem::permissions(m_game, Executable);
 
-		// Quoted, so a TMPDIR with a space or a shell character still splits as one program.
-		WriteConfig(std::format(R"({{ "game": "kingpin", "games": {{ "kingpin": {{ "installs": [{{ "id": 1, "command": "\"{}\"" }}] }} }} }})", m_game.string()));
+		// Quoted, so a build folder with a space or a shell character still splits as one program.
+		nlohmann::json const command = Launch::QuoteArgument(m_game.string());
+
+		WriteConfig(std::format(R"({{ "game": "kingpin", "games": {{ "kingpin": {{ "installs": [{{ "id": 1, "command": {} }}] }} }} }})", command.dump()));
 	}
 
 	void TearDown() override
 	{
 		m_browser.Terminate();
 		m_server.Stop();
-
-		// Children a test did not hand to the browser's reaping.
-		while (::waitpid(-1, nullptr, 0) > 0)
-		{
-		}
-
 		m_tempDir.Terminate();
 	}
 	// ~testing::Test
@@ -140,6 +135,23 @@ protected:
 		}
 
 		return pFound;
+	}
+
+	// The game's log once it reads as expected, or as it stands at the deadline; the log is made empty before the game
+	// starts. Updating lets the browser reap the game meanwhile.
+	std::string WaitForGameLog(std::string_view expected)
+	{
+		auto const deadline{ std::chrono::steady_clock::now() + Patience };
+		std::string text{ ReadText(m_logsDir / "game-kingpin.log") };
+
+		while (text != expected && std::chrono::steady_clock::now() < deadline)
+		{
+			std::this_thread::sleep_for(PollInterval);
+			m_browser.Update();
+			text = ReadText(m_logsDir / "game-kingpin.log");
+		}
+
+		return text;
 	}
 
 	Lkt::Fixtures::CTempDir m_tempDir{};
@@ -217,15 +229,12 @@ TEST_F(CBrowserTest, UnmarkedFavouriteIsSavedAtOnce)
 TEST_F(CBrowserTest, JoinStartsTheGameWithTheAddress)
 {
 	Query::SServerAddress const address{ 0xCB007107, 31510 };
-	siginfo_t info{};
 
 	// Started, so the spawn happens beside the engine's thread, as in the app.
 	ASSERT_TRUE(StartWithServer());
 	ASSERT_TRUE(m_browser.Join(address, {}, "install:1").has_value());
-	ASSERT_EQ(::waitid(P_ALL, 0, &info, WEXITED | WNOWAIT), 0);
-	m_browser.Update();
 
-	EXPECT_EQ(ReadText(m_logsDir / "game-kingpin.log"), "+connect\n203.0.113.7:31510\n");
+	EXPECT_EQ(WaitForGameLog("+connect\n203.0.113.7:31510\n"), "+connect\n203.0.113.7:31510\n");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -344,7 +353,7 @@ TEST_F(CBrowserTest, RemovedInstallIsSavedAtOnce)
 	Initialize();
 	m_browser.RemoveInstall(Fixtures::GetGameId("kingpin"), 1);
 
-	EXPECT_FALSE(ReadText(m_configDir / "config.json").contains("fake-game.sh"));
+	EXPECT_FALSE(ReadText(m_configDir / "config.json").contains(m_game.stem().string()));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -363,15 +372,12 @@ TEST_F(CBrowserTest, BrokenFolderInstallReportsItsError)
 TEST_F(CBrowserTest, JoinStartsTheInstallItIsGiven)
 {
 	Query::SServerAddress const address{ 0xCB007107, 31510 };
-	siginfo_t info{};
 
 	ASSERT_TRUE(StartWithServer());
-	m_browser.AddInstall(Fixtures::GetGameId("kingpin"), Config::EInstallKind::Command, std::format("\"{}\" second", m_game.string()));
+	m_browser.AddInstall(Fixtures::GetGameId("kingpin"), Config::EInstallKind::Command, std::format("{} second", Launch::QuoteArgument(m_game.string())));
 	ASSERT_TRUE(m_browser.Join(address, {}, "install:2").has_value());
-	ASSERT_EQ(::waitid(P_ALL, 0, &info, WEXITED | WNOWAIT), 0);
-	m_browser.Update();
 
-	EXPECT_EQ(ReadText(m_logsDir / "game-kingpin.log"), "second\n+connect\n203.0.113.7:31510\n");
+	EXPECT_EQ(WaitForGameLog("second\n+connect\n203.0.113.7:31510\n"), "second\n+connect\n203.0.113.7:31510\n");
 }
 
 //////////////////////////////////////////////////////////////////////////

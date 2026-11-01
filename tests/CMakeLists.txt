@@ -1,10 +1,16 @@
 file(GLOB_RECURSE LKT_TEST_SOURCES CONFIGURE_DEPENDS "*.cpp" "*.hpp")
+list(FILTER LKT_TEST_SOURCES EXCLUDE REGEX "/fake_game/")
+
+add_subdirectory(fake_game)
 
 LktApp(LookoutTests ${LKT_TEST_SOURCES})
 
 target_compile_definitions(LookoutTests PRIVATE LKT_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
 	LKT_TEST_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/scripts" LKT_TEST_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
-	LKT_LOOKOUT_GAMES_DIR="${PROJECT_SOURCE_DIR}/external/lookout-games")
+	LKT_LOOKOUT_GAMES_DIR="${PROJECT_SOURCE_DIR}/external/lookout-games" LKT_FAKE_GAME="$<TARGET_FILE:LookoutFakeGame>")
+
+# Nothing else names the fake game, so building the tests has to build it.
+add_dependencies(LookoutTests LookoutFakeGame)
 
 # Pure logic private to its module by design, such as the network scheduler or the settings reader; reaching in
 # beats widening an interface for a test.
