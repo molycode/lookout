@@ -2,7 +2,7 @@
 #include <tge/module/core_module.hpp>
 #include <cstddef>
 
-namespace Lkt
+namespace Lkt::Cli
 {
 namespace
 {
@@ -23,8 +23,9 @@ constexpr size_t NumWorkerThreads{ 0 };
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
+// The directories are borrowed: their strings must outlive the runtime.
 Tge::SRunContext MakeRunContext(std::string_view logsDir, std::string_view configDir)
 {
 	return Tge::SRunContext{ Modules, Schedule, {}, logsDir, configDir, NumWorkerThreads };
 }
-} // namespace Lkt
+} // namespace Lkt::Cli

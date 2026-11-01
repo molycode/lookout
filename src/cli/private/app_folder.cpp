@@ -3,7 +3,7 @@
 #include <tge/platform.hpp>
 #include <string_view>
 
-namespace Lkt
+namespace Lkt::Cli
 {
 namespace
 {
@@ -21,4 +21,4 @@ std::expected<std::filesystem::path, std::error_code> GetAppFolder(Tge::IO::EUse
 {
 	return Tge::IO::GetUserFolder(folder).transform([](std::filesystem::path const& base) { return base / AppFolderName; });
 }
-} // namespace Lkt
+} // namespace Lkt::Cli

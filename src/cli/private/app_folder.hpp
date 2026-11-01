@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <system_error>
 
-namespace Lkt
+namespace Lkt::Cli
 {
 std::expected<std::filesystem::path, std::error_code> GetAppFolder(Tge::IO::EUserFolder folder);
-} // namespace Lkt
+} // namespace Lkt::Cli

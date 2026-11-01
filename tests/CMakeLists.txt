@@ -18,6 +18,7 @@ target_include_directories(LookoutTests
 	PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}
 		$<TARGET_PROPERTY:LktBrowser,SOURCE_DIR>/private
+		$<TARGET_PROPERTY:LktCli,SOURCE_DIR>/private
 		$<TARGET_PROPERTY:LktConfig,SOURCE_DIR>/private
 		$<TARGET_PROPERTY:LktDownload,SOURCE_DIR>/private
 		$<TARGET_PROPERTY:LktGames,SOURCE_DIR>/private
@@ -34,6 +35,7 @@ target_link_libraries(LookoutTests
 		Tge::Net
 		Tge::Testing
 		Lkt::Browser
+		Lkt::Cli
 		Lkt::Config
 		Lkt::Download
 		Lkt::Games

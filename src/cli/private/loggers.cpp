@@ -1,6 +1,6 @@
 #include "loggers.hpp"
 
-namespace Lkt
+namespace Lkt::Cli
 {
 Tge::Logging::CLog gLog{ "Lookout" };
-} // namespace Lkt
+} // namespace Lkt::Cli

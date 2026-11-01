@@ -9,26 +9,18 @@ add_subdirectory(download)
 add_subdirectory(browser)
 add_subdirectory(config)
 add_subdirectory(ui)
+add_subdirectory(cli)
 
 file(GLOB LKT_APP_SOURCES CONFIGURE_DEPENDS "*.cpp" "*.hpp")
 
 LktApp(lookout ${LKT_APP_SOURCES})
 
-target_compile_definitions(lookout PRIVATE LKT_VERSION="${PROJECT_VERSION}")
-
 target_link_libraries(lookout PRIVATE
 	Lkt::Browser
-	Lkt::Config
-	Lkt::Download
+	Lkt::Cli
 	Lkt::Games
 	Lkt::Launch
-	Lkt::Net
-	Lkt::Query
 	Lkt::Ui
-	Tge::IO
-	Tge::Lifecycle
-	Tge::Logging
-	Tge::Net
 )
 
 set_target_properties(lookout PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
