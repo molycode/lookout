@@ -449,10 +449,10 @@ void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, uint64_t for
 	if (pLaunch != nullptr)
 	{
 		CheckFields(*pLaunch, "launch", format, problem);
-		ReadRequiredStrings(*pLaunch, "launch", "desktopFiles", launch.desktopFiles, problem);
-		ReadRequiredString(*pLaunch, "launch", "installDir", launch.installDir, problem);
-		ReadRequiredString(*pLaunch, "launch", "program", launch.program, problem);
-		ReadRequiredStrings(*pLaunch, "launch", "requiredFiles", launch.requiredFiles, problem);
+		ReadRequiredStrings(*pLaunch, "launch", "desktopFiles", launch.onLinux.desktopFiles, problem);
+		ReadRequiredString(*pLaunch, "launch", "installDir", launch.onLinux.installDir, problem);
+		ReadRequiredString(*pLaunch, "launch", "program", launch.onLinux.program, problem);
+		ReadRequiredStrings(*pLaunch, "launch", "requiredFiles", launch.onLinux.requiredFiles, problem);
 	}
 }
 

@@ -60,7 +60,7 @@ TEST(GameJson, ReadsAMinimalGame)
 	EXPECT_EQ(game->queryPortOffset, 0);
 	EXPECT_EQ(game->keys.password, "needpass");
 	EXPECT_TRUE(game->modes.empty());
-	EXPECT_TRUE(game->launch.program.empty());
+	EXPECT_TRUE(game->launch.onLinux.program.empty());
 }
 
 //////////////////////////////////////////////////////////////////////////

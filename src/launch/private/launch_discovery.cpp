@@ -205,7 +205,7 @@ std::optional<SLaunchOption> FindDesktopOption(std::string_view id, SLaunchEnvir
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::optional<SLaunchOption> FindInstallOption(Query::SLaunchHints const& hints, std::string_view gameName, SLaunchEnvironment const& environment)
+std::optional<SLaunchOption> FindInstallOption(Query::SLinuxLaunchHints const& hints, std::string_view gameName, SLaunchEnvironment const& environment)
 {
 	std::optional<SLaunchOption> option{};
 
@@ -255,7 +255,7 @@ std::vector<SLaunchOption> FindLaunchOptions(Query::SLaunchHints const& hints, s
 {
 	std::vector<SLaunchOption> options{};
 
-	for (std::string_view const id : hints.desktopFiles)
+	for (std::string_view const id : hints.onLinux.desktopFiles)
 	{
 		std::optional<SLaunchOption> option{ FindDesktopOption(id, environment) };
 
@@ -265,7 +265,7 @@ std::vector<SLaunchOption> FindLaunchOptions(Query::SLaunchHints const& hints, s
 		}
 	}
 
-	std::optional<SLaunchOption> installOption{ FindInstallOption(hints, gameName, environment) };
+	std::optional<SLaunchOption> installOption{ FindInstallOption(hints.onLinux, gameName, environment) };
 
 	if (installOption.has_value() && std::ranges::none_of(options, [&installOption](SLaunchOption const& option) { return StartsTheSameProgram(option, *installOption); }))
 	{

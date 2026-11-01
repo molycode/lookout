@@ -15,7 +15,7 @@ bool IsFolderInstallSupported(Query::SGameDefinition const& game)
 #if defined(TGE_PLATFORM_WINDOWS)
 	return false;
 #elif defined(TGE_PLATFORM_LINUX)
-	return !game.launch.program.empty();
+	return !game.launch.onLinux.program.empty();
 #else
 #error "Unsupported platform"
 #endif // defined(TGE_PLATFORM_WINDOWS)
@@ -28,7 +28,7 @@ std::expected<SLaunchOption, ELaunchError> MakeFolderOption(Query::SGameDefiniti
 
 	if (IsFolderInstallSupported(game))
 	{
-		std::expected<std::filesystem::path, std::string> const program{ CheckInstallFolder(game.launch, std::filesystem::path{ folder }) };
+		std::expected<std::filesystem::path, std::string> const program{ CheckInstallFolder(game.launch.onLinux, std::filesystem::path{ folder }) };
 
 		if (program.has_value())
 		{
