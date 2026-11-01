@@ -1,7 +1,8 @@
 #include "icon_cache.hpp"
 #include "index_file.hpp"
 #include "sha256.hpp"
-#include "json/files.hpp"
+#include <tge/io/read_whole_file.hpp>
+#include <tge/io/write_file_atomically.hpp>
 #include <format>
 #include <system_error>
 #include <utility>
@@ -24,7 +25,7 @@ std::filesystem::path MakeIconPath(std::filesystem::path const& iconDir, std::st
 std::expected<std::optional<std::string>, std::string> ReadCachedIcon(std::filesystem::path const& iconDir, SIndexFile const& icon)
 {
 	std::filesystem::path const path{ MakeIconPath(iconDir, icon.sha256) };
-	std::expected<std::string, std::error_code> read{ Json::ReadFile(path, icon.size) };
+	std::expected<std::string, std::error_code> read{ Tge::IO::ReadWholeFile(path, icon.size) };
 	std::expected<std::optional<std::string>, std::string> result{ std::optional<std::string>{} };
 
 	if (read.has_value() && read->size() == icon.size && HashSha256(*read) == icon.sha256)
@@ -48,10 +49,10 @@ std::expected<void, std::string> CacheIcon(std::filesystem::path const& iconDir,
 
 	std::filesystem::create_directories(iconDir, error);
 
-	std::expected<void, std::string> const written{ (error.value() == 0) ? Json::WriteFileAtomically(path, png)
-		: std::expected<void, std::string>{ std::unexpected{ error.message() } } };
+	std::expected<void, std::error_code> const written{ (error.value() == 0) ? Tge::IO::WriteFileAtomically(path, png)
+		: std::expected<void, std::error_code>{ std::unexpected{ error } } };
 
-	return written.has_value() ? written : std::unexpected{ std::format("{}: {}", path.string(), written.error()) };
+	return written.has_value() ? std::expected<void, std::string>{} : std::unexpected{ std::format("{}: {}", path.string(), written.error().message()) };
 }
 
 //////////////////////////////////////////////////////////////////////////

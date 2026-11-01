@@ -5,8 +5,8 @@
 #include "try_conversations.hpp"
 #include "user_file_size.hpp"
 #include "games/game_files.hpp"
-#include "json/files.hpp"
 #include "script/protocol_script.hpp"
+#include <tge/io/read_whole_file.hpp>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -62,7 +62,7 @@ std::vector<std::filesystem::directory_entry> ListFolder(std::filesystem::path c
 // An absent file is no error, only nothing.
 std::expected<std::optional<std::string>, std::string> ReadUserFile(std::filesystem::path const& path, std::string_view shownAs)
 {
-	std::expected<std::string, std::error_code> text{ Json::ReadFile(path, MaxUserFileSize) };
+	std::expected<std::string, std::error_code> text{ Tge::IO::ReadWholeFile(path, MaxUserFileSize) };
 	std::expected<std::optional<std::string>, std::string> result{};
 
 	if (text.has_value())

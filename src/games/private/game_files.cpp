@@ -1,8 +1,9 @@
 #include "games/game_files.hpp"
 #include "merge_patch.hpp"
 #include "user_file_size.hpp"
-#include "json/files.hpp"
 #include <tge/assert.hpp>
+#include <tge/io/read_whole_file.hpp>
+#include <tge/io/write_file_atomically.hpp>
 #include <algorithm>
 #include <array>
 #include <format>
@@ -37,7 +38,7 @@ bool IsDownloaded(std::filesystem::path const& userDir, std::string_view key)
 std::optional<std::string> ReadDownloadedText(std::filesystem::path const& userDir, std::string_view key)
 {
 	std::expected<std::string, std::error_code> text{ IsDownloaded(userDir, key)
-		? Json::ReadFile(GetGameFolder(GetDownloadedDir(userDir), key) / GameFileName, MaxUserFileSize)
+		? Tge::IO::ReadWholeFile(GetGameFolder(GetDownloadedDir(userDir), key) / GameFileName, MaxUserFileSize)
 		: std::expected<std::string, std::error_code>{ std::unexpected{ std::make_error_code(std::errc::no_such_file_or_directory) } } };
 
 	return text.has_value() ? std::optional<std::string>{ std::move(*text) } : std::nullopt;
@@ -53,11 +54,11 @@ std::expected<void, std::string> WriteGameFile(std::filesystem::path const& fold
 
 	if (error.value() == 0)
 	{
-		std::expected<void, std::string> const written{ Json::WriteFileAtomically(folder / GameFileName, text) };
+		std::expected<void, std::error_code> const written{ Tge::IO::WriteFileAtomically(folder / GameFileName, text) };
 
 		if (!written.has_value())
 		{
-			result = std::unexpected{ std::format("games/{}/{}: {}", key, GameFileName, written.error()) };
+			result = std::unexpected{ std::format("games/{}/{}: {}", key, GameFileName, written.error().message()) };
 		}
 	}
 	else
@@ -102,11 +103,11 @@ bool AreIconsAsDownloaded(std::filesystem::path const& folder, std::filesystem::
 
 	for (std::string_view const name : IconFileNames)
 	{
-		std::expected<std::string, std::error_code> const own{ Json::ReadFile(folder / name, MaxUserFileSize) };
+		std::expected<std::string, std::error_code> const own{ Tge::IO::ReadWholeFile(folder / name, MaxUserFileSize) };
 
 		if (own.has_value())
 		{
-			std::expected<std::string, std::error_code> const downloaded{ Json::ReadFile(downloadedFolder / name, MaxUserFileSize) };
+			std::expected<std::string, std::error_code> const downloaded{ Tge::IO::ReadWholeFile(downloadedFolder / name, MaxUserFileSize) };
 
 			isSame = isSame && downloaded.has_value() && *downloaded == *own;
 		}
@@ -159,7 +160,7 @@ SEditableGame ReadGameText(std::filesystem::path const& userDir, std::string_vie
 {
 	std::optional<std::string> const downloaded{ ReadDownloadedText(userDir, key) };
 	std::expected<std::string, std::error_code> const userText{ (!userDir.empty() && IsValidKey(key))
-		? Json::ReadFile(GetGameFolder(userDir, key) / GameFileName, MaxUserFileSize)
+		? Tge::IO::ReadWholeFile(GetGameFolder(userDir, key) / GameFileName, MaxUserFileSize)
 		: std::expected<std::string, std::error_code>{ std::unexpected{ std::make_error_code(std::errc::no_such_file_or_directory) } } };
 	SEditableGame game{};
 

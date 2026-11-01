@@ -13,5 +13,6 @@ target_link_libraries(LktConfig
 		Tge::Base
 	PRIVATE
 		Lkt::Json
+		Tge::IO
 		Tge::Logging
 )

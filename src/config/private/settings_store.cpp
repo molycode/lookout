@@ -2,8 +2,9 @@
 #include "loggers.hpp"
 #include "settings_json.hpp"
 #include "config/default_settings.hpp"
-#include "json/files.hpp"
 #include <tge/assert.hpp>
+#include <tge/io/read_whole_file.hpp>
+#include <tge/io/write_file_atomically.hpp>
 #include <cstddef>
 #include <expected>
 #include <format>
@@ -44,7 +45,7 @@ SSettings CSettingsStore::Load()
 
 	if (!m_path.empty())
 	{
-		std::expected<std::string, std::error_code> const text{ Json::ReadFile(m_path, MaxFileSize) };
+		std::expected<std::string, std::error_code> const text{ Tge::IO::ReadWholeFile(m_path, MaxFileSize) };
 
 		if (text.has_value())
 		{
@@ -100,7 +101,7 @@ void CSettingsStore::Save(SSettings const& settings)
 	if (m_canSave && m_written != settings)
 	{
 		std::string text{ WriteSettingsJson(settings, m_kept) };
-		std::expected<void, std::string> const written{ Json::WriteFileAtomically(m_path, text) };
+		std::expected<void, std::error_code> const written{ Tge::IO::WriteFileAtomically(m_path, text) };
 
 		if (written.has_value())
 		{
@@ -109,7 +110,7 @@ void CSettingsStore::Save(SSettings const& settings)
 		}
 		else
 		{
-			gLog.Error("Cannot save the settings to '{}': {}", m_path.string(), written.error());
+			gLog.Error("Cannot save the settings to '{}': {}", m_path.string(), written.error().message());
 		}
 	}
 }

@@ -1,8 +1,9 @@
 #include "downloaded_files.hpp"
 #include "sha256.hpp"
 #include "games/game_files.hpp"
-#include "json/files.hpp"
 #include "json/json.hpp"
+#include <tge/io/read_whole_file.hpp>
+#include <tge/io/write_file_atomically.hpp>
 #include <algorithm>
 #include <format>
 #include <set>
@@ -22,7 +23,7 @@ constexpr std::string_view ProtocolExtension{ ".lua" };
 //////////////////////////////////////////////////////////////////////////
 bool HasContent(std::filesystem::path const& path, SIndexFile const& file)
 {
-	std::expected<std::string, std::error_code> const text{ Json::ReadFile(path, MaxFileSize) };
+	std::expected<std::string, std::error_code> const text{ Tge::IO::ReadWholeFile(path, MaxFileSize) };
 
 	return text.has_value() && text->size() == file.size && HashSha256(*text) == file.sha256;
 }
@@ -50,7 +51,7 @@ std::vector<std::filesystem::path> ListEntries(std::filesystem::path const& fold
 //////////////////////////////////////////////////////////////////////////
 JsonValue ReadGame(std::filesystem::path const& gameFile)
 {
-	std::expected<std::string, std::error_code> const text{ Json::ReadFile(gameFile, MaxFileSize) };
+	std::expected<std::string, std::error_code> const text{ Tge::IO::ReadWholeFile(gameFile, MaxFileSize) };
 
 	return text.has_value() ? JsonValue::parse(*text, nullptr, AllowExceptions, IgnoreComments) : JsonValue{};
 }
@@ -143,12 +144,12 @@ std::expected<void, std::string> InstallGame(std::filesystem::path const& downlo
 
 	for (auto const& [name, bytes] : files)
 	{
-		std::expected<void, std::string> const written{ (error.value() == 0) ? Json::WriteFileAtomically(staging / name, bytes)
-			: std::expected<void, std::string>{ std::unexpected{ error.message() } } };
+		std::expected<void, std::error_code> const written{ (error.value() == 0) ? Tge::IO::WriteFileAtomically(staging / name, bytes)
+			: std::expected<void, std::error_code>{ std::unexpected{ error } } };
 
 		if (!written.has_value() && result.has_value())
 		{
-			result = std::unexpected{ std::format("downloaded/games/{}/{}: {}", key, name, written.error()) };
+			result = std::unexpected{ std::format("downloaded/games/{}/{}: {}", key, name, written.error().message()) };
 		}
 	}
 
@@ -190,12 +191,12 @@ std::expected<void, std::string> InstallProtocol(std::filesystem::path const& do
 
 	std::filesystem::create_directories(folder, error);
 
-	std::expected<void, std::string> const written{ (error.value() == 0)
-		? Json::WriteFileAtomically(folder / std::format("{}{}", name, ProtocolExtension), source)
-		: std::expected<void, std::string>{ std::unexpected{ error.message() } } };
+	std::expected<void, std::error_code> const written{ (error.value() == 0)
+		? Tge::IO::WriteFileAtomically(folder / std::format("{}{}", name, ProtocolExtension), source)
+		: std::expected<void, std::error_code>{ std::unexpected{ error } } };
 
-	return written.has_value() ? written
-		: std::expected<void, std::string>{ std::unexpected{ std::format("downloaded/protocols/{}{}: {}", name, ProtocolExtension, written.error()) } };
+	return written.has_value() ? std::expected<void, std::string>{}
+		: std::expected<void, std::string>{ std::unexpected{ std::format("downloaded/protocols/{}{}: {}", name, ProtocolExtension, written.error().message()) } };
 }
 
 //////////////////////////////////////////////////////////////////////////

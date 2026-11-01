@@ -15,5 +15,6 @@ target_link_libraries(LktDownload
 		Lkt::Json
 		Lkt::Script
 		mbedtls
+		Tge::IO
 		Tge::Logging
 )

@@ -3,7 +3,7 @@
 #include "user_file_size.hpp"
 #include "games/game_files.hpp"
 #include "games/load_games.hpp"
-#include "json/files.hpp"
+#include <tge/io/read_whole_file.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -60,7 +60,7 @@ std::optional<std::array<uint32_t, 2>> ReadPngSize(std::span<std::byte const> pn
 //////////////////////////////////////////////////////////////////////////
 void CheckIcon(std::filesystem::path const& path, std::string_view shownAs, std::vector<Query::SGameProblem>& problems)
 {
-	std::expected<std::string, std::error_code> const icon{ Json::ReadFile(path, MaxUserFileSize) };
+	std::expected<std::string, std::error_code> const icon{ Tge::IO::ReadWholeFile(path, MaxUserFileSize) };
 	std::optional<std::array<uint32_t, 2>> const size{ icon.has_value() ? ReadPngSize(std::as_bytes(std::span{ *icon })) : std::nullopt };
 
 	if (!icon.has_value())

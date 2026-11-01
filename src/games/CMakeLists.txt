@@ -14,6 +14,7 @@ target_link_libraries(LktGames
 	PRIVATE
 		Lkt::Json
 		Lkt::Script
+		Tge::IO
 		Tge::Logging
 )
 
