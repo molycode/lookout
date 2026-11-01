@@ -129,3 +129,28 @@ jobs:
         run: |
           & (Join-Path (Split-Path $env:LKT_CMAKE) ctest.exe) --test-dir build/${{ matrix.dir }} --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw "tests failed ($LASTEXITCODE)" }
+
+      # Windows tells a window program from a console one by the subsystem in its PE header: 2 and 3. The step ends
+      # with exit 0, as pwsh would otherwise end it with the last program's code, which --nonsense makes 1.
+      - name: Check Lookout's programs
+        run: |
+          function Get-Subsystem([string] $path)
+          {
+            $bytes = [IO.File]::ReadAllBytes($path)
+            [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 0x5C)
+          }
+
+          $build = "build/${{ matrix.dir }}"
+          if ((Get-Subsystem "$build/lookout.exe") -ne 2) { throw "lookout.exe is not a window program" }
+          if ((Get-Subsystem "$build/lookout.com") -ne 3) { throw "lookout.com is not a console program" }
+
+          $version = & "$build/lookout.com" --version
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^Lookout \d+\.\d+\.\d+$') { throw "lookout.com --version said '$version' ($LASTEXITCODE)" }
+
+          & "$build/lookout.com" --check external/lookout-games
+          if ($LASTEXITCODE -ne 0) { throw "lookout.com --check failed ($LASTEXITCODE)" }
+
+          & "$build/lookout.com" --nonsense
+          if ($LASTEXITCODE -ne 1) { throw "lookout.com --nonsense exited $LASTEXITCODE, not 1" }
+
+          exit 0
