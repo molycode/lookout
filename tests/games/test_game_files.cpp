@@ -6,9 +6,9 @@
 #include "json/json.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
+#include "temp_dir.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
-#include <cstdlib>
 #include <expected>
 #include <filesystem>
 #include <fstream>
@@ -55,19 +55,16 @@ protected:
 	void SetUp() override
 	{
 		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-game-files-XXXXXX").string() };
 
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_dir = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-game-files"));
+		m_dir = m_tempDir.GetPath();
 		std::filesystem::create_directory_symlink(LKT_LOOKOUT_GAMES_DIR, GetDownloadedDir(m_dir), error);
 		ASSERT_EQ(error.value(), 0) << error.message();
 	}
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
-		std::filesystem::remove_all(m_dir, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
@@ -102,6 +99,7 @@ protected:
 		return game.dump(1, '\t');
 	}
 
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_dir;
 };
 

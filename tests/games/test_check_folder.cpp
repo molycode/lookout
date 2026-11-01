@@ -1,8 +1,8 @@
 #include "games/check_folder.hpp"
+#include "temp_dir.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <array>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -40,10 +40,9 @@ protected:
 	{
 		std::filesystem::path const games{ LKT_LOOKOUT_GAMES_DIR };
 		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-check-XXXXXX").string() };
 
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_dir = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-check"));
+		m_dir = m_tempDir.GetPath();
 		std::filesystem::create_directories(m_dir / "protocols");
 		std::filesystem::create_directories(m_dir / "games");
 		std::filesystem::copy(games / "protocols" / "quake2.lua", m_dir / "protocols" / "quake2.lua", error);
@@ -53,9 +52,7 @@ protected:
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
-		std::filesystem::remove_all(m_dir, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
@@ -77,6 +74,7 @@ protected:
 		return (content.problems.size() == 1) ? content.problems.front().text : std::string{};
 	}
 
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_dir;
 };
 

@@ -5,9 +5,9 @@
 #include "query/game_problem.hpp"
 #include "query/protocol_definition.hpp"
 #include "query/protocol_origin.hpp"
+#include "temp_dir.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -55,18 +55,13 @@ protected:
 	// testing::Test
 	void SetUp() override
 	{
-		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-games-XXXXXX").string() };
-
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_dir = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-games"));
+		m_dir = m_tempDir.GetPath();
 	}
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
-		std::filesystem::remove_all(m_dir, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
@@ -83,6 +78,7 @@ protected:
 		EXPECT_TRUE(file.good()) << path;
 	}
 
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_dir;
 };
 

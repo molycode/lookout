@@ -1,9 +1,9 @@
 #include "channels.hpp"
 #include "hinted_discovery.hpp"
 #include "launch/launcher_ids.hpp"
+#include "temp_dir.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -48,11 +48,8 @@ protected:
 	// testing::Test
 	void SetUp() override
 	{
-		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-launch-XXXXXX").string() };
-
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_root = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-launch"));
+		m_root = m_tempDir.GetPath();
 		m_hints = Query::SLaunchHints{ { std::string{ DesktopId } }, "Games/Kingpin", "run-game.sh", { "kingpin.x86", "main/pak0.pak" } };
 		m_game = m_root / "games" / "Kingpin";
 		m_program = m_game / "run-game.sh";
@@ -66,9 +63,7 @@ protected:
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
-		std::filesystem::remove_all(m_root, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
@@ -97,6 +92,7 @@ protected:
 	}
 
 	Query::SLaunchHints m_hints;
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_root;
 	std::filesystem::path m_game;
 	std::filesystem::path m_program;

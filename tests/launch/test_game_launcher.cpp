@@ -2,11 +2,11 @@
 #include "fixtures.hpp"
 #include "launch/game_launcher.hpp"
 #include "query/game_definition.hpp"
+#include "temp_dir.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <cerrno>
 #include <csignal>
-#include <cstdlib>
 #include <fcntl.h>
 #include <filesystem>
 #include <format>
@@ -76,11 +76,8 @@ protected:
 	// testing::Test
 	void SetUp() override
 	{
-		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-game-XXXXXX").string() };
-
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_root = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-game"));
+		m_root = m_tempDir.GetPath();
 		m_logs = m_root / "logs";
 		m_work = m_root / "work";
 		m_script = m_root / "fake-game.sh";
@@ -92,14 +89,12 @@ protected:
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
 		// Children a test did not hand to ReapFinished.
 		while (::waitpid(-1, nullptr, 0) > 0)
 		{
 		}
 
-		std::filesystem::remove_all(m_root, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
@@ -135,6 +130,7 @@ protected:
 		return m_launcher.Launch(Fixtures::GetGameByKey("kingpin"), MakeOption(), SConnectRequest{ Server, std::move(password) });
 	}
 
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_root;
 	std::filesystem::path m_logs;
 	std::filesystem::path m_work;

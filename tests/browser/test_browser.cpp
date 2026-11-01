@@ -9,11 +9,11 @@
 #include "query/master_endpoint.hpp"
 #include "query/protocol_definition.hpp"
 #include "query/protocol_origin.hpp"
+#include "temp_dir.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -63,12 +63,8 @@ protected:
 	// testing::Test
 	void SetUp() override
 	{
-		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-browser-XXXXXX").string() };
-
-		ASSERT_EQ(error.value(), 0);
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_root = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-browser"));
+		m_root = m_tempDir.GetPath();
 		m_configDir = m_root / "config";
 		m_logsDir = m_root / "logs";
 		m_game = m_root / "fake-game.sh";
@@ -87,8 +83,6 @@ protected:
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
 		m_browser.Terminate();
 		m_server.Stop();
 
@@ -97,7 +91,7 @@ protected:
 		{
 		}
 
-		std::filesystem::remove_all(m_root, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
@@ -148,6 +142,7 @@ protected:
 		return pFound;
 	}
 
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_root;
 	std::filesystem::path m_configDir;
 	std::filesystem::path m_logsDir;

@@ -2,9 +2,9 @@
 #include "fixtures.hpp"
 #include "launch/folder_option.hpp"
 #include "query/game_definition.hpp"
+#include "temp_dir.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -39,11 +39,8 @@ protected:
 	// testing::Test
 	void SetUp() override
 	{
-		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-folder-XXXXXX").string() };
-
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_folder = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-folder"));
+		m_folder = m_tempDir.GetPath();
 		WriteFile(m_folder / "run-game.sh", "#!/bin/sh\n");
 		std::filesystem::permissions(m_folder / "run-game.sh", Executable);
 		WriteFile(m_folder / "kingpin.x86", "");
@@ -52,12 +49,11 @@ protected:
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
-		std::filesystem::remove_all(m_folder, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_folder;
 };
 

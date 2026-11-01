@@ -3,12 +3,12 @@
 #include "download/game_downloads.hpp"
 #include "json/json.hpp"
 #include "script/script_api.hpp"
+#include "temp_dir.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <condition_variable>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -62,11 +62,9 @@ protected:
 	void SetUp() override
 	{
 		std::filesystem::path const games{ LKT_LOOKOUT_GAMES_DIR };
-		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-downloads-XXXXXX").string() };
 
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_dir = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-downloads"));
+		m_dir = m_tempDir.GetPath();
 
 		for (std::string_view const file : { "game.json", "icon.png", "icon-licence.txt" })
 		{
@@ -80,11 +78,9 @@ protected:
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
 		m_downloads.Terminate();
 		m_server.Stop();
-		std::filesystem::remove_all(m_dir, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
@@ -256,6 +252,7 @@ protected:
 		return (it != offers.end()) ? it->state : EOfferState::NotInstalled;
 	}
 
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_dir;
 	std::map<std::string, std::string> m_files;
 	Fixtures::CLoopbackHttpsServer m_server;

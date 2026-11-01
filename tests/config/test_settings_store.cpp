@@ -5,16 +5,16 @@
 #include "config/settings.hpp"
 #include "config/settings_store.hpp"
 #include "query/server_address.hpp"
+#include "temp_dir.hpp"
+#include <tge/platform.hpp>
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
-#include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <iterator>
 #include <string>
 #include <string_view>
-#include <sys/stat.h>
 #include <system_error>
 #include <vector>
 
@@ -53,16 +53,6 @@ void WriteText(std::filesystem::path const& path, std::string_view text)
 }
 
 //////////////////////////////////////////////////////////////////////////
-ino_t GetInode(std::filesystem::path const& path)
-{
-	struct stat status{};
-
-	EXPECT_EQ(::stat(path.c_str(), &status), 0) << path;
-
-	return status.st_ino;
-}
-
-//////////////////////////////////////////////////////////////////////////
 class CSettingsStoreTest : public testing::Test
 {
 protected:
@@ -70,22 +60,18 @@ protected:
 	// testing::Test
 	void SetUp() override
 	{
-		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-settings-XXXXXX").string() };
-
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_dir = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-settings"));
+		m_dir = m_tempDir.GetPath();
 		m_file = m_dir / "config.json";
 	}
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
-		std::filesystem::remove_all(m_dir, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_dir;
 	std::filesystem::path m_file;
 };
@@ -155,19 +141,21 @@ TEST_F(CSettingsStoreTest, SaveLeavesOnlyTheSettingsFile)
 TEST_F(CSettingsStoreTest, UnchangedSettingsAreNotRewritten)
 {
 	CExpectedLog const expected{ ConfigChannel, 0, 0 };
+	std::filesystem::path const kept{ m_dir / "kept.json" };
 	CSettingsStore writer{};
+	CSettingsStore store{};
+	std::error_code error{};
 
 	writer.Initialize(m_dir.string());
 	writer.Load();
 	writer.Save(MakeChangedSettings());
-
-	ino_t const before{ GetInode(m_file) };
-	CSettingsStore store{};
-
+	// A second name for the file, which a rewrite would leave on the old one.
+	std::filesystem::create_hard_link(m_file, kept, error);
+	ASSERT_EQ(error.value(), 0) << error.message();
 	store.Initialize(m_dir.string());
 	store.Save(store.Load());
 
-	EXPECT_EQ(GetInode(m_file), before);
+	EXPECT_TRUE(std::filesystem::equivalent(m_file, kept, error));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -282,6 +270,7 @@ TEST_F(CSettingsStoreTest, NewerFileIsNeverOverwritten)
 	EXPECT_EQ(ReadText(m_file), newer);
 }
 
+#if defined(TGE_PLATFORM_LINUX)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CSettingsStoreTest, SavingKeepsASymlinkedFileLinked)
 {
@@ -304,7 +293,7 @@ TEST_F(CSettingsStoreTest, SavingKeepsThePermissions)
 {
 	CExpectedLog const expected{ ConfigChannel, 0, 0 };
 	CSettingsStore store{};
-	struct stat status{};
+	std::error_code error{};
 
 	WriteText(m_file, "{}");
 	std::filesystem::permissions(m_file, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
@@ -312,9 +301,10 @@ TEST_F(CSettingsStoreTest, SavingKeepsThePermissions)
 	store.Load();
 	store.Save(MakeChangedSettings());
 
-	ASSERT_EQ(::stat(m_file.c_str(), &status), 0);
-	EXPECT_EQ(status.st_mode & 0777, 0600u);
+	EXPECT_EQ(std::filesystem::status(m_file, error).permissions() & std::filesystem::perms::all,
+		std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
 }
+#endif // defined(TGE_PLATFORM_LINUX)
 
 //////////////////////////////////////////////////////////////////////////
 // A regular file where the directory should be fails even for root, which permissions would not.

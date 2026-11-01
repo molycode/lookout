@@ -1,8 +1,8 @@
 #include "games/folder_watcher.hpp"
+#include "temp_dir.hpp"
 #include <gtest/gtest.h>
 #include <chrono>
 #include <condition_variable>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -30,20 +30,15 @@ protected:
 	// testing::Test
 	void SetUp() override
 	{
-		std::error_code error{};
-		std::string pattern{ (std::filesystem::temp_directory_path(error) / "lookout-watch-XXXXXX").string() };
-
-		ASSERT_NE(::mkdtemp(pattern.data()), nullptr);
-		m_root = pattern;
+		ASSERT_TRUE(m_tempDir.Initialize("lookout-watch"));
+		m_root = m_tempDir.GetPath();
 		m_userDir = m_root / "data" / "lookout";
 	}
 
 	void TearDown() override
 	{
-		std::error_code error{};
-
 		m_watcher.Terminate();
-		std::filesystem::remove_all(m_root, error);
+		m_tempDir.Terminate();
 	}
 	// ~testing::Test
 
@@ -86,6 +81,7 @@ protected:
 		return m_numWakes;
 	}
 
+	Lkt::Fixtures::CTempDir m_tempDir;
 	std::filesystem::path m_root;
 	std::filesystem::path m_userDir;
 	CFolderWatcher m_watcher;
