@@ -102,7 +102,7 @@ std::expected<SLaunchOption, std::string> MakeDesktopOption(std::string_view id,
 {
 	std::expected<SLaunchOption, std::string> result{ std::unexpected{ std::string{} } };
 	std::filesystem::path const workingDir{ entry.path };
-	std::expected<std::vector<std::string>, ECommandLineError> const split{ SplitCommandLine(entry.exec, EQuoting::Lenient) };
+	std::expected<std::vector<std::string>, ECommandLineError> const split{ SplitCommandLine(entry.exec, ECommandSyntax::Posix, EQuoting::Lenient) };
 	std::expected<std::vector<std::string>, ECommandLineError> const argv{ split.and_then([&entry, &file](std::vector<std::string> const& arguments)
 	{
 		return ExpandFieldCodes(arguments, entry.name, file.string());

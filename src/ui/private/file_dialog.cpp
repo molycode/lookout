@@ -1,8 +1,13 @@
 #include "file_dialog.hpp"
 #include "file_dialog_mailbox.hpp"
 #include <tge/assert.hpp>
+#include <tge/platform.hpp>
 #include <SDL3/SDL.h>
 #include <string_view>
+
+#if defined(TGE_PLATFORM_WINDOWS)
+#include <array>
+#endif // defined(TGE_PLATFORM_WINDOWS)
 
 namespace Lkt::Ui
 {
@@ -10,6 +15,11 @@ namespace
 {
 // Static and trivially destructible: zenity calls back from a thread of its own, even after Lookout has shut down.
 constinit SFileDialogMailbox gMailbox{};
+
+#if defined(TGE_PLATFORM_WINDOWS)
+// Static, as SDL reads it until it calls back.
+constexpr std::array<SDL_DialogFileFilter, 1> ProgramFilters{ SDL_DialogFileFilter{ "Programs", "exe;com" } };
+#endif // defined(TGE_PLATFORM_WINDOWS)
 
 //////////////////////////////////////////////////////////////////////////
 // After shutdown neither the logger, the allocator nor SDL's event queue may be used.
@@ -56,7 +66,14 @@ void OpenProgramDialog(SDL_Window* pWindow)
 	TGE_ASSERT(gMailbox.state.load(std::memory_order_acquire) == EFileDialogState::Closed, "A program dialog opens over one whose answer was never taken");
 
 	gMailbox.state.store(EFileDialogState::Open, std::memory_order_relaxed);
+
+#if defined(TGE_PLATFORM_WINDOWS)
+	SDL_ShowOpenFileDialog(&OnDialogFinished, nullptr, pWindow, ProgramFilters.data(), static_cast<int>(ProgramFilters.size()), nullptr, false);
+#elif defined(TGE_PLATFORM_LINUX)
 	SDL_ShowOpenFileDialog(&OnDialogFinished, nullptr, pWindow, nullptr, 0, nullptr, false);
+#else
+#error "Unsupported platform"
+#endif // defined(TGE_PLATFORM_WINDOWS)
 }
 
 //////////////////////////////////////////////////////////////////////////

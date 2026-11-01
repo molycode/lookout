@@ -1,14 +1,18 @@
 #include "command_line.hpp"
+#include "typed_command_syntax.hpp"
 #include "launch/quote_argument.hpp"
+#include <algorithm>
 #include <optional>
 
 namespace Lkt::Launch
 {
 namespace
 {
-constexpr std::string_view Separators{ " \t\n" };
+constexpr std::string_view PosixSeparators{ " \t\n" };
 constexpr std::string_view QuotedEscapes{ "\"`$\\" };
-constexpr std::string_view ShellCharacters{ "'~$`;|&<>()*?#" };
+constexpr std::string_view PosixShellCharacters{ "'~$`;|&<>()*?#" };
+constexpr std::string_view WindowsSeparators{ " \t" };
+constexpr std::string_view WindowsShellCharacters{ "&|<>^%" };
 constexpr std::string_view RemovedFieldCodes{ "fFuUidDnNvm" };
 
 //////////////////////////////////////////////////////////////////////////
@@ -63,10 +67,23 @@ std::expected<std::string, ECommandLineError> ExpandArgument(std::string_view ar
 
 	return result;
 }
-} // namespace
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<std::vector<std::string>, ECommandLineError> SplitCommandLine(std::string_view text, EQuoting quoting)
+std::expected<std::vector<std::string>, ECommandLineError> ToResult(std::vector<std::string> arguments, std::optional<ECommandLineError> const& error)
+{
+	std::expected<std::vector<std::string>, ECommandLineError> result{ std::move(arguments) };
+
+	if (error.has_value())
+	{
+		result = std::unexpected{ *error };
+	}
+
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The Desktop Entry specification's Exec quoting.
+std::expected<std::vector<std::string>, ECommandLineError> SplitPosix(std::string_view text, EQuoting quoting)
 {
 	std::vector<std::string> arguments{};
 	std::string current{};
@@ -102,7 +119,7 @@ std::expected<std::vector<std::string>, ECommandLineError> SplitCommandLine(std:
 				current += character;
 			}
 		}
-		else if (Separators.contains(character))
+		else if (PosixSeparators.contains(character))
 		{
 			if (isInWord)
 			{
@@ -121,7 +138,7 @@ std::expected<std::vector<std::string>, ECommandLineError> SplitCommandLine(std:
 			error = ECommandLineError::StrayBackslash;
 		}
 		// A single quote is refused even leniently: GLib would honour it as shell quoting, which this splitting lacks.
-		else if ((quoting == EQuoting::Strict && ShellCharacters.contains(character)) || character == '\'')
+		else if ((quoting == EQuoting::Strict && PosixShellCharacters.contains(character)) || character == '\'')
 		{
 			error = ECommandLineError::UnquotedShellCharacter;
 		}
@@ -142,14 +159,148 @@ std::expected<std::vector<std::string>, ECommandLineError> SplitCommandLine(std:
 		arguments.emplace_back(std::move(current));
 	}
 
-	std::expected<std::vector<std::string>, ECommandLineError> result{ std::move(arguments) };
+	return ToResult(std::move(arguments), error);
+}
 
-	if (error.has_value())
+//////////////////////////////////////////////////////////////////////////
+// The C runtime's rules, which a Windows program applies to its own command line: backslashes are literal except
+// before a quote, and "" inside quotes is a quote.
+std::expected<std::vector<std::string>, ECommandLineError> SplitWindows(std::string_view text, EQuoting quoting)
+{
+	std::vector<std::string> arguments{};
+	std::string current{};
+	std::optional<ECommandLineError> error{};
+	bool isInWord{ false };
+	bool isQuoted{ false };
+	size_t index{ 0 };
+
+	while (!error.has_value() && index < text.size())
 	{
-		result = std::unexpected{ *error };
+		char const character{ text[index] };
+
+		if (character == '\\')
+		{
+			size_t const numBackslashes{ std::min(text.find_first_not_of('\\', index), text.size()) - index };
+			bool const isBeforeQuote{ index + numBackslashes < text.size() && text[index + numBackslashes] == '"' };
+
+			current.append(isBeforeQuote ? numBackslashes / 2 : numBackslashes, '\\');
+			index += numBackslashes;
+			isInWord = true;
+
+			if (isBeforeQuote && numBackslashes % 2 == 1)
+			{
+				current += '"';
+				++index;
+			}
+		}
+		else if (character == '"')
+		{
+			if (isQuoted && index + 1 < text.size() && text[index + 1] == '"')
+			{
+				current += '"';
+				++index;
+			}
+			else
+			{
+				isQuoted = !isQuoted;
+			}
+
+			isInWord = true;
+			++index;
+		}
+		else if (!isQuoted && WindowsSeparators.contains(character))
+		{
+			if (isInWord)
+			{
+				arguments.emplace_back(std::move(current));
+				current.clear();
+				isInWord = false;
+			}
+
+			++index;
+		}
+		else if (!isQuoted && quoting == EQuoting::Strict && WindowsShellCharacters.contains(character))
+		{
+			error = ECommandLineError::UnquotedShellCharacter;
+		}
+		else
+		{
+			current += character;
+			isInWord = true;
+			++index;
+		}
 	}
 
-	return result;
+	if (!error.has_value() && isQuoted)
+	{
+		error = ECommandLineError::UnterminatedQuote;
+	}
+
+	if (isInWord)
+	{
+		arguments.emplace_back(std::move(current));
+	}
+
+	return ToResult(std::move(arguments), error);
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::string QuotePosix(std::string_view text)
+{
+	std::string quoted{ '"' };
+
+	for (char const character : text)
+	{
+		if (QuotedEscapes.contains(character))
+		{
+			quoted += '\\';
+		}
+
+		quoted += character;
+	}
+
+	quoted += '"';
+
+	return quoted;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::string QuoteWindows(std::string_view text)
+{
+	std::string quoted{ '"' };
+	size_t numBackslashes{ 0 };
+
+	for (char const character : text)
+	{
+		if (character == '\\')
+		{
+			++numBackslashes;
+		}
+		else if (character == '"')
+		{
+			quoted.append(numBackslashes * 2 + 1, '\\');
+			quoted += '"';
+			numBackslashes = 0;
+		}
+		else
+		{
+			quoted.append(numBackslashes, '\\');
+			quoted += character;
+			numBackslashes = 0;
+		}
+	}
+
+	quoted.append(numBackslashes * 2, '\\');
+	quoted += '"';
+
+	return quoted;
+}
+} // namespace
+
+//////////////////////////////////////////////////////////////////////////
+std::expected<std::vector<std::string>, ECommandLineError> SplitCommandLine(std::string_view text, ECommandSyntax syntax, EQuoting quoting)
+{
+	return (syntax == ECommandSyntax::Windows) ? SplitWindows(text, quoting) : SplitPosix(text, quoting);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -175,33 +326,18 @@ std::expected<std::vector<std::string>, ECommandLineError> ExpandFieldCodes(std:
 		}
 	}
 
-	std::expected<std::vector<std::string>, ECommandLineError> result{ std::move(expanded) };
+	return ToResult(std::move(expanded), error);
+}
 
-	if (error.has_value())
-	{
-		result = std::unexpected{ *error };
-	}
-
-	return result;
+//////////////////////////////////////////////////////////////////////////
+std::string QuoteArgument(std::string_view text, ECommandSyntax syntax)
+{
+	return (syntax == ECommandSyntax::Windows) ? QuoteWindows(text) : QuotePosix(text);
 }
 
 //////////////////////////////////////////////////////////////////////////
 std::string QuoteArgument(std::string_view text)
 {
-	std::string quoted{ '"' };
-
-	for (char const character : text)
-	{
-		if (QuotedEscapes.contains(character))
-		{
-			quoted += '\\';
-		}
-
-		quoted += character;
-	}
-
-	quoted += '"';
-
-	return quoted;
+	return QuoteArgument(text, GetTypedCommandSyntax());
 }
 } // namespace Lkt::Launch
