@@ -3,6 +3,7 @@
 #include "download/download_phase.hpp"
 #include "download/download_source.hpp"
 #include "download/game_offer.hpp"
+#include "net/clock.hpp"
 #include "net/fetch_result.hpp"
 #include "net/https_fetcher.hpp"
 #include <tge/non_copyable.hpp>
@@ -22,6 +23,7 @@ namespace Lkt::Download
 {
 struct SGameIndex;
 struct SIndexFile;
+struct SPendingSwap;
 
 // Lists, downloads, updates and removes the games of a lookout-games repository in the downloaded folder of userDir,
 // which nothing else writes. Used from one thread: the callback only says that Update has something to take.
@@ -42,7 +44,8 @@ public:
 	void RequestIcon(std::string_view key);
 
 	// True when the downloaded games changed, so they are to be loaded again.
-	bool Update();
+	bool Update(Net::Clock::time_point now);
+	std::optional<Net::Clock::time_point> GetNextRetry() const;
 
 	EDownloadPhase GetPhase() const;
 	bool HasIndex() const;
@@ -60,7 +63,9 @@ private:
 	void PruneIcons() const;
 	void TakeIcon(Net::SFetchResult result, std::string_view sha256);
 	std::optional<std::string> FindHeldIcon(SIndexFile const& icon) const;
-	void InstallFetched();
+	void InstallFetched(Net::Clock::time_point now);
+	void RetrySwaps(Net::Clock::time_point now);
+	void FinishInstall();
 	void RefreshOffers();
 	std::string MakePath(std::string_view reference, std::string_view file) const;
 	void AddProblem(std::string problem);
@@ -78,8 +83,12 @@ private:
 	std::map<std::string, std::string, std::less<>> m_pendingIconHashes;
 	std::map<std::string, std::string, std::less<>> m_iconsByHash;
 	std::set<std::string, std::less<>> m_failedIconHashes;
+	std::vector<SPendingSwap> m_pendingSwaps;
+	std::optional<Net::Clock::time_point> m_nextRetry;
 	size_t m_numToFetch{ 0 };
+	size_t m_numInstalled{ 0 };
 	EDownloadPhase m_phase{ EDownloadPhase::Idle };
 	bool m_hasChanged{ false };
+	bool m_hasNewProtocols{ false };
 };
 } // namespace Lkt::Download

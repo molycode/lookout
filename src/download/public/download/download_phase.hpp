@@ -8,6 +8,7 @@ enum class EDownloadPhase : uint8_t
 {
 	Idle,
 	ReadingIndex,
-	Downloading
+	Downloading,
+	Installing
 };
 } // namespace Lkt::Download

@@ -251,6 +251,10 @@ void CDownloadWindow::DrawStatus() const
 		// A label over the bar would end up light text on amber, which cannot be read.
 		ImGui::ProgressBar(fraction, ImVec2{ -FLT_MIN, ProgressBarHeightEm * ImGui::GetFontSize() }, "");
 	}
+	else if (m_pDownloads->GetPhase() == Download::EDownloadPhase::Installing)
+	{
+		ImGui::TextUnformatted("Installing: waiting for the files to be free…");
+	}
 
 	ImGui::PushTextWrapPos(0.0f);
 	ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColors().error);

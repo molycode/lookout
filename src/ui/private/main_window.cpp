@@ -237,10 +237,11 @@ void CMainWindow::RequestQuit()
 void CMainWindow::Draw(Browser::CBrowser& browser)
 {
 	SFrameIntents intents{};
-	bool const hasNewDownloads{ m_canDownload && m_downloads.Update() };
+	Net::Clock::time_point const now{ Net::Clock::now() };
+	bool const hasNewDownloads{ m_canDownload && m_downloads.Update(now) };
 
 	m_masterProbes.Update();
-	m_latestRelease.Update(Net::Clock::now());
+	m_latestRelease.Update(now);
 
 	intents.quit = std::exchange(m_isQuitRequested, false);
 
@@ -298,10 +299,16 @@ std::optional<std::chrono::steady_clock::time_point> CMainWindow::GetNextDeadlin
 {
 	std::optional<std::chrono::steady_clock::time_point> deadline{ m_masterProbes.GetNextDeadline() };
 	std::optional<std::chrono::steady_clock::time_point> const check{ m_latestRelease.GetNextCheck() };
+	std::optional<std::chrono::steady_clock::time_point> const retry{ m_canDownload ? m_downloads.GetNextRetry() : std::nullopt };
 
 	if (check.has_value() && (!deadline.has_value() || *check < *deadline))
 	{
 		deadline = check;
+	}
+
+	if (retry.has_value() && (!deadline.has_value() || *retry < *deadline))
+	{
+		deadline = retry;
 	}
 
 	return deadline;

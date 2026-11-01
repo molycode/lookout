@@ -1,6 +1,7 @@
 #include "net/loopback_https_server.hpp"
 #include "sha256.hpp"
 #include "download/game_downloads.hpp"
+#include "net/clock.hpp"
 #include "json/json.hpp"
 #include "script/script_api.hpp"
 #include "temp_dir.hpp"
@@ -157,18 +158,19 @@ protected:
 	bool RunUntil(std::function<bool()> const& isDone)
 	{
 		auto const deadline{ std::chrono::steady_clock::now() + Patience };
-		bool hasChanged{ m_downloads.Update() };
+		bool hasChanged{ m_downloads.Update(Net::Clock::now()) };
 
 		while (!isDone() && std::chrono::steady_clock::now() < deadline)
 		{
 			{
 				std::unique_lock lock{ m_mutex };
+				std::optional<Net::Clock::time_point> const retry{ m_downloads.GetNextRetry() };
 
-				m_wake.wait_until(lock, deadline, [this]() { return m_hasResults; });
+				m_wake.wait_until(lock, (retry.has_value() && *retry < deadline) ? *retry : deadline, [this]() { return m_hasResults; });
 				m_hasResults = false;
 			}
 
-			hasChanged = m_downloads.Update() || hasChanged;
+			hasChanged = m_downloads.Update(Net::Clock::now()) || hasChanged;
 		}
 
 		return hasChanged;
@@ -360,6 +362,33 @@ TEST_F(CGameDownloadsTest, UpdateReplacesTheGame)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Windows will not move a folder while a file inside is open, as a virus scanner keeps one it reads, so the update
+// waits for the file; elsewhere it goes through at once.
+TEST_F(CGameDownloadsTest, UpdateWaitsForAGameFileHeldOpen)
+{
+	std::vector<std::string> const keys{ "kingpin" };
+
+	Start();
+	ReadIndex();
+	Download("kingpin");
+	m_files["games/kingpin/game.json"] += "\n";
+	Serve(MakeIndex());
+	ReadIndex();
+
+	std::ifstream held{ m_dir / "downloaded/games/kingpin/game.json" };
+
+	ASSERT_TRUE(held.is_open());
+	m_downloads.Download(keys);
+	RunUntil([this]() { return m_downloads.GetPhase() != EDownloadPhase::Downloading; });
+	held.close();
+	RunUntilIdle();
+
+	EXPECT_EQ(ReadText(m_dir / "downloaded/games/kingpin/game.json"), m_files.at("games/kingpin/game.json"));
+	EXPECT_EQ(GetState("kingpin"), EOfferState::Installed);
+	EXPECT_TRUE(m_downloads.GetProblems().empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CGameDownloadsTest, FileThatDiffersFromTheIndexIsNotInstalled)
 {
 	JsonValue const index = MakeIndex();
@@ -424,7 +453,7 @@ TEST_F(CGameDownloadsTest, RemoveTakesTheGameAndItsProtocol)
 	Download("kingpin");
 	m_downloads.Remove(keys);
 
-	EXPECT_TRUE(m_downloads.Update());
+	EXPECT_TRUE(m_downloads.Update(Net::Clock::now()));
 	EXPECT_FALSE(std::filesystem::exists(m_dir / "downloaded/games/kingpin"));
 	EXPECT_FALSE(std::filesystem::exists(m_dir / "downloaded/protocols/quake2.lua"));
 	EXPECT_EQ(GetState("kingpin"), EOfferState::NotInstalled);

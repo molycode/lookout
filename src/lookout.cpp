@@ -262,10 +262,9 @@ bool CLookout::RunDownload(std::span<std::string const> keys)
 				hasResults = false;
 			}
 
-			downloads.Update();
-
 			auto const now{ std::chrono::steady_clock::now() };
 
+			downloads.Update(now);
 			latestRelease.Update(now);
 			Tge::gRuntime->Update(std::chrono::duration<float>{ now - lastUpdate }.count());
 			lastUpdate = now;

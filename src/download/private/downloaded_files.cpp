@@ -21,6 +21,18 @@ constexpr size_t MaxFileSize{ 1024 * 1024 };
 constexpr std::string_view ProtocolExtension{ ".lua" };
 
 //////////////////////////////////////////////////////////////////////////
+std::filesystem::path GetStagingFolder(std::filesystem::path const& downloadedDir, std::string const& key)
+{
+	return downloadedDir / "games" / std::format(".{}.new", key);
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::filesystem::path GetPreviousFolder(std::filesystem::path const& downloadedDir, std::string const& key)
+{
+	return downloadedDir / "games" / std::format(".{}.old", key);
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool HasContent(std::filesystem::path const& path, SIndexFile const& file)
 {
 	std::expected<std::string, std::error_code> const text{ Tge::IO::ReadWholeFile(path, MaxFileSize) };
@@ -127,20 +139,21 @@ std::map<std::string, std::string> ListDownloadedGames(std::filesystem::path con
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Staged beside its final place under a dot name the loader skips, then swapped in; what is left of a failed swap goes.
-std::expected<void, std::string> InstallGame(std::filesystem::path const& downloadedDir, std::string const& key,
+// Staged beside its final place under a dot name the loader skips; a stale staging folder that cannot go would bring
+// its own files along, so that fails the game too. Nothing staged is left behind a failure.
+std::expected<void, std::string> StageGame(std::filesystem::path const& downloadedDir, std::string const& key,
 	std::map<std::string, std::string> const& files)
 {
-	std::filesystem::path const games{ downloadedDir / "games" };
-	std::filesystem::path const staging{ games / std::format(".{}.new", key) };
-	std::filesystem::path const previous{ games / std::format(".{}.old", key) };
-	std::filesystem::path const target{ games / key };
+	std::filesystem::path const staging{ GetStagingFolder(downloadedDir, key) };
 	std::error_code error{};
 	std::expected<void, std::string> result{};
 
 	std::filesystem::remove_all(staging, error);
-	std::filesystem::remove_all(previous, error);
-	std::filesystem::create_directories(staging, error);
+
+	if (error.value() == 0)
+	{
+		std::filesystem::create_directories(staging, error);
+	}
 
 	for (auto const& [name, bytes] : files)
 	{
@@ -153,34 +166,59 @@ std::expected<void, std::string> InstallGame(std::filesystem::path const& downlo
 		}
 	}
 
-	bool const hadTarget{ std::filesystem::exists(target, error) };
+	if (!result.has_value())
+	{
+		DiscardStagedGame(downloadedDir, key);
+	}
 
-	if (result.has_value() && hadTarget)
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// One attempt, safe to repeat after any failure: a folder an earlier attempt set aside goes first, as a rename never
+// replaces a folder on Windows, and the game in place comes back when the new one cannot take its place.
+std::expected<void, std::error_code> SwapInGame(std::filesystem::path const& downloadedDir, std::string const& key)
+{
+	std::filesystem::path const staging{ GetStagingFolder(downloadedDir, key) };
+	std::filesystem::path const previous{ GetPreviousFolder(downloadedDir, key) };
+	std::filesystem::path const target{ downloadedDir / "games" / key };
+	std::error_code error{};
+	std::error_code ignored{};
+
+	std::filesystem::remove_all(previous, error);
+
+	bool const hadTarget{ error.value() == 0 && std::filesystem::exists(target, error) };
+
+	if (hadTarget)
 	{
 		std::filesystem::rename(target, previous, error);
 	}
 
-	if (result.has_value() && error.value() == 0)
+	if (error.value() == 0)
 	{
 		std::filesystem::rename(staging, target, error);
 
 		if (error.value() != 0 && hadTarget)
 		{
-			std::error_code restoreError{};
-
-			std::filesystem::rename(previous, target, restoreError);
+			std::filesystem::rename(previous, target, ignored);
 		}
 	}
 
-	if (result.has_value() && error.value() != 0)
+	if (error.value() == 0)
 	{
-		result = std::unexpected{ std::format("downloaded/games/{}: {}", key, error.message()) };
+		std::filesystem::remove_all(previous, ignored);
 	}
 
-	std::filesystem::remove_all(staging, error);
-	std::filesystem::remove_all(previous, error);
+	return (error.value() == 0) ? std::expected<void, std::error_code>{} : std::unexpected{ error };
+}
 
-	return result;
+//////////////////////////////////////////////////////////////////////////
+// What cannot go now goes at the game's next install; the loader skips it meanwhile.
+void DiscardStagedGame(std::filesystem::path const& downloadedDir, std::string const& key)
+{
+	std::error_code ignored{};
+
+	std::filesystem::remove_all(GetStagingFolder(downloadedDir, key), ignored);
 }
 
 //////////////////////////////////////////////////////////////////////////

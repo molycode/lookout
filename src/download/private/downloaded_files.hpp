@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace Lkt::Download
@@ -19,8 +20,10 @@ bool IsProtocolCurrent(std::filesystem::path const& downloadedDir, SIndexProtoco
 std::map<std::string, std::string> ListDownloadedGames(std::filesystem::path const& downloadedDir);
 
 // The game's folder is replaced whole, through renames, so a game is never half old and half new.
-std::expected<void, std::string> InstallGame(std::filesystem::path const& downloadedDir, std::string const& key,
+std::expected<void, std::string> StageGame(std::filesystem::path const& downloadedDir, std::string const& key,
 	std::map<std::string, std::string> const& files);
+std::expected<void, std::error_code> SwapInGame(std::filesystem::path const& downloadedDir, std::string const& key);
+void DiscardStagedGame(std::filesystem::path const& downloadedDir, std::string const& key);
 std::expected<void, std::string> InstallProtocol(std::filesystem::path const& downloadedDir, std::string const& name, std::string const& source);
 std::expected<void, std::string> RemoveGame(std::filesystem::path const& downloadedDir, std::string const& key);
 // Removes each downloaded protocol that neither a downloaded game nor one of the user's games names any more.

@@ -3,19 +3,23 @@
 #include "game_index.hpp"
 #include "icon_cache.hpp"
 #include "loggers.hpp"
+#include "pending_swap.hpp"
 #include "read_index.hpp"
 #include "sha256.hpp"
 #include "games/game_files.hpp"
 #include "games/game_format.hpp"
 #include "script/script_api.hpp"
 #include <tge/assert.hpp>
+#include <tge/io/is_busy.hpp>
 #include <algorithm>
+#include <chrono>
 #include <expected>
 #include <format>
 #include <optional>
 #include <ranges>
 #include <set>
 #include <string_view>
+#include <system_error>
 #include <utility>
 
 namespace Lkt::Download
@@ -30,6 +34,9 @@ constexpr std::string_view IconFolder{ "icons" };
 // The window asks again every frame for the icons on screen, so a few keep the connection busy; more would hold up
 // a reading or a download behind icons that may have scrolled away.
 constexpr size_t MaxPendingIcons{ 4 };
+// A virus scanner reads files just written and keeps their folder from moving meanwhile, which takes it a moment.
+constexpr std::chrono::milliseconds SwapRetryInterval{ 250 };
+constexpr size_t MaxSwapTries{ 20 };
 
 //////////////////////////////////////////////////////////////////////////
 bool IsSupported(SIndexGame const& game, SIndexProtocol const& protocol)
@@ -106,6 +113,13 @@ bool CGameDownloads::Initialize(std::filesystem::path const& userDir, std::files
 //////////////////////////////////////////////////////////////////////////
 void CGameDownloads::Terminate()
 {
+	for (SPendingSwap const& swap : m_pendingSwaps)
+	{
+		gLog.Warning("{}: not installed, as its files were still in use when Lookout quit", swap.name);
+	}
+
+	m_pendingSwaps.clear();
+	m_nextRetry.reset();
 	m_fetcher.Terminate();
 	m_pIndex.reset();
 	m_offers.clear();
@@ -208,7 +222,7 @@ void CGameDownloads::Remove(std::span<std::string const> keys)
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool CGameDownloads::Update()
+bool CGameDownloads::Update(Net::Clock::time_point now)
 {
 	std::vector<Net::SFetchResult> results{};
 
@@ -241,12 +255,20 @@ bool CGameDownloads::Update()
 
 	if (m_phase == EDownloadPhase::Downloading && m_fetched.size() >= m_numToFetch)
 	{
-		InstallFetched();
-		m_phase = EDownloadPhase::Idle;
-		RefreshOffers();
+		InstallFetched(now);
+	}
+	else if (m_phase == EDownloadPhase::Installing && m_nextRetry.has_value() && now >= *m_nextRetry)
+	{
+		RetrySwaps(now);
 	}
 
 	return std::exchange(m_hasChanged, false);
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::optional<Net::Clock::time_point> CGameDownloads::GetNextRetry() const
+{
+	return m_nextRetry;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -436,11 +458,14 @@ std::optional<std::string> CGameDownloads::FindHeldIcon(SIndexFile const& icon) 
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Protocols first, so a game never lands without the protocol it names.
-void CGameDownloads::InstallFetched()
+// Protocols first, so a game never lands without the protocol it names. A game whose folder Windows holds stays staged
+// and is swapped in again shortly; the reload waits for all of them, so no reload pairs new protocols with old games.
+void CGameDownloads::InstallFetched(Net::Clock::time_point now)
 {
 	std::set<std::string> failedProtocols{};
-	size_t numInstalled{ 0 };
+
+	m_numInstalled = 0;
+	m_hasNewProtocols = false;
 
 	for (SIndexProtocol const& protocol : m_pIndex->protocols)
 	{
@@ -453,7 +478,7 @@ void CGameDownloads::InstallFetched()
 
 			installed = verified.has_value() ? InstallProtocol(m_downloadedDir, protocol.name, **verified)
 				: std::expected<void, std::string>{ std::unexpected{ verified.error() } };
-			m_hasChanged = m_hasChanged || installed.has_value();
+			m_hasNewProtocols = m_hasNewProtocols || installed.has_value();
 		}
 
 		if (!installed.has_value())
@@ -486,24 +511,88 @@ void CGameDownloads::InstallFetched()
 			}
 		}
 
-		std::expected<void, std::string> const installed{ problem.empty() ? InstallGame(m_downloadedDir, key, files)
+		std::expected<void, std::string> const staged{ problem.empty() ? StageGame(m_downloadedDir, key, files)
 			: std::expected<void, std::string>{ std::unexpected{ problem } } };
+		std::expected<void, std::error_code> const swapped{ staged.has_value() ? SwapInGame(m_downloadedDir, key)
+			: std::expected<void, std::error_code>{} };
 
-		if (installed.has_value())
+		if (!staged.has_value())
 		{
-			++numInstalled;
+			AddProblem(std::format("{}: {}", game.name, staged.error()));
+		}
+		else if (swapped.has_value())
+		{
+			++m_numInstalled;
+		}
+		else if (Tge::IO::IsBusy(swapped.error()))
+		{
+			m_pendingSwaps.emplace_back(key, game.name, 1);
 		}
 		else
 		{
-			AddProblem(std::format("{}: {}", game.name, installed.error()));
+			DiscardStagedGame(m_downloadedDir, key);
+			AddProblem(std::format("{}: downloaded/games/{}: {}", game.name, key, swapped.error().message()));
 		}
 	}
 
-	gLog.Info("Downloaded {} of {} {} from {}", numInstalled, m_downloadKeys.size(), (m_downloadKeys.size() == 1) ? "game" : "games",
-		m_source.origin.host);
-	m_hasChanged = m_hasChanged || numInstalled > 0;
 	m_fetched.clear();
+
+	if (m_pendingSwaps.empty())
+	{
+		FinishInstall();
+	}
+	else
+	{
+		m_phase = EDownloadPhase::Installing;
+		m_nextRetry = now + SwapRetryInterval;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CGameDownloads::RetrySwaps(Net::Clock::time_point now)
+{
+	std::erase_if(m_pendingSwaps, [this](SPendingSwap& swap)
+	{
+		std::expected<void, std::error_code> const swapped{ SwapInGame(m_downloadedDir, swap.key) };
+		bool const isBusy{ !swapped.has_value() && Tge::IO::IsBusy(swapped.error()) };
+
+		++swap.numTries;
+
+		if (swapped.has_value())
+		{
+			++m_numInstalled;
+			gLog.Info("{} was installed after {} tries, as its files were in use", swap.name, swap.numTries);
+		}
+		else if (!isBusy || swap.numTries >= MaxSwapTries)
+		{
+			DiscardStagedGame(m_downloadedDir, swap.key);
+			AddProblem(isBusy ? std::format("{}: downloaded/games/{}: still in use after {} tries: {}", swap.name, swap.key, swap.numTries, swapped.error().message())
+				: std::format("{}: downloaded/games/{}: {}", swap.name, swap.key, swapped.error().message()));
+		}
+
+		return swapped.has_value() || !isBusy || swap.numTries >= MaxSwapTries;
+	});
+
+	if (m_pendingSwaps.empty())
+	{
+		FinishInstall();
+	}
+	else
+	{
+		m_nextRetry = now + SwapRetryInterval;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CGameDownloads::FinishInstall()
+{
+	gLog.Info("Downloaded {} of {} {} from {}", m_numInstalled, m_downloadKeys.size(), (m_downloadKeys.size() == 1) ? "game" : "games",
+		m_source.origin.host);
+	m_hasChanged = m_hasChanged || m_hasNewProtocols || m_numInstalled > 0;
 	m_downloadKeys.clear();
+	m_nextRetry.reset();
+	m_phase = EDownloadPhase::Idle;
+	RefreshOffers();
 }
 
 //////////////////////////////////////////////////////////////////////////
