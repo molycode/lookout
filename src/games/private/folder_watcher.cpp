@@ -1,30 +1,13 @@
 #include "games/folder_watcher.hpp"
+#include "loader_input.hpp"
 #include "loggers.hpp"
 #include <algorithm>
-#include <array>
-#include <cerrno>
-#include <cstring>
-#include <string_view>
-#include <sys/inotify.h>
-#include <system_error>
-#include <unistd.h>
 #include <utility>
 
 namespace Lkt::Games
 {
 namespace
 {
-constexpr uint32_t WatchedEvents{ IN_CREATE | IN_DELETE | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_DELETE_SELF | IN_MOVE_SELF
-	| IN_ONLYDIR };
-
-//////////////////////////////////////////////////////////////////////////
-bool IsWithin(std::filesystem::path const& path, std::filesystem::path const& base)
-{
-	auto const [baseEnd, pathEnd]{ std::mismatch(base.begin(), base.end(), path.begin(), path.end()) };
-
-	return baseEnd == base.end();
-}
-
 //////////////////////////////////////////////////////////////////////////
 // The folder itself when it exists, else its nearest ancestor that does.
 std::filesystem::path FindNearestFolder(std::filesystem::path const& folder)
@@ -42,35 +25,28 @@ std::filesystem::path FindNearestFolder(std::filesystem::path const& folder)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-// The watches are added before the loop runs: what changes in between waits in the descriptor, so nothing is missed.
+// The watch starts before the loop runs: what changes in between waits in the system, so nothing is missed.
 bool CFolderWatcher::Initialize(std::filesystem::path const& userDir, std::chrono::milliseconds settleTime, std::function<void()> onChanged)
 {
 	m_userDir = userDir;
 	m_settleTime = settleTime;
 	m_onChanged = std::move(onChanged);
-	m_inotify = ::inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
 
-	if (m_inotify >= 0)
+	std::expected<void, std::error_code> const armed{ Arm() };
+
+	if (!armed.has_value())
 	{
-		Rearm();
-		m_isRunning = m_loop.Initialize("LookoutWatch");
+		gLog.Warning("Cannot watch '{}', so changed game descriptions need a restart: {}", m_userDir.string(), armed.error().message());
 	}
-
-	if (m_isRunning)
+	else if (m_loop.Initialize("LookoutWatch"))
 	{
-		m_loop.Post([this]()
-		{
-			Tge::Threading::SWaitable const inotify{ static_cast<uintptr_t>(m_inotify), Tge::Threading::EWaitableKind::Event };
-
-			if (!m_loop.Watch(inotify, [this]() { ReadEvents(); }).has_value())
-			{
-				gLog.Warning("Cannot wait for changes to '{}', so changed game descriptions need a restart", m_userDir.string());
-			}
-		});
+		m_isRunning = true;
+		m_loop.Post([this]() { WatchArmed(); });
 	}
 	else
 	{
-		gLog.Warning("Cannot watch '{}', so changed game descriptions need a restart: {}", m_userDir.string(), std::strerror(errno));
+		gLog.Warning("Cannot wait for changes to '{}', so changed game descriptions need a restart", m_userDir.string());
+		m_watch.Terminate();
 	}
 
 	return m_isRunning;
@@ -85,115 +61,92 @@ void CFolderWatcher::Terminate()
 		m_isRunning = false;
 	}
 
-	if (m_inotify >= 0)
-	{
-		::close(m_inotify);
-		m_inotify = -1;
-	}
-
-	m_watches.clear();
+	m_watch.Terminate();
+	m_watchId.reset();
 	m_settleTimer.reset();
 }
 
 //////////////////////////////////////////////////////////////////////////
-// The user folder, its two folders and each game's folder; until the user folder exists, its nearest existing ancestor,
-// so that nothing has to be created to be watched. A folder newly watched may have been filled before its watch.
-bool CFolderWatcher::Rearm()
+// The user folder's whole tree; until it exists, its nearest existing ancestor alone, so that nothing has to be created
+// to be watched. A folder made toward the user folder between the look and the watch sends no event, so the look is
+// repeated.
+std::expected<void, std::error_code> CFolderWatcher::Arm()
 {
-	std::error_code error{};
-	std::filesystem::path const nearest{ FindNearestFolder(m_userDir) };
-	bool hasNewFolder{ false };
+	std::expected<void, std::error_code> armed{};
+	bool isSettled{ false };
 
-	if (nearest == m_userDir)
+	while (armed.has_value() && !isSettled)
 	{
-		hasNewFolder = AddWatch(m_userDir) || hasNewFolder;
-		hasNewFolder = AddWatch(m_userDir / "protocols") || hasNewFolder;
-		hasNewFolder = AddWatch(m_userDir / "games") || hasNewFolder;
+		m_watchedFolder = FindNearestFolder(m_userDir);
+		armed = m_watch.Initialize(m_watchedFolder, (m_watchedFolder == m_userDir) ? Tge::IO::EWatchScope::Tree : Tge::IO::EWatchScope::Folder);
+		isSettled = !armed.has_value() || FindNearestFolder(m_userDir) == m_watchedFolder;
 
-		for (std::filesystem::directory_iterator it{ m_userDir / "games", error }, end{}; error.value() == 0 && it != end; it.increment(error))
+		if (!isSettled)
 		{
-			if (!it->path().filename().string().starts_with('.') && it->is_directory(error))
-			{
-				hasNewFolder = AddWatch(it->path()) || hasNewFolder;
-			}
+			m_watch.Terminate();
 		}
+	}
+
+	return armed;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CFolderWatcher::Rearm()
+{
+	if (m_watchId.has_value())
+	{
+		m_loop.Unwatch(*m_watchId);
+		m_watchId.reset();
+	}
+
+	m_watch.Terminate();
+
+	std::expected<void, std::error_code> const armed{ Arm() };
+
+	if (armed.has_value())
+	{
+		WatchArmed();
 	}
 	else
 	{
-		AddWatch(nearest);
-		// A folder made toward the user folder between the look and the watch sends no event, so the look is repeated.
-		hasNewFolder = FindNearestFolder(m_userDir) != nearest && Rearm();
+		gLog.Warning("Cannot watch '{}', so changed game descriptions need a restart: {}", m_userDir.string(), armed.error().message());
 	}
-
-	return hasNewFolder;
 }
 
 //////////////////////////////////////////////////////////////////////////
-// A folder that does not exist, or no longer does, is simply not watched.
-bool CFolderWatcher::AddWatch(std::filesystem::path const& folder)
+void CFolderWatcher::WatchArmed()
 {
-	int const watch{ ::inotify_add_watch(m_inotify, folder.c_str(), WatchedEvents) };
-	bool const isNew{ watch >= 0 && !m_watches.contains(watch) };
+	m_watchId = m_loop.Watch(m_watch.GetWaitable(), [this]() { ReadChanges(); });
 
-	if (watch >= 0)
+	if (!m_watchId.has_value())
 	{
-		m_watches[watch] = folder;
+		gLog.Warning("Cannot wait for changes to '{}', so changed game descriptions need a restart", m_userDir.string());
 	}
-
-	return isNew;
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Dot entries are left out, as the loader leaves them: editors' swap files and a checkout's .git change all the time.
-void CFolderWatcher::ReadEvents()
+// A watch that ended took the user folder or an ancestor with it, so anything may have changed. While an ancestor is
+// watched, only a step toward the user folder matters, and the games change once the user folder is reached.
+void CFolderWatcher::ReadChanges()
 {
-	alignas(inotify_event) std::array<char, 16 * 1024> buffer{};
-	bool isChanged{ false };
-	bool shouldRearm{ false };
-	ssize_t count{ ::read(m_inotify, buffer.data(), buffer.size()) };
+	std::expected<Tge::IO::SDirectoryChanges, std::error_code> const changes{ m_watch.ReadChanges() };
+	bool const isWatchingUserDir{ m_watchedFolder == m_userDir };
+	bool isChanged{ !changes.has_value() || changes->hasOverflowed };
+	bool shouldRearm{ !changes.has_value() };
 
-	while (count > 0)
+	if (changes.has_value() && isWatchingUserDir)
 	{
-		size_t offset{ 0 };
-
-		while (offset < static_cast<size_t>(count))
-		{
-			inotify_event const* const pEvent{ reinterpret_cast<inotify_event const*>(buffer.data() + offset) };
-			std::string_view const name{ (pEvent->len > 0) ? std::string_view{ pEvent->name } : std::string_view{} };
-			auto const watched{ m_watches.find(pEvent->wd) };
-
-			if ((pEvent->mask & IN_Q_OVERFLOW) != 0)
-			{
-				isChanged = true;
-				shouldRearm = true;
-			}
-			else if ((pEvent->mask & IN_IGNORED) != 0)
-			{
-				m_watches.erase(pEvent->wd);
-			}
-			else if (watched != m_watches.end() && !name.starts_with('.'))
-			{
-				std::filesystem::path const path{ name.empty() ? watched->second : watched->second / name };
-				bool const isInside{ IsWithin(path, m_userDir) };
-
-				isChanged = isChanged || isInside;
-				shouldRearm = shouldRearm || (isInside && (pEvent->mask & IN_ISDIR) != 0) || (!isInside && IsWithin(m_userDir, path));
-			}
-
-			offset += sizeof(inotify_event) + pEvent->len;
-		}
-
-		count = ::read(m_inotify, buffer.data(), buffer.size());
+		isChanged = isChanged || std::ranges::any_of(changes->paths, IsLoaderInput);
 	}
-
-	if (count < 0 && errno != EAGAIN && errno != EINTR)
+	else if (changes.has_value())
 	{
-		gLog.Warning("Cannot read the changes to '{}': {}", m_userDir.string(), std::strerror(errno));
+		shouldRearm = FindNearestFolder(m_userDir) != m_watchedFolder;
 	}
 
 	if (shouldRearm)
 	{
-		isChanged = Rearm() || isChanged;
+		Rearm();
+		isChanged = isChanged || (!isWatchingUserDir && m_watchedFolder == m_userDir);
 	}
 
 	if (isChanged)
@@ -214,7 +167,6 @@ void CFolderWatcher::ScheduleSettle()
 	m_settleTimer = m_loop.ScheduleAt(std::chrono::steady_clock::now() + m_settleTime, [this]()
 	{
 		m_settleTimer.reset();
-		Rearm();
 		m_onChanged();
 	});
 }

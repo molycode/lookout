@@ -10,11 +10,11 @@ target_include_directories(LktGames
 target_link_libraries(LktGames
 	PUBLIC
 		Lkt::Query
+		Tge::IO
 		Tge::Threading
 	PRIVATE
 		Lkt::Json
 		Lkt::Script
-		Tge::IO
 		Tge::Logging
 )
 

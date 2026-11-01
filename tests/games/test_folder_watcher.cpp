@@ -141,6 +141,51 @@ TEST_F(CFolderWatcherTest, DotFilesDoNotWake)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// What the loader does not read, beside or below what it does; on Windows the settings sit in the same folder.
+TEST_F(CFolderWatcherTest, ChangesTheLoaderDoesNotReadDoNotWake)
+{
+	std::error_code error{};
+
+	WriteFile("games/mygame/game.json", "{}");
+	std::filesystem::create_directories(m_userDir / "games" / "mygame" / "sub", error);
+	std::filesystem::create_directories(m_userDir / "downloaded" / "games" / "quake2", error);
+	std::filesystem::create_directories(m_userDir / ".git" / "objects" / "ab", error);
+	Start();
+	WriteFile("config.json", "{}");
+	WriteFile("games/mygame/sub/notes.txt", "notes");
+	WriteFile("downloaded/games/quake2/game.json", "{}");
+	WriteFile(".git/objects/ab/cdef", "object");
+
+	EXPECT_EQ(GetNumWakesAfterQuiet(), 0);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CFolderWatcherTest, RemovedUserFolderWakesAndIsWatchedAgain)
+{
+	std::error_code error{};
+
+	WriteFile("games/mygame/game.json", "{}");
+	Start();
+	std::filesystem::remove_all(m_userDir, error);
+
+	ASSERT_TRUE(WaitForWakes(1));
+
+	WriteFile("games/mygame/game.json", "{}");
+
+	EXPECT_TRUE(WaitForWakes(2));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CFolderWatcherTest, UserFolderUnderAMissingDotFolderIsWatchedOnceMade)
+{
+	m_userDir = m_root / ".local" / "share" / "lookout";
+	Start();
+	WriteFile("games/mygame/game.json", "{}");
+
+	EXPECT_TRUE(WaitForWakes(1));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CFolderWatcherTest, WatchingCreatesNothing)
 {
 	Start();
