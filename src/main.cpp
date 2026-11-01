@@ -1,7 +1,6 @@
-#include "app_dir_name.hpp"
+#include "app_folder.hpp"
 #include "lookout.hpp"
 #include "loggers.hpp"
-#include "config/xdg_paths.hpp"
 #include "games/check_folder.hpp"
 #include "games/game_files.hpp"
 #include "games/load_games.hpp"
@@ -82,14 +81,14 @@ int main(int argc, char* argv[])
 		Lkt::gLog.Error("Cannot start the socket library, so no server can be reached: {}", sockets.error().message());
 	}
 
-	std::expected<std::filesystem::path, Lkt::Config::EXdgError> const dataHome{ Lkt::Config::GetDataHome() };
-	std::filesystem::path const userDir{ dataHome.has_value() ? *dataHome / Lkt::AppDirName : std::filesystem::path{} };
+	std::expected<std::filesystem::path, std::error_code> const dataDir{ Lkt::GetAppFolder(Tge::IO::EUserFolder::Data) };
+	std::filesystem::path const userDir{ dataDir.value_or(std::filesystem::path{}) };
 	Lkt::Games::SGameContent content{ Lkt::Games::LoadGames(Lkt::Games::GetDownloadedDir(userDir), userDir) };
 
-	if (!dataHome.has_value())
+	if (!dataDir.has_value())
 	{
 		content.problems.emplace_back(Lkt::Query::SGameProblem{ std::format("Cannot locate the data directory, so no games can be loaded: {}",
-			Lkt::Config::ToString(dataHome.error())), {} });
+			dataDir.error().message()), {} });
 	}
 
 	Lkt::Query::InitializeGameCatalog(content.protocols, content.games);

@@ -1,9 +1,8 @@
 #include "lookout.hpp"
-#include "app_dir_name.hpp"
+#include "app_folder.hpp"
 #include "loggers.hpp"
 #include "run_context.hpp"
 #include "browser/server_list.hpp"
-#include "config/xdg_paths.hpp"
 #include "download/game_downloads.hpp"
 #include "download/latest_release.hpp"
 #include "download/lookout_games.hpp"
@@ -375,34 +374,33 @@ void CLookout::StopListLogging()
 // Created here because the log system's own create_directories throws, which -fno-exceptions turns into a crash.
 void CLookout::PrepareDirectories()
 {
-	std::expected<std::filesystem::path, Config::EXdgError> const configHome{ Config::GetConfigHome() };
+	std::expected<std::filesystem::path, std::error_code> const configDir{ GetAppFolder(Tge::IO::EUserFolder::Config) };
 
-	if (configHome.has_value())
+	if (configDir.has_value())
 	{
-		std::filesystem::path const configDir{ *configHome / AppDirName };
 		std::error_code error{};
 
-		std::filesystem::create_directories(configDir, error);
+		std::filesystem::create_directories(*configDir, error);
 
 		if (error.value() == 0)
 		{
-			m_configDir = configDir.string();
+			m_configDir = configDir->string();
 		}
 		else
 		{
-			m_startupProblems.emplace_back(std::format("Cannot create the config directory '{}': {}", configDir.string(), error.message()));
+			m_startupProblems.emplace_back(std::format("Cannot create the config directory '{}': {}", configDir->string(), error.message()));
 		}
 	}
 	else
 	{
-		m_startupProblems.emplace_back(std::format("Cannot locate the config directory: {}", Config::ToString(configHome.error())));
+		m_startupProblems.emplace_back(std::format("Cannot locate the config directory: {}", configDir.error().message()));
 	}
 
-	std::expected<std::filesystem::path, Config::EXdgError> const stateHome{ Config::GetStateHome() };
+	std::expected<std::filesystem::path, std::error_code> const stateDir{ GetAppFolder(Tge::IO::EUserFolder::State) };
 
-	if (stateHome.has_value())
+	if (stateDir.has_value())
 	{
-		std::filesystem::path const logsDir{ *stateHome / AppDirName / "logs" };
+		std::filesystem::path const logsDir{ *stateDir / "logs" };
 		std::error_code error{};
 
 		std::filesystem::create_directories(logsDir, error);
@@ -418,18 +416,18 @@ void CLookout::PrepareDirectories()
 	}
 	else
 	{
-		m_startupProblems.emplace_back(std::format("Cannot locate the log directory, logging to the terminal only: {}", Config::ToString(stateHome.error())));
+		m_startupProblems.emplace_back(std::format("Cannot locate the log directory, logging to the terminal only: {}", stateDir.error().message()));
 	}
 
-	std::expected<std::filesystem::path, Config::EXdgError> const cacheHome{ Config::GetCacheHome() };
+	std::expected<std::filesystem::path, std::error_code> const cacheDir{ GetAppFolder(Tge::IO::EUserFolder::Cache) };
 
-	if (cacheHome.has_value())
+	if (cacheDir.has_value())
 	{
-		m_cacheDir = *cacheHome / AppDirName;
+		m_cacheDir = *cacheDir;
 	}
 	else
 	{
-		m_startupProblems.emplace_back(std::format("Cannot locate the cache directory, so game icons are not kept: {}", Config::ToString(cacheHome.error())));
+		m_startupProblems.emplace_back(std::format("Cannot locate the cache directory, so game icons are not kept: {}", cacheDir.error().message()));
 	}
 }
 

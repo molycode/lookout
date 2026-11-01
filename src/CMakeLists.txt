@@ -25,6 +25,7 @@ target_link_libraries(lookout PRIVATE
 	Lkt::Net
 	Lkt::Query
 	Lkt::Ui
+	Tge::IO
 	Tge::Lifecycle
 	Tge::Logging
 	Tge::Net
