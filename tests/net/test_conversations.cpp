@@ -285,13 +285,13 @@ TEST_F(CConversationTest, EndedConversationsLeaveNoSocketOpen)
 	EXPECT_TRUE(WaitForRequests(m_master, 1));
 	m_engine.Refresh(game, {});
 	EXPECT_TRUE(WaitForRequests(m_master, 2));
-	EXPECT_EQ(Fixtures::CountSocketsTo(m_master.GetAddress()), 1u);
+	EXPECT_EQ(Fixtures::CountSocketsTo(m_master), 1u);
 	m_engine.Cancel(game);
 	m_engine.Refresh(game, {});
 	EXPECT_TRUE(WaitForRequests(m_master, 3));
 	m_engine.Terminate();
 
-	EXPECT_EQ(Fixtures::CountSocketsTo(m_master.GetAddress()), 0u);
+	EXPECT_EQ(Fixtures::CountSocketsTo(m_master), 0u);
 
 	m_master.Stop();
 }

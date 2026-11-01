@@ -3,6 +3,7 @@
 #include "launch/folder_option.hpp"
 #include "query/game_definition.hpp"
 #include "temp_dir.hpp"
+#include <tge/platform.hpp>
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <filesystem>
@@ -57,6 +58,8 @@ protected:
 	std::filesystem::path m_folder{};
 };
 
+// game.json's launch facts are Linux's, so Windows starts no game from a folder yet.
+#if defined(TGE_PLATFORM_LINUX)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CFolderOptionTest, CompleteFolderStartsItsProgram)
 {
@@ -86,6 +89,7 @@ TEST_F(CFolderOptionTest, ProgramThatIsNotExecutableIsBroken)
 
 	EXPECT_EQ(MakeFolderOption(Fixtures::GetGameByKey("kingpin"), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::BrokenInstallFolder);
 }
+#endif // defined(TGE_PLATFORM_LINUX)
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CFolderOptionTest, GameWithoutHintsCannotStartFromAFolder)

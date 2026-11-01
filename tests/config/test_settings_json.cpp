@@ -8,6 +8,7 @@
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include "query/server_address.hpp"
+#include <tge/platform.hpp>
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <array>
@@ -25,6 +26,15 @@ namespace Lkt::Config
 namespace
 {
 using CSettingsWithoutGamesTest = Fixtures::CEmptyCatalogTest;
+
+// A folder install's folder must be absolute, which on Windows takes a drive.
+#if defined(TGE_PLATFORM_WINDOWS)
+constexpr std::string_view FolderRoot{ "C:/games" };
+#elif defined(TGE_PLATFORM_LINUX)
+constexpr std::string_view FolderRoot{ "/games" };
+#else
+#error "Unsupported platform"
+#endif // defined(TGE_PLATFORM_WINDOWS)
 
 // 203.0.113.7:31510 and 203.0.113.8:27910.
 constexpr Query::SServerAddress Favourite{ 0xCB007107, 31510 };
@@ -57,7 +67,7 @@ SSettings MakeVariedSettings()
 		game.sort = SSortOrder{ SortColumns[index % SortColumns.size()], isEven };
 		game.installs = {
 			SGameInstall{ 1 + offset, std::format("Copy {}", index), EInstallKind::Command, std::format("run-game-{} +connect", index) },
-			SGameInstall{ 7 + offset, {}, EInstallKind::Folder, std::format("/games/{}", index) }
+			SGameInstall{ 7 + offset, {}, EInstallKind::Folder, std::format("{}/{}", FolderRoot, index) }
 		};
 		game.favourites = { Query::SServerAddress{ Favourite.ipv4 + offset, Favourite.port }, OtherFavourite };
 	}
@@ -490,20 +500,20 @@ TEST(SettingsJson, InvalidUtf8IsWrittenAsReplacement)
 //////////////////////////////////////////////////////////////////////////
 TEST(SettingsJson, BadInstallCostsOnlyItself)
 {
-	SSettingsDocument const document{ ReadValid(R"({ "games": { "kingpin": { "installs": [
-		{ "id": 1, "command": "steam -applaunch 38430" },
-		{ "command": "no id" },
-		{ "id": 0, "command": "id zero" },
-		{ "id": 2, "folder": "/games", "command": "both" },
-		{ "id": 3, "name": "neither" },
-		{ "id": 4, "folder": "" },
-		{ "id": 1, "folder": "/games/repeated" },
-		{ "id": 5, "name": "Native", "folder": "/opt/kingpin" }
-	] } } })") };
+	SSettingsDocument const document{ ReadValid(std::format(R"({{ "games": {{ "kingpin": {{ "installs": [
+		{{ "id": 1, "command": "steam -applaunch 38430" }},
+		{{ "command": "no id" }},
+		{{ "id": 0, "command": "id zero" }},
+		{{ "id": 2, "folder": "/games", "command": "both" }},
+		{{ "id": 3, "name": "neither" }},
+		{{ "id": 4, "folder": "" }},
+		{{ "id": 1, "folder": "/games/repeated" }},
+		{{ "id": 5, "name": "Native", "folder": "{}/kingpin" }}
+	] }} }} }})", FolderRoot)) };
 
 	EXPECT_EQ(document.settings.games[static_cast<size_t>(Fixtures::GetGameId("kingpin"))].installs, (std::vector<SGameInstall>{
 		SGameInstall{ 1, {}, EInstallKind::Command, "steam -applaunch 38430" },
-		SGameInstall{ 5, "Native", EInstallKind::Folder, "/opt/kingpin" } }));
+		SGameInstall{ 5, "Native", EInstallKind::Folder, std::format("{}/kingpin", FolderRoot) } }));
 	EXPECT_EQ(document.numInvalid, 6u);
 	EXPECT_EQ(document.firstInvalidPath, "games.kingpin.installs[1]");
 }

@@ -44,6 +44,7 @@ target_link_libraries(LookoutTests
 		Lkt::Query
 		Lkt::Script
 		mbedtls
+		$<$<PLATFORM_ID:Windows>:iphlpapi>
 )
 
 add_test(NAME LookoutTests COMMAND LookoutTests)

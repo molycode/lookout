@@ -12,6 +12,7 @@
 #include "query/protocol_definition.hpp"
 #include "query/protocol_origin.hpp"
 #include "temp_dir.hpp"
+#include <tge/platform.hpp>
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <algorithm>
@@ -261,6 +262,8 @@ TEST_F(CBrowserTest, JoinWithAMissingLauncherIsAWarning)
 	m_browser.Terminate();
 }
 
+// Desktop entries are where Linux keeps its games; Windows looks elsewhere.
+#if defined(TGE_PLATFORM_LINUX)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserTest, LaunchOptionsHoldTheGamesDesktopEntry)
 {
@@ -295,6 +298,7 @@ TEST_F(CBrowserTest, ChangingTheInstallsDoesNotScanAgain)
 	m_browser.AddInstall(Fixtures::GetGameId("kingpin"), Config::EInstallKind::Command, "steam -applaunch 38430");
 	m_browser.Terminate();
 }
+#endif // defined(TGE_PLATFORM_LINUX)
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserTest, EditedCommandIsUsedAtOnce)
@@ -356,6 +360,8 @@ TEST_F(CBrowserTest, RemovedInstallIsSavedAtOnce)
 	EXPECT_FALSE(ReadText(m_configDir / "config.json").contains(m_game.stem().string()));
 }
 
+// game.json's launch facts are Linux's, so Windows starts no game from a folder yet.
+#if defined(TGE_PLATFORM_LINUX)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserTest, BrokenFolderInstallReportsItsError)
 {
@@ -367,6 +373,7 @@ TEST_F(CBrowserTest, BrokenFolderInstallReportsItsError)
 	EXPECT_EQ(m_browser.ResolveLauncher(Fixtures::GetGameId("kingpin"), "install:2").error_or(Launch::ELaunchError::SpawnFailed), Launch::ELaunchError::BrokenInstallFolder);
 	m_browser.Terminate();
 }
+#endif // defined(TGE_PLATFORM_LINUX)
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CBrowserTest, JoinStartsTheInstallItIsGiven)

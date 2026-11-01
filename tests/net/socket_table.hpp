@@ -5,7 +5,8 @@
 
 namespace Lkt::Fixtures
 {
-// This process's open TCP and UDP sockets connected to that address, as the kernel's tables list them, so descriptors
-// opened meanwhile by anything else, such as a DNS lookup glibc finishes, cannot disturb the count.
+class CLoopbackServer;
+
 size_t CountSocketsTo(Query::SServerAddress const& peer);
+size_t CountSocketsTo(CLoopbackServer const& server);
 } // namespace Lkt::Fixtures

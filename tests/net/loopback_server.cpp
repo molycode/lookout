@@ -77,6 +77,20 @@ uint32_t CLoopbackServer::GetNumRequests() const
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::vector<uint16_t> CLoopbackServer::GetClientPorts() const
+{
+	std::vector<uint16_t> ports{};
+	size_t const numPorts{ m_numClientPorts.load(std::memory_order_acquire) };
+
+	for (size_t index{ 0 }; index < numPorts; ++index)
+	{
+		ports.emplace_back(m_clientPorts[index].load(std::memory_order_relaxed));
+	}
+
+	return ports;
+}
+
+//////////////////////////////////////////////////////////////////////////
 std::vector<std::byte> CLoopbackServer::GetFirstRequest() const
 {
 	return std::vector<std::byte>{ m_firstRequest.begin(), m_firstRequest.begin() + static_cast<std::ptrdiff_t>(m_firstRequestSize) };
@@ -122,6 +136,7 @@ void CLoopbackServer::Serve()
 				}
 
 				m_numRequests.fetch_add(1, std::memory_order_acq_rel);
+				RecordClientPort(sender.port);
 
 				auto const exchange{ std::ranges::find_if(m_exchanges, [request](SLoopbackExchange const& candidate)
 				{
@@ -145,6 +160,23 @@ void CLoopbackServer::Serve()
 				}
 			}
 		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Written by the serving thread alone, and into fixed storage, as it may not allocate.
+void CLoopbackServer::RecordClientPort(uint16_t port)
+{
+	size_t const numPorts{ m_numClientPorts.load(std::memory_order_acquire) };
+	bool const isKnown{ std::ranges::any_of(std::span{ m_clientPorts }.first(numPorts), [port](std::atomic<uint16_t> const& known)
+	{
+		return known.load(std::memory_order_relaxed) == port;
+	}) };
+
+	if (!isKnown && numPorts < m_clientPorts.size())
+	{
+		m_clientPorts[numPorts].store(port, std::memory_order_relaxed);
+		m_numClientPorts.store(numPorts + 1, std::memory_order_release);
 	}
 }
 } // namespace Lkt::Fixtures

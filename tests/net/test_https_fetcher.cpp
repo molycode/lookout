@@ -1,5 +1,6 @@
 #include "loopback_https_server.hpp"
 #include "net/https_fetcher.hpp"
+#include <tge/platform.hpp>
 #include <gtest/gtest.h>
 #include <chrono>
 #include <condition_variable>
@@ -236,7 +237,12 @@ TEST_F(CHttpsFetcherTest, RefusedConnectionFailsEveryRequest)
 	std::vector<SFetchResult> const results{ Fetch({ { "/a", MaxSize }, { "/b", MaxSize } }) };
 
 	ASSERT_EQ(results.size(), 2u);
-	EXPECT_EQ(results[1].body.error_or(""), "localhost: cannot be reached: Connection refused");
+	ASSERT_FALSE(results[1].body.has_value());
+
+	// Windows tries a refused connection again for about two seconds, as long as the deadline, so either can end it.
+#if defined(TGE_PLATFORM_LINUX)
+	EXPECT_EQ(results[1].body.error(), "localhost: cannot be reached: Connection refused");
+#endif // defined(TGE_PLATFORM_LINUX)
 }
 
 //////////////////////////////////////////////////////////////////////////

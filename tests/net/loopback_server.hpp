@@ -28,6 +28,7 @@ public:
 
 	Query::SServerAddress GetAddress() const;
 	uint32_t GetNumRequests() const;
+	std::vector<uint16_t> GetClientPorts() const;
 	// Read once stopped.
 	std::vector<std::byte> GetFirstRequest() const;
 	bool AreRequestsAlike() const;
@@ -37,8 +38,10 @@ public:
 private:
 
 	static constexpr size_t MaxRequestSize{ 2048 };
+	static constexpr size_t MaxClientPorts{ 16 };
 
 	void Serve();
+	void RecordClientPort(uint16_t port);
 
 	Tge::Net::CUdpSocket m_socket{};
 	uint16_t m_port{ 0 };
@@ -49,6 +52,8 @@ private:
 	std::array<std::byte, MaxRequestSize> m_firstRequest{};
 	size_t m_firstRequestSize{ 0 };
 	std::atomic<bool> m_areRequestsAlike{ true };
+	std::array<std::atomic<uint16_t>, MaxClientPorts> m_clientPorts{};
+	std::atomic<size_t> m_numClientPorts{ 0 };
 	std::thread m_thread{};
 };
 } // namespace Lkt::Fixtures

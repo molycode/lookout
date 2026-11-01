@@ -195,7 +195,7 @@ TEST_F(CMasterProbesTest, RowNoLongerWantedStopsItsTest)
 	ASSERT_NE(m_probes.GetResult(Key), nullptr);
 	Want({}, Start + SettleTime);
 	EXPECT_EQ(m_probes.GetResult(Key), nullptr);
-	EXPECT_EQ(Fixtures::CountSocketsTo(m_master.GetAddress()), 0u);
+	EXPECT_EQ(Fixtures::CountSocketsTo(m_master), 0u);
 }
 
 //////////////////////////////////////////////////////////////////////////

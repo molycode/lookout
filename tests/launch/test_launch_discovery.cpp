@@ -2,6 +2,7 @@
 #include "hinted_discovery.hpp"
 #include "launch/launcher_ids.hpp"
 #include "temp_dir.hpp"
+#include <tge/platform.hpp>
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <filesystem>
@@ -15,6 +16,8 @@ namespace Lkt::Launch
 {
 namespace
 {
+// Desktop entries and the home install folder are where Linux keeps its games; Windows looks elsewhere.
+#if defined(TGE_PLATFORM_LINUX)
 using Fixtures::LaunchChannel;
 using Tge::Testing::CExpectedLog;
 
@@ -297,5 +300,6 @@ TEST_F(CLaunchDiscoveryTest, MissingHomeIsReported)
 
 	EXPECT_TRUE(Find().empty());
 }
+#endif // defined(TGE_PLATFORM_LINUX)
 } // namespace
 } // namespace Lkt::Launch

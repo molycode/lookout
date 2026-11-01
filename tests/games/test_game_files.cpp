@@ -59,6 +59,14 @@ protected:
 		ASSERT_TRUE(m_tempDir.Initialize("lookout-game-files"));
 		m_dir = m_tempDir.GetPath();
 		std::filesystem::create_directory_symlink(LKT_LOOKOUT_GAMES_DIR, GetDownloadedDir(m_dir), error);
+
+		// Windows makes a symlink only in Developer Mode or elevated; a copy reads the same.
+		if (error.value() != 0)
+		{
+			error = std::error_code{};
+			std::filesystem::copy(LKT_LOOKOUT_GAMES_DIR, GetDownloadedDir(m_dir), std::filesystem::copy_options::recursive, error);
+		}
+
 		ASSERT_EQ(error.value(), 0) << error.message();
 	}
 
