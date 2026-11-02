@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 4.3.0)
 
-project(Lookout VERSION 1.6.0 LANGUAGES C CXX)
+project(Lookout VERSION 1.7.0 LANGUAGES C CXX)
 
 if(NOT CMAKE_SYSTEM_NAME MATCHES "^(Linux|Windows)$")
 	message(FATAL_ERROR "Lookout runs on Linux and Windows; '${CMAKE_SYSTEM_NAME}' is not supported")
