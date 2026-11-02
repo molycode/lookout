@@ -18,6 +18,10 @@ namespace
 {
 using JsonValue = nlohmann::ordered_json;
 
+// lookout-games' games with launch facts are format 3, so format 1's behaviour needs a game of its own.
+constexpr std::string_view FormatOneKingpin{ R"json({ "format": 1, "name": "Kingpin", "launch": { "desktopFiles": [ "kingpin-native.desktop" ],
+	"installDir": "Games/Kingpin", "program": "run-game.sh", "requiredFiles": [ "kingpin.x86", "main/pak0.pak" ] } })json" };
+
 //////////////////////////////////////////////////////////////////////////
 std::string ReadGameFile(std::filesystem::path const& path)
 {
@@ -251,7 +255,7 @@ TEST(GameForm, SpentFormatCannotBeShown)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, FormatOneLaunchOpensAsTheLinuxGroup)
 {
-	SGameFormNode const form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode const form{ ReadForm(FormatOneKingpin) };
 	SGameFormNode const* const pLinux{ FindFormField(*FindFormField(form, "launch"), "linux") };
 
 	ASSERT_NE(pLinux, nullptr);
@@ -262,7 +266,7 @@ TEST(GameForm, FormatOneLaunchOpensAsTheLinuxGroup)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, EditedFormatOneGameStaysFormatOne)
 {
-	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode form{ ReadForm(FormatOneKingpin) };
 
 	GetFormField(form, "name").text = "Kingpin, mine";
 
@@ -275,7 +279,7 @@ TEST(GameForm, EditedFormatOneGameStaysFormatOne)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, WindowsFactsMakeFormatThree)
 {
-	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode form{ ReadForm(FormatOneKingpin) };
 	SGameFormNode& windows{ GetFormField(GetFormField(form, "launch"), "windows") };
 
 	windows.isPresent = true;
@@ -293,7 +297,7 @@ TEST(GameForm, WindowsFactsMakeFormatThree)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, DesktopFilesAloneMakeFormatThree)
 {
-	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode form{ ReadForm(FormatOneKingpin) };
 	SGameFormNode& facts{ GetFormField(GetFormField(form, "launch"), "linux") };
 	SGameFormNode& requiredFiles{ GetFormField(facts, "requiredFiles") };
 
@@ -332,7 +336,7 @@ TEST(GameForm, CompleteLinuxFactsAloneAreFormatOne)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, EmptiedRequiredFilesStayWithTheInstallFolder)
 {
-	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode form{ ReadForm(FormatOneKingpin) };
 	SGameFormNode& requiredFiles{ GetFormField(GetFormField(GetFormField(form, "launch"), "linux"), "requiredFiles") };
 
 	requiredFiles.texts.clear();
@@ -347,7 +351,7 @@ TEST(GameForm, EmptiedRequiredFilesStayWithTheInstallFolder)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, EmptiedDesktopFilesKeepFormatOne)
 {
-	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+	SGameFormNode form{ ReadForm(FormatOneKingpin) };
 	SGameFormNode& desktopFiles{ GetFormField(GetFormField(GetFormField(form, "launch"), "linux"), "desktopFiles") };
 
 	desktopFiles.texts.clear();
