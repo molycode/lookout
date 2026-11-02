@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+    # Until windows-port merges: workflow_dispatch runs only workflows that are on the default branch.
+    branches: [windows-port]
+    paths:
+      - 'tools/windows/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows setup
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Install CMake
+        run: |
+          $archive = "$env:RUNNER_TEMP\cmake.zip"
+          Invoke-WebRequest -UseBasicParsing -OutFile $archive `
+            https://github.com/Kitware/CMake/releases/download/v4.3.2/cmake-4.3.2-windows-x86_64.zip
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne '83d20c23f5c5f64b3b328785e35b23c532e33057a97ed6294acaca3781b78a01') { throw "cmake.zip: unexpected SHA-256 $hash" }
+          Expand-Archive $archive -DestinationPath $env:RUNNER_TEMP
+          "LKT_CMAKE=$env:RUNNER_TEMP\cmake-4.3.2-windows-x86_64\bin\cmake.exe" >> $env:GITHUB_ENV
+
+      # The runner has no NSIS. SourceForge publishes MD5s only; these SHA-256s were taken from files that matched them.
+      - name: Install NSIS
+        run: |
+          $files = @{
+            'nsis-3.13.zip' = 'ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8'
+            'nsis-3.13-strlen_8192.zip' = '8096bc89cb01b9e726cc09fefef86e977ce934005200468b649e39a1ce6c969f'
+          }
+          foreach ($name in $files.Keys)
+          {
+            Invoke-WebRequest -UseBasicParsing -UserAgent 'Wget' -OutFile "$env:RUNNER_TEMP\$name" `
+              "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.13/$name"
+            $hash = (Get-FileHash "$env:RUNNER_TEMP\$name" -Algorithm SHA256).Hash.ToLower()
+            if ($hash -ne $files[$name]) { throw "${name}: unexpected SHA-256 $hash" }
+          }
+          Expand-Archive "$env:RUNNER_TEMP\nsis-3.13.zip" -DestinationPath $env:RUNNER_TEMP
+          Expand-Archive "$env:RUNNER_TEMP\nsis-3.13-strlen_8192.zip" -DestinationPath "$env:RUNNER_TEMP\nsis-3.13" -Force
+          "LKT_MAKENSIS=$env:RUNNER_TEMP\nsis-3.13\makensis.exe" >> $env:GITHUB_ENV
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch submodules and Mbed TLS
+        run: '& $env:LKT_CMAKE -P scripts/init_submodules.cmake'
+
+      - name: Build the programs
+        run: ./tools/windows/build-release.ps1
+
+      - name: Export the uninstaller
+        run: ./tools/windows/make-installer.ps1 -Stage Uninstaller
+
+      - name: Build the setup
+        run: ./tools/windows/make-installer.ps1 -Stage Installer
+
+      - name: Check the setup
+        run: ./tools/windows/check-package.ps1 -Here
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lookout-windows-setup
+          path: |
+            dist/lookout-*-x86_64-setup.exe
+            dist/lookout-*-x86_64-setup.exe.sha256
+          if-no-files-found: error
