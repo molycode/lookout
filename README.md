@@ -41,6 +41,36 @@ SHA-256. `tools/build-release.sh` builds the distributable binary in a
 container, so that it runs on Ubuntu 22.04, Debian 12 and anything newer. `tools/make-package.sh` then wraps it into
 `dist/lookout-<version>-x86_64.tar.xz`, with a menu entry, an icon and an `install.sh` that installs to `~/.local`.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/).
+
+- Committers and reviewers: [moly](https://github.com/molycode)
+- Approvers: [moly](https://github.com/molycode)
+
+Only Lookout's own Windows programs are signed: `lookout.exe`, `lookout.com`, the uninstaller and the setup of each
+release. They are built from the release's tagged source by this repository's
+[release workflow](https://github.com/molycode/lookout/blob/windows-port/.github/workflows/release.yml) on GitHub's
+runners, and each signing request is approved by hand. The libraries Lookout uses are open source and compiled into
+those programs from the sources this repository names; their licences are under Lookout > About Lookout > Licences.
+Linux packages are not signed; each release lists its SHA-256.
+
+### Privacy
+
+Lookout collects no data about you or how you use it. It connects to other systems only for these, and each request
+names Lookout and its version (`Lookout/<version> (+https://github.com/molycode/lookout)`), no account, no identifier:
+
+- **Game servers.** When a game's server list is shown or refreshed, Lookout asks the master servers its description
+  names for their lists, and each server listed for its status, as any server browser does. Each of them sees your IP
+  address, as every connection shows it. Joining a server starts the game, which connects as it would by itself.
+- **lookout-games.** Download games and `lookout --download` read the games' index, files and icons from GitHub
+  (`raw.githubusercontent.com`). On a first start with no games, Download games opens by itself and reads the index.
+- **New versions.** Lookout asks GitHub (`api.github.com`) for its latest release at start and once a day; Lookout 1.6
+  adds a switch for it, in the installer and in Lookout.
+
+Settings, logs and your own games stay on your machine.
+
 ## License
 
 MIT — see `LICENSE`.
