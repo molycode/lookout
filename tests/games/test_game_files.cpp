@@ -2,6 +2,7 @@
 #include "script/script_fixture.hpp"
 #include "games/check_game.hpp"
 #include "games/game_files.hpp"
+#include "games/game_form.hpp"
 #include "games/load_games.hpp"
 #include "json/json.hpp"
 #include "query/game_catalog.hpp"
@@ -36,6 +37,8 @@ constexpr std::string_view UserGame{ R"json({
 	"join": { "arguments": [ "+connect", "{address}" ], "passwordArguments": [ "+password", "{password}", "+connect", "{address}" ],
 		"password": { "maxLength": 63 } }
 })json" };
+// "Prüfung ß € 测试", as typed into the editor.
+constexpr std::string_view NonAsciiName{ "Pr\xC3\xBC" "fung \xC3\x9F \xE2\x82\xAC \xE6\xB5\x8B\xE8\xAF\x95" };
 
 //////////////////////////////////////////////////////////////////////////
 // As lookout-games has it, which the tests' data folder takes as its download.
@@ -96,6 +99,22 @@ protected:
 		return std::string{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} };
 	}
 
+	// As the editor saves a downloaded game whose name was typed anew: through its form.
+	bool SaveRenamedDownload(std::string_view key, std::string_view name) const
+	{
+		std::string const downloaded{ ReadDownloadedText(key) };
+		std::expected<SGameFormNode, std::string> form{ ReadGameForm(downloaded) };
+
+		EXPECT_TRUE(form.has_value()) << form.error();
+
+		if (form.has_value())
+		{
+			GetFormField(*form, "name").text = name;
+		}
+
+		return form.has_value() && SaveGame(m_dir, key, WriteGameForm(*form), downloaded).has_value();
+	}
+
 	// The downloaded text, changed by edit.
 	template<typename TEdit>
 	std::string EditDownloaded(std::string_view key, TEdit&& edit) const
@@ -110,6 +129,22 @@ protected:
 	Lkt::Fixtures::CTempDir m_tempDir{};
 	std::filesystem::path m_dir{};
 };
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameFilesTest, NonAsciiNameIsWrittenAsUtf8)
+{
+	ASSERT_TRUE(SaveRenamedDownload("kingpin", NonAsciiName));
+
+	EXPECT_TRUE(ReadFile(std::filesystem::path{ "games" } / "kingpin" / "game.json").contains(NonAsciiName));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameFilesTest, NonAsciiNameReadsBackUnchanged)
+{
+	ASSERT_TRUE(SaveRenamedDownload("kingpin", NonAsciiName));
+
+	EXPECT_EQ(JsonValue::parse(ReadGameText(m_dir, "kingpin").text).value("name", std::string{}), NonAsciiName);
+}
 
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CGameFilesTest, UnchangedDownloadWritesNoFile)
