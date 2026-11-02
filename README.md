@@ -81,8 +81,8 @@ names Lookout and its version (`Lookout/<version> (+https://github.com/molycode/
   address, as every connection shows it. Joining a server starts the game, which connects as it would by itself.
 - **lookout-games.** Download games and `lookout --download` read the games' index, files and icons from GitHub
   (`raw.githubusercontent.com`). On a first start with no games, Download games opens by itself and reads the index.
-- **New versions.** Lookout asks GitHub (`api.github.com`) for its latest release at start and once a day; Lookout 1.6
-  adds a switch for it, in the installer and in Lookout.
+- **New versions.** Lookout asks GitHub (`api.github.com`) for its latest release at start and once a day, unless you
+  turned that off when installing it or in Lookout.
 
 Settings, logs and your own games stay on your machine.
 
