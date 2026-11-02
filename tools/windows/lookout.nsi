@@ -202,6 +202,54 @@ Var PreviousDir
 	FunctionEnd
 !macroend
 
+; As tge-core's GetUserFolder: an absolute XDG variable wins, a relative one is ignored.
+; In: $R0 = the XDG variable, $R1 = Windows' folder. Out: $R2 = the Lookout folder, or "" when there is none. Uses $0-$3.
+!macro DefineUserFolder UN
+	Function ${UN}UserFolder
+		ReadEnvStr $R2 $R0
+		StrCpy $0 $R2 1 1
+		StrCpy $1 $R2 1 2
+		StrCpy $2 $R2 2
+		StrCpy $3 0
+
+		${If} $0 == ":"
+			${If} $1 == "\"
+			${OrIf} $1 == "/"
+				StrCpy $3 1
+			${EndIf}
+		${ElseIf} $2 == "\\"
+		${OrIf} $2 == "//"
+		${OrIf} $2 == "\/"
+		${OrIf} $2 == "/\"
+			StrCpy $3 1
+		${EndIf}
+
+		${If} $3 = 0
+			StrCpy $R2 $R1
+		${EndIf}
+
+		${Do}
+			StrCpy $0 $R2 1 -1
+
+			${If} $0 == "\"
+			${OrIf} $0 == "/"
+				StrCpy $R2 $R2 -1
+			${Else}
+				${ExitDo}
+			${EndIf}
+		${Loop}
+
+		${If} $R2 != ""
+			System::Call 'kernel32::GetFullPathNameW(w "$R2\Lookout", i ${NSIS_MAX_STRLEN}, w .R2, p 0) i .r0'
+
+			${If} $0 = 0
+			${OrIf} $0 >= ${NSIS_MAX_STRLEN}
+				StrCpy $R2 ""
+			${EndIf}
+		${EndIf}
+	FunctionEnd
+!macroend
+
 Section "Lookout" SecLookout
 	SectionIn RO
 	Call EnsureClosed
@@ -421,6 +469,7 @@ FunctionEnd
 
 	!insertmacro DefineEnsureClosed "un."
 	!insertmacro DefineReadPath "un."
+	!insertmacro DefineUserFolder "un."
 
 	Function un.onInit
 		${un.GetParameters} $0
@@ -429,52 +478,6 @@ FunctionEnd
 
 		${IfNot} ${Errors}
 			!insertmacro SelectSection ${UnSecPurge}
-		${EndIf}
-	FunctionEnd
-
-	; As tge-core's GetUserFolder: an absolute XDG variable wins, a relative one is ignored.
-	; In: $R0 = the XDG variable, $R1 = Windows' folder. Out: $R2 = the Lookout folder, or "" when there is none. Uses $0-$3.
-	Function un.UserFolder
-		ReadEnvStr $R2 $R0
-		StrCpy $0 $R2 1 1
-		StrCpy $1 $R2 1 2
-		StrCpy $2 $R2 2
-		StrCpy $3 0
-
-		${If} $0 == ":"
-			${If} $1 == "\"
-			${OrIf} $1 == "/"
-				StrCpy $3 1
-			${EndIf}
-		${ElseIf} $2 == "\\"
-		${OrIf} $2 == "//"
-		${OrIf} $2 == "\/"
-		${OrIf} $2 == "/\"
-			StrCpy $3 1
-		${EndIf}
-
-		${If} $3 = 0
-			StrCpy $R2 $R1
-		${EndIf}
-
-		${Do}
-			StrCpy $0 $R2 1 -1
-
-			${If} $0 == "\"
-			${OrIf} $0 == "/"
-				StrCpy $R2 $R2 -1
-			${Else}
-				${ExitDo}
-			${EndIf}
-		${Loop}
-
-		${If} $R2 != ""
-			System::Call 'kernel32::GetFullPathNameW(w "$R2\Lookout", i ${NSIS_MAX_STRLEN}, w .R2, p 0) i .r0'
-
-			${If} $0 = 0
-			${OrIf} $0 >= ${NSIS_MAX_STRLEN}
-				StrCpy $R2 ""
-			${EndIf}
 		${EndIf}
 	FunctionEnd
 
