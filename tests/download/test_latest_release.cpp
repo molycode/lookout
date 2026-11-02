@@ -154,5 +154,39 @@ TEST_F(CLatestReleaseTest, FailureKeepsTheVersionFoundBefore)
 	EXPECT_EQ(m_release.GetVersion(), "9.0.41");
 	EXPECT_FALSE(m_release.GetProblem().empty());
 }
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLatestReleaseTest, DisabledCheckAsksNothing)
+{
+	ServeTag("v9.0.41");
+	m_release.SetEnabled(false);
+	UpdateAt(m_start);
+	m_release.Update(m_start + std::chrono::hours{ 48 });
+
+	EXPECT_EQ(m_server.GetNumRequests(), 0u);
+	EXPECT_FALSE(m_release.GetNextCheck().has_value());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLatestReleaseTest, DisablingForgetsTheVersion)
+{
+	ServeTag("v9.0.41");
+	UpdateAt(m_start);
+	m_release.SetEnabled(false);
+
+	EXPECT_TRUE(m_release.GetVersion().empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLatestReleaseTest, EnablingAsksAtOnce)
+{
+	ServeTag("v9.0.41");
+	m_release.SetEnabled(false);
+	UpdateAt(m_start);
+	m_release.SetEnabled(true);
+	UpdateAt(m_start + std::chrono::minutes{ 1 });
+
+	EXPECT_EQ(m_release.GetVersion(), "9.0.41");
+}
 } // namespace
 } // namespace Lkt::Download

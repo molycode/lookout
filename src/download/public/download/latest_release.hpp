@@ -22,7 +22,9 @@ public:
 	bool Initialize(Net::SHttpsOrigin origin, std::function<void()> onResults);
 	void Terminate();
 	void Update(Net::Clock::time_point now);
+	void SetEnabled(bool isEnabled);
 
+	bool IsEnabled() const;
 	std::optional<Net::Clock::time_point> GetNextCheck() const;
 	bool IsChecking() const;
 	std::string_view GetVersion() const;
@@ -34,6 +36,8 @@ private:
 
 	Net::CHttpsFetcher m_fetcher{};
 	std::optional<Net::Clock::time_point> m_nextCheck{};
+	bool m_isReady{ false };
+	bool m_isEnabled{ true };
 	bool m_isChecking{ false };
 	std::string m_version{};
 	std::string m_problem{};

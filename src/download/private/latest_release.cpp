@@ -23,11 +23,14 @@ constexpr size_t MaxReleaseSize{ 256 * 1024 };
 //////////////////////////////////////////////////////////////////////////
 bool CLatestRelease::Initialize(Net::SHttpsOrigin origin, std::function<void()> onResults)
 {
-	bool const isReady{ m_fetcher.Initialize(std::move(origin), std::move(onResults)) };
+	m_isReady = m_fetcher.Initialize(std::move(origin), std::move(onResults));
 
-	m_nextCheck = isReady ? std::optional<Net::Clock::time_point>{ Net::Clock::time_point{} } : std::nullopt;
+	if (m_isReady && m_isEnabled)
+	{
+		m_nextCheck = Net::Clock::time_point{};
+	}
 
-	return isReady;
+	return m_isReady;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -35,6 +38,8 @@ void CLatestRelease::Terminate()
 {
 	m_fetcher.Terminate();
 	m_nextCheck.reset();
+	m_isReady = false;
+	m_isEnabled = true;
 	m_isChecking = false;
 	m_version.clear();
 	m_problem.clear();
@@ -44,24 +49,56 @@ void CLatestRelease::Terminate()
 // The next check is a day off from the moment one starts, so a deadline already passed never comes back.
 void CLatestRelease::Update(Net::Clock::time_point now)
 {
-	if (m_nextCheck.has_value())
+	if (m_isReady)
 	{
 		std::vector<Net::SFetchResult> results{};
 
 		m_fetcher.TakeResults(results);
 
-		for (Net::SFetchResult const& result : results)
+		if (m_isEnabled)
 		{
-			TakeAnswer(result, now);
-		}
+			for (Net::SFetchResult const& result : results)
+			{
+				TakeAnswer(result, now);
+			}
 
-		if (!m_isChecking && now >= *m_nextCheck)
-		{
-			m_isChecking = true;
-			m_nextCheck = now + CheckInterval;
-			m_fetcher.Fetch({ Net::SFetchRequest{ std::string{ LookoutLatestReleasePath }, MaxReleaseSize } });
+			if (!m_isChecking && now >= *m_nextCheck)
+			{
+				m_isChecking = true;
+				m_nextCheck = now + CheckInterval;
+				m_fetcher.Fetch({ Net::SFetchRequest{ std::string{ LookoutLatestReleasePath }, MaxReleaseSize } });
+			}
 		}
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Switched off, it forgets what it found, so nothing shown afterwards rests on a check the user declined.
+void CLatestRelease::SetEnabled(bool isEnabled)
+{
+	if (m_isReady && isEnabled != m_isEnabled)
+	{
+		if (isEnabled)
+		{
+			m_nextCheck = Net::Clock::time_point{};
+		}
+		else
+		{
+			m_fetcher.Cancel();
+			m_nextCheck.reset();
+			m_isChecking = false;
+			m_version.clear();
+			m_problem.clear();
+		}
+	}
+
+	m_isEnabled = isEnabled;
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool CLatestRelease::IsEnabled() const
+{
+	return m_isEnabled;
 }
 
 //////////////////////////////////////////////////////////////////////////
