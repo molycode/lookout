@@ -44,7 +44,7 @@ function Get-EmbeddedPaths([string] $path)
 # Windows tells a window program from a console one by the subsystem in its PE header: 2 and 3.
 function Get-Subsystem([string] $path)
 {
-	$bytes = [IO.File]::ReadAllBytes($path)
+	$bytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $path).Path)
 	[BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 0x5C)
 }
 
