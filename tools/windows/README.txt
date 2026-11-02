@@ -11,7 +11,7 @@ so adding a game, even one still in development, needs no new Lookout.
 
 Requirements
 ------------
-64-bit Windows 10 22H2 or Windows 11.
+64-bit Windows 10 22H2 or Windows 11; tested on Windows 11.
 
 Install
 -------

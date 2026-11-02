@@ -29,11 +29,12 @@ icon at the right of the menu bar says whether a newer Lookout is out; Lookout a
 ## Installing
 
 On Linux, unpack `lookout-<version>-x86_64.tar.xz` from the [releases](https://github.com/molycode/lookout/releases)
-and run its `install.sh`, which installs to `~/.local`. On Windows 10 22H2 or 11 (64-bit), run
+and run its `install.sh`, which installs to `~/.local`. On Windows 10 22H2 or 11 (64-bit; tested on 11), run
 `lookout-<version>-x86_64-setup.exe`, which installs for you alone, needs no administrator rights, and can put
 `lookout` on your PATH for the command line. Both come with a README on where Lookout keeps its files and how to
 uninstall it. Neither package is signed yet, so Windows SmartScreen may stop the setup at first: choose More info, then
-Run anyway. Each release lists the SHA-256 of its files.
+Run anyway. Where Windows 11's Smart App Control is on, it blocks unsigned programs outright, Lookout among them. Each
+release lists the SHA-256 of its files.
 
 ## Building
 
