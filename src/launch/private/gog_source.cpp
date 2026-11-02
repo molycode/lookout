@@ -34,8 +34,8 @@ std::vector<SLaunchOption> CGogSource::Find(Query::SLaunchHints const& hints, st
 
 		if (program.has_value())
 		{
-			options.emplace_back(std::string{ GogLauncherId }, install->name.empty() ? std::string{ gameName } : install->name, install->folder.string(),
-				std::vector<std::string>{ program->string() }, install->folder.string());
+			options.emplace_back(MakeInstallOption(std::string{ GogLauncherId }, install->name.empty() ? std::string{ gameName } : install->name,
+				install->folder.string(), *program));
 		}
 	}
 

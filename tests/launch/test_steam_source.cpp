@@ -94,6 +94,22 @@ TEST_F(CSteamSourceTest, InstalledAppIsFound)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CSteamSourceTest, ProgramInASubfolderStartsInItsFolder)
+{
+	std::filesystem::path const gameData{ std::filesystem::path{ m_folder / "GameData" }.make_preferred() };
+
+	m_hints.onWindows.program = "GameData/jamp.exe";
+	WriteFile(gameData / "jamp.exe", "");
+	std::filesystem::permissions(gameData / "jamp.exe", Executable);
+
+	std::vector<SLaunchOption> const options{ Find() };
+
+	ASSERT_EQ(options.size(), 1u);
+	EXPECT_EQ(options.front().location, m_folder.string());
+	EXPECT_EQ(options.front().workingDir, gameData.string());
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CSteamSourceTest, AppNotFullyInstalledIsSkipped)
 {
 	CExpectedLog const expected{ LaunchChannel, 0, 0 };

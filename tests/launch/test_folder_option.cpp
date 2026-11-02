@@ -93,6 +93,21 @@ TEST_F(CFolderOptionTest, FolderMissingAWindowsFileIsBroken)
 
 	EXPECT_EQ(MakeFolderOption(MakeWindowsKingpin(), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::BrokenInstallFolder);
 }
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CFolderOptionTest, ProgramInASubfolderStartsInItsFolder)
+{
+	Query::SGameDefinition game{ Fixtures::GetGameByKey("jka") };
+
+	game.launch.onWindows = Query::SWindowsLaunchHints{ 6020, 0, {}, "GameData/jamp.exe", { "GameData/base/assets0.pk3" } };
+	WriteFile(m_folder / "GameData" / "jamp.exe", "");
+	WriteFile(m_folder / "GameData" / "base" / "assets0.pk3", "");
+
+	std::expected<SLaunchOption, ELaunchError> const option{ MakeFolderOption(game, m_folder.string()) };
+
+	ASSERT_TRUE(option.has_value());
+	EXPECT_EQ(option->workingDir, (m_folder / "GameData").string());
+}
 #elif defined(TGE_PLATFORM_LINUX)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CFolderOptionTest, CompleteFolderStartsItsProgram)
@@ -122,6 +137,21 @@ TEST_F(CFolderOptionTest, ProgramThatIsNotExecutableIsBroken)
 	std::filesystem::permissions(m_folder / "run-game.sh", std::filesystem::perms::owner_read);
 
 	EXPECT_EQ(MakeFolderOption(Fixtures::GetGameByKey("kingpin"), m_folder.string()).error_or(ELaunchError::SpawnFailed), ELaunchError::BrokenInstallFolder);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CFolderOptionTest, ProgramInASubfolderStartsInItsFolder)
+{
+	WriteFile(m_folder / "System" / "ut-bin-amd64", "");
+	std::filesystem::permissions(m_folder / "System" / "ut-bin-amd64", Executable);
+	WriteFile(m_folder / "System" / "Core.u", "");
+	WriteFile(m_folder / "System" / "Engine.u", "");
+	WriteFile(m_folder / "System" / "Default.ini", "");
+
+	std::expected<SLaunchOption, ELaunchError> const option{ MakeFolderOption(Fixtures::GetGameByKey("ut99"), m_folder.string()) };
+
+	ASSERT_TRUE(option.has_value());
+	EXPECT_EQ(option->workingDir, (m_folder / "System").string());
 }
 #else
 #error "Unsupported platform"

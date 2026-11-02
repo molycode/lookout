@@ -43,8 +43,8 @@ std::vector<SLaunchOption> CHomeInstallSource::Find(Query::SLaunchHints const& h
 
 			if (program.has_value())
 			{
-				options.emplace_back(std::string{ InstallDirLauncherId }, std::string{ gameName }, ShortenHome(folder.string(), m_pEnvironment->home),
-					std::vector<std::string>{ program->string() }, folder.string());
+				options.emplace_back(MakeInstallOption(std::string{ InstallDirLauncherId }, std::string{ gameName }, ShortenHome(folder.string(), m_pEnvironment->home),
+					*program));
 			}
 		}
 		else if (error.value() != 0 && error != std::errc::no_such_file_or_directory)

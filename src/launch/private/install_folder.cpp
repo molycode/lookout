@@ -1,9 +1,11 @@
 #include "install_folder.hpp"
+#include "launch/launch_option.hpp"
 #include "loggers.hpp"
 #include "program_path.hpp"
 #include <algorithm>
 #include <format>
 #include <system_error>
+#include <utility>
 
 namespace Lkt::Launch
 {
@@ -61,5 +63,12 @@ std::optional<std::filesystem::path> FindInstallProgram(std::filesystem::path co
 	}
 
 	return found;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Some engines find their data from the working directory, so the program's own folder, as Steam's launch configs set it.
+SLaunchOption MakeInstallOption(std::string id, std::string name, std::string location, std::filesystem::path const& program)
+{
+	return SLaunchOption{ std::move(id), std::move(name), std::move(location), { program.string() }, program.parent_path().string() };
 }
 } // namespace Lkt::Launch

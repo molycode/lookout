@@ -45,7 +45,7 @@ std::expected<SLaunchOption, ELaunchError> MakeFolderOption(Query::SGameDefiniti
 			std::filesystem::path preferred{ *program };
 
 			preferred.make_preferred();
-			result = SLaunchOption{ {}, {}, {}, { preferred.string() }, std::string{ folder } };
+			result = MakeInstallOption({}, {}, {}, preferred);
 		}
 		else
 		{

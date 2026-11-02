@@ -70,8 +70,7 @@ std::vector<SLaunchOption> CFolderCandidatesSource::Find(Query::SLaunchHints con
 
 			if (program.has_value())
 			{
-				options.emplace_back(std::format("{}:{}", InstallDirLauncherId, index + 1), std::string{ gameName }, folder.string(),
-					std::vector<std::string>{ program->string() }, folder.string());
+				options.emplace_back(MakeInstallOption(std::format("{}:{}", InstallDirLauncherId, index + 1), std::string{ gameName }, folder.string(), *program));
 			}
 		}
 		else if (!base.empty() && error.value() != 0 && error != std::errc::no_such_file_or_directory)

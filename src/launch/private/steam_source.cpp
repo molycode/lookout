@@ -70,8 +70,7 @@ std::optional<SLaunchOption> MakeSteamOption(std::filesystem::path const& manife
 
 		if (program.has_value())
 		{
-			option = SLaunchOption{ std::string{ SteamLauncherId }, std::string{ name.empty() ? gameName : name }, folder.string(),
-				{ program->string() }, folder.string() };
+			option = MakeInstallOption(std::string{ SteamLauncherId }, std::string{ name.empty() ? gameName : name }, folder.string(), *program);
 		}
 	}
 
