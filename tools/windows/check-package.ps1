@@ -342,14 +342,18 @@ function Invoke-Checks([string] $setup, [string] $version)
 	Assert-Exists (Join-Path $kept 'kept.txt') 'the target of a junction inside the games'
 	Write-Ok "purged: settings, logs and games gone; a junction inside removed without entering it"
 
-	$code = Invoke-Setup $setup
+	# Two-, three- and four-byte UTF-8, from code points: Windows PowerShell reads this file as ANSI.
+	$unicodeName = "Lookout $([char]0x00DC) $([char]0x6D4B)$([char]0x8BD5) $([char]::ConvertFromUtf32(0x1F3AE))"
+	$unicodeDir = Join-Path (Split-Path $dir) $unicodeName
+	$code = Invoke-Setup $setup "/D=$unicodeDir"
 
 	if ($code -ne 0)
 	{
-		Fail "installing a third time exited $code"
+		Fail "installing a third time, into $unicodeDir, exited $code"
 	}
 
-	$xdgRoot = Join-Path $work 'xdg'
+	Assert-Exists (Join-Path $unicodeDir 'lookout.com') 'lookout.com in a folder with a non-ASCII name'
+	$xdgRoot = Join-Path $work $unicodeName
 	$xdg = @{
 		XDG_CONFIG_HOME = Join-Path $xdgRoot 'config'
 		XDG_DATA_HOME = Join-Path $xdgRoot 'data'
@@ -374,8 +378,8 @@ function Invoke-Checks([string] $setup, [string] $version)
 	New-Item -ItemType Directory -Force $userData | Out-Null
 	Set-Content -LiteralPath (Join-Path $userData 'config.json') -Value '{}'
 
-	Copy-Item -LiteralPath (Join-Path $dir 'uninstall.exe') $copy -Force
-	$code = (Invoke-Process $copy "/S /PURGE _?=$dir" 120 $xdg).ExitCode
+	Copy-Item -LiteralPath (Join-Path $unicodeDir 'uninstall.exe') $copy -Force
+	$code = (Invoke-Process $copy "/S /PURGE _?=$unicodeDir" 120 $xdg).ExitCode
 
 	if ($code -ne 0)
 	{
@@ -387,8 +391,9 @@ function Invoke-Checks([string] $setup, [string] $version)
 		Assert-Gone $folder 'an XDG folder of Lookout'
 	}
 
+	Assert-Gone $unicodeDir 'the install folder with a non-ASCII name'
 	Assert-Exists (Join-Path $userData 'config.json') 'the settings outside the XDG folders'
-	Write-Ok "purged with XDG folders set: those removed, %APPDATA%\Lookout left alone"
+	Write-Ok "installed, run and purged in folders with non-ASCII names, XDG folders set: those removed, %APPDATA%\Lookout left alone"
 }
 
 function Get-SandboxIds
