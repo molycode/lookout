@@ -27,6 +27,20 @@ function Write-Ok([string] $message)
 	Write-Host $message
 }
 
+# Absolute paths in a program, as UTF-8 and as UTF-16 at either alignment.
+function Get-EmbeddedPaths([string] $path)
+{
+	$bytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $path).Path)
+	$texts = @([Text.Encoding]::UTF8.GetString($bytes), [Text.Encoding]::Unicode.GetString($bytes),
+		[Text.Encoding]::Unicode.GetString($bytes, 1, $bytes.Length - 1))
+	$paths = foreach ($text in $texts)
+	{
+		[regex]::Matches($text, '[A-Za-z]:\\(?:[\p{L}\p{N} ._()+~#&$@!'',;=\[\]{}%^-]+\\)+[\p{L}\p{N} ._()+~#&$@!'',;=\[\]{}%^-]+') | ForEach-Object { $_.Value }
+	}
+
+	@($paths | Sort-Object -Unique)
+}
+
 # Windows tells a window program from a console one by the subsystem in its PE header: 2 and 3.
 function Get-Subsystem([string] $path)
 {
@@ -136,6 +150,23 @@ if ((Get-Subsystem $programs[1]) -ne 3)
 }
 
 Write-Ok "lookout.exe is a window program, lookout.com a console one"
+
+# SDL's asserts keep their source files' absolute paths, so a build in a profile folder would publish whose it is.
+$profileDir = "$env:USERPROFILE".TrimEnd('\')
+
+foreach ($program in $programs)
+{
+	$paths = @(Get-EmbeddedPaths $program)
+	$private = @($paths | Where-Object { $_ -match '\\Users\\' -or ($profileDir -ne '' -and $_.StartsWith($profileDir, [StringComparison]::OrdinalIgnoreCase)) -or (($_ -split '\\') -contains $env:USERNAME) })
+
+	if ($private.Count -ne 0)
+	{
+		Fail "$program names a profile folder or the user $env:USERNAME, so who built it would be published: $($private[0..2] -join '; ') - build in a folder outside your profile"
+	}
+
+	$roots = @($paths | ForEach-Object { (($_ -split '\\') | Select-Object -First 3) -join '\' } | Sort-Object -Unique)
+	Write-Ok "$(Split-Path $program -Leaf) names no profile folder or user ($($paths.Count) paths$(if ($roots.Count -ne 0) { ', under ' + ($roots -join ', ') }))"
+}
 
 $versionLine = (& $programs[1] --version | Out-String).Trim()
 
