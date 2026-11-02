@@ -3,11 +3,6 @@ name: Release
 on:
   push:
     tags: ['v*']
-    # Until windows-port merges: workflow_dispatch runs only workflows that are on the default branch.
-    branches: [windows-port]
-    paths:
-      - 'tools/windows/**'
-      - '.github/workflows/release.yml'
   workflow_dispatch:
 
 permissions:
