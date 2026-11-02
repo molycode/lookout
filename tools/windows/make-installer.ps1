@@ -1,14 +1,12 @@
 # Package dist\lookout.exe and dist\lookout.com, which tools\windows\build-release.ps1 built, as
 # dist\lookout-<version>-x86_64-setup.exe with its .sha256.
 #
-#   tools\windows\make-installer.ps1 [-Stage All|Uninstaller|Installer] [-MakeNsis <makensis.exe>]
+#   tools\windows\make-installer.ps1 [-MakeNsis <makensis.exe>]
 #
-# Uninstaller writes dist\uninstall.exe and Installer packs it, so a release signs it in between; All does both.
 # makensis comes from -MakeNsis or LKT_MAKENSIS and must be NSIS's strlen_8192 build. The version comes from
 # lookout.com itself, so a setup can never carry another build's number.
 
 param(
-	[ValidateSet('All', 'Uninstaller', 'Installer')] [string] $Stage = 'All',
 	[string] $MakeNsis = $env:LKT_MAKENSIS
 )
 
@@ -27,7 +25,6 @@ function Write-Ok([string] $message)
 	Write-Host $message
 }
 
-# SignPath refuses a file without them.
 function Assert-VersionInfo([string] $path, [string] $version)
 {
 	$info = (Get-Item $path).VersionInfo
@@ -98,49 +95,14 @@ Write-Host "`nPackaging Lookout $version" -ForegroundColor White
 Assert-VersionInfo (Join-Path $dist 'lookout.exe') $version
 Assert-VersionInfo $console $version
 
-$uninstaller = Join-Path $dist 'uninstall.exe'
+$name = "lookout-$version-x86_64-setup.exe"
+$setup = Join-Path $dist $name
 
-if ($Stage -ne 'Installer')
-{
-	Remove-Item $uninstaller -ErrorAction SilentlyContinue
-	$exportSetup = Join-Path ([IO.Path]::GetTempPath()) "lookout-export-$PID.exe"
+Invoke-MakeNsis @("/DVERSION=$version", "/DDIST=$dist", "/DOUTFILE=$setup")
+Assert-VersionInfo $setup $version
 
-	try
-	{
-		Invoke-MakeNsis @("/DVERSION=$version", "/DDIST=$dist", "/DOUTFILE=$exportSetup", '/DEXPORT_UNINST')
-	}
-	finally
-	{
-		Remove-Item $exportSetup -ErrorAction SilentlyContinue
-	}
+$hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText("$setup.sha256", "$hash  $name`n", (New-Object Text.UTF8Encoding $false))
 
-	if (-not (Test-Path $uninstaller))
-	{
-		Fail "makensis wrote no dist\uninstall.exe"
-	}
-
-	Assert-VersionInfo $uninstaller $version
-	Write-Ok "dist\uninstall.exe  $([math]::Floor((Get-Item $uninstaller).Length / 1024)) KiB"
-}
-
-if ($Stage -ne 'Uninstaller')
-{
-	if (-not (Test-Path $uninstaller))
-	{
-		Fail "dist\uninstall.exe is missing - run this with -Stage Uninstaller first"
-	}
-
-	Assert-VersionInfo $uninstaller $version
-
-	$name = "lookout-$version-x86_64-setup.exe"
-	$setup = Join-Path $dist $name
-
-	Invoke-MakeNsis @("/DVERSION=$version", "/DDIST=$dist", "/DOUTFILE=$setup", '/DIMPORT_UNINST')
-	Assert-VersionInfo $setup $version
-
-	$hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
-	[IO.File]::WriteAllText("$setup.sha256", "$hash  $name`n", (New-Object Text.UTF8Encoding $false))
-
-	Write-Ok "dist\$name  $([math]::Floor((Get-Item $setup).Length / 1024)) KiB"
-	Write-Ok "dist\$name.sha256"
-}
+Write-Ok "dist\$name  $([math]::Floor((Get-Item $setup).Length / 1024)) KiB"
+Write-Ok "dist\$name.sha256"

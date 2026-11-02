@@ -1,20 +1,9 @@
-; Lookout's setup and uninstaller, compiled twice by tools\windows\make-installer.ps1, so that the uninstaller can be
-; signed before the setup packs it:
-;   /DEXPORT_UNINST  writes the uninstaller to ${DIST}\uninstall.exe; the setup it makes is thrown away
-;   /DIMPORT_UNINST  packs ${DIST}\uninstall.exe into the setup
-; Both take /DVERSION=<x.y.z> /DDIST=<folder holding lookout.exe and lookout.com> /DOUTFILE=<setup to write>, and need
-; NSIS's strlen_8192 build: the PATH code refuses a value it cannot hold whole.
+; Lookout's setup and uninstaller, compiled by tools\windows\make-installer.ps1 with /DVERSION=<x.y.z>
+; /DDIST=<folder holding lookout.exe and lookout.com> /DOUTFILE=<setup to write>. It needs NSIS's strlen_8192 build:
+; the PATH code refuses a value it cannot hold whole.
 
 !ifndef VERSION | DIST | OUTFILE
 	!error "VERSION, DIST and OUTFILE must be defined"
-!endif
-
-!ifdef EXPORT_UNINST & IMPORT_UNINST
-	!error "define EXPORT_UNINST or IMPORT_UNINST, not both"
-!endif
-
-!ifndef EXPORT_UNINST & IMPORT_UNINST
-	!error "define EXPORT_UNINST or IMPORT_UNINST"
 !endif
 
 !if ${NSIS_MAX_STRLEN} < 8192
@@ -44,11 +33,7 @@ VIAddVersionKey /LANG=1033 "ProductName" "Lookout"
 VIAddVersionKey /LANG=1033 "ProductVersion" "${VERSION}"
 VIAddVersionKey /LANG=1033 "FileVersion" "${VERSION}"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "© 2026 moly"
-!ifdef EXPORT_UNINST
-	VIAddVersionKey /LANG=1033 "FileDescription" "Lookout uninstaller"
-!else
-	VIAddVersionKey /LANG=1033 "FileDescription" "Lookout setup"
-!endif
+VIAddVersionKey /LANG=1033 "FileDescription" "Lookout setup"
 
 !include FileFunc.nsh
 !include LogicLib.nsh
@@ -77,11 +62,8 @@ Page custom VersionCheckPage VersionCheckPageLeave
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 
-!ifdef EXPORT_UNINST
-	!insertmacro MUI_UNPAGE_COMPONENTS
-	!insertmacro MUI_UNPAGE_INSTFILES
-	!uninstfinalize 'copy /Y "%1" "${DIST}\uninstall.exe" >nul' = 0
-!endif
+!insertmacro MUI_UNPAGE_COMPONENTS
+!insertmacro MUI_UNPAGE_INSTFILES
 
 !insertmacro MUI_LANGUAGE "English"
 
@@ -265,12 +247,7 @@ Section "Lookout" SecLookout
 	File "${DIST}\lookout.com"
 	File "/oname=LICENSE.txt" "..\..\LICENSE"
 	File "README.txt"
-
-!ifdef IMPORT_UNINST
-	File "${DIST}\uninstall.exe"
-!else
 	WriteUninstaller "$INSTDIR\uninstall.exe"
-!endif
 
 	CreateShortcut "$SMPROGRAMS\Lookout.lnk" "$INSTDIR\lookout.exe"
 
@@ -484,109 +461,107 @@ Function .onVerifyInstDir
 	${EndIf}
 FunctionEnd
 
-!ifdef EXPORT_UNINST
-	Section "un.Lookout" UnSecLookout
-		SectionIn RO
-		Call un.EnsureClosed
-		Delete "$INSTDIR\lookout.exe"
-		Delete "$INSTDIR\lookout.com"
-		Delete "$INSTDIR\LICENSE.txt"
-		Delete "$INSTDIR\README.txt"
-		Delete "$INSTDIR\uninstall.exe"
-		RMDir "$INSTDIR"
-		Delete "$SMPROGRAMS\Lookout.lnk"
-		Delete "$DESKTOP\Lookout.lnk"
+Section "un.Lookout" UnSecLookout
+	SectionIn RO
+	Call un.EnsureClosed
+	Delete "$INSTDIR\lookout.exe"
+	Delete "$INSTDIR\lookout.com"
+	Delete "$INSTDIR\LICENSE.txt"
+	Delete "$INSTDIR\README.txt"
+	Delete "$INSTDIR\uninstall.exe"
+	RMDir "$INSTDIR"
+	Delete "$SMPROGRAMS\Lookout.lnk"
+	Delete "$DESKTOP\Lookout.lnk"
 
-		StrCpy $R9 $INSTDIR
-		Call un.ReadPath
+	StrCpy $R9 $INSTDIR
+	Call un.ReadPath
 
-		${If} $R1 = 1
-			StrCpy $R5 $R4
-			Call un.WritePath
-		${ElseIf} $R3 = 0
-			DetailPrint "PATH not changed."
-			MessageBox MB_OK|MB_ICONINFORMATION "Your PATH is too long, or of a kind Setup does not change. If it names $INSTDIR, remove that yourself." /SD IDOK
+	${If} $R1 = 1
+		StrCpy $R5 $R4
+		Call un.WritePath
+	${ElseIf} $R3 = 0
+		DetailPrint "PATH not changed."
+		MessageBox MB_OK|MB_ICONINFORMATION "Your PATH is too long, or of a kind Setup does not change. If it names $INSTDIR, remove that yourself." /SD IDOK
+	${EndIf}
+
+	DeleteRegKey HKCU "${UNINSTALL_KEY}"
+
+	StrCpy $R0 "XDG_CACHE_HOME"
+	StrCpy $R1 $LOCALAPPDATA
+	Call un.UserFolder
+
+	${If} $R2 != ""
+		StrCpy $R3 $R2
+		StrCpy $R2 "$R3\icons"
+		Call un.RemoveTree
+		RMDir $R3
+	${EndIf}
+SectionEnd
+
+Section /o "un.Settings, logs and games" UnSecPurge
+	StrCpy $R0 "XDG_CONFIG_HOME"
+	StrCpy $R1 $APPDATA
+	Call un.UserFolder
+	Call un.RemoveTree
+
+	StrCpy $R0 "XDG_DATA_HOME"
+	StrCpy $R1 $APPDATA
+	Call un.UserFolder
+	Call un.RemoveTree
+
+	StrCpy $R0 "XDG_STATE_HOME"
+	StrCpy $R1 $LOCALAPPDATA
+	Call un.UserFolder
+	Call un.RemoveTree
+
+	StrCpy $R0 "XDG_CACHE_HOME"
+	StrCpy $R1 $LOCALAPPDATA
+	Call un.UserFolder
+	Call un.RemoveTree
+SectionEnd
+
+!insertmacro MUI_UNFUNCTION_DESCRIPTION_BEGIN
+	!insertmacro MUI_DESCRIPTION_TEXT ${UnSecLookout} "The program, its shortcuts, its PATH entry and the game icons it keeps."
+	!insertmacro MUI_DESCRIPTION_TEXT ${UnSecPurge} "Also your settings, logs, downloaded games and your own games and protocols."
+!insertmacro MUI_UNFUNCTION_DESCRIPTION_END
+
+!insertmacro DefineEnsureClosed "un."
+!insertmacro DefineReadPath "un."
+!insertmacro DefineUserFolder "un."
+
+Function un.onInit
+	${un.GetParameters} $0
+	ClearErrors
+	${un.GetOptions} $0 "/PURGE" $1
+
+	${IfNot} ${Errors}
+		!insertmacro SelectSection ${UnSecPurge}
+	${EndIf}
+FunctionEnd
+
+; RMDir /r would follow a junction and empty its target; rd removes the junction itself. cmd expands a % even
+; inside quotes, so a folder named with one is left to the user. In: $R2 = the folder. Uses $0-$3.
+Function un.RemoveTree
+	StrLen $0 $R2
+	StrCpy $1 0
+	StrCpy $2 0
+
+	${DoWhile} $1 < $0
+		StrCpy $3 $R2 1 $1
+		${IfThen} $3 == "%" ${|} StrCpy $2 1 ${|}
+		IntOp $1 $1 + 1
+	${Loop}
+
+	${If} $R2 != ""
+	${AndIf} ${FileExists} "$R2\*.*"
+		${If} $2 = 0
+			nsExec::ExecToLog '"$SYSDIR\cmd.exe" /c rd /s /q "$R2"'
+			Pop $0
 		${EndIf}
 
-		DeleteRegKey HKCU "${UNINSTALL_KEY}"
-
-		StrCpy $R0 "XDG_CACHE_HOME"
-		StrCpy $R1 $LOCALAPPDATA
-		Call un.UserFolder
-
-		${If} $R2 != ""
-			StrCpy $R3 $R2
-			StrCpy $R2 "$R3\icons"
-			Call un.RemoveTree
-			RMDir $R3
+		${If} ${FileExists} "$R2\*.*"
+			DetailPrint "Could not remove $R2."
+			MessageBox MB_OK|MB_ICONEXCLAMATION "Could not remove $R2; remove it yourself." /SD IDOK
 		${EndIf}
-	SectionEnd
-
-	Section /o "un.Settings, logs and games" UnSecPurge
-		StrCpy $R0 "XDG_CONFIG_HOME"
-		StrCpy $R1 $APPDATA
-		Call un.UserFolder
-		Call un.RemoveTree
-
-		StrCpy $R0 "XDG_DATA_HOME"
-		StrCpy $R1 $APPDATA
-		Call un.UserFolder
-		Call un.RemoveTree
-
-		StrCpy $R0 "XDG_STATE_HOME"
-		StrCpy $R1 $LOCALAPPDATA
-		Call un.UserFolder
-		Call un.RemoveTree
-
-		StrCpy $R0 "XDG_CACHE_HOME"
-		StrCpy $R1 $LOCALAPPDATA
-		Call un.UserFolder
-		Call un.RemoveTree
-	SectionEnd
-
-	!insertmacro MUI_UNFUNCTION_DESCRIPTION_BEGIN
-		!insertmacro MUI_DESCRIPTION_TEXT ${UnSecLookout} "The program, its shortcuts, its PATH entry and the game icons it keeps."
-		!insertmacro MUI_DESCRIPTION_TEXT ${UnSecPurge} "Also your settings, logs, downloaded games and your own games and protocols."
-	!insertmacro MUI_UNFUNCTION_DESCRIPTION_END
-
-	!insertmacro DefineEnsureClosed "un."
-	!insertmacro DefineReadPath "un."
-	!insertmacro DefineUserFolder "un."
-
-	Function un.onInit
-		${un.GetParameters} $0
-		ClearErrors
-		${un.GetOptions} $0 "/PURGE" $1
-
-		${IfNot} ${Errors}
-			!insertmacro SelectSection ${UnSecPurge}
-		${EndIf}
-	FunctionEnd
-
-	; RMDir /r would follow a junction and empty its target; rd removes the junction itself. cmd expands a % even
-	; inside quotes, so a folder named with one is left to the user. In: $R2 = the folder. Uses $0-$3.
-	Function un.RemoveTree
-		StrLen $0 $R2
-		StrCpy $1 0
-		StrCpy $2 0
-
-		${DoWhile} $1 < $0
-			StrCpy $3 $R2 1 $1
-			${IfThen} $3 == "%" ${|} StrCpy $2 1 ${|}
-			IntOp $1 $1 + 1
-		${Loop}
-
-		${If} $R2 != ""
-		${AndIf} ${FileExists} "$R2\*.*"
-			${If} $2 = 0
-				nsExec::ExecToLog '"$SYSDIR\cmd.exe" /c rd /s /q "$R2"'
-				Pop $0
-			${EndIf}
-
-			${If} ${FileExists} "$R2\*.*"
-				DetailPrint "Could not remove $R2."
-				MessageBox MB_OK|MB_ICONEXCLAMATION "Could not remove $R2; remove it yourself." /SD IDOK
-			${EndIf}
-		${EndIf}
-	FunctionEnd
-!endif
+	${EndIf}
+FunctionEnd

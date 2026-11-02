@@ -58,11 +58,8 @@ jobs:
       - name: Build the programs
         run: ./tools/windows/build-release.ps1
 
-      - name: Export the uninstaller
-        run: ./tools/windows/make-installer.ps1 -Stage Uninstaller
-
       - name: Build the setup
-        run: ./tools/windows/make-installer.ps1 -Stage Installer
+        run: ./tools/windows/make-installer.ps1
 
       - name: Check the setup
         run: ./tools/windows/check-package.ps1 -Here

@@ -2,7 +2,7 @@
 # running Lookout, upgrade turning the version check off, and uninstall three ways (keeping the user's files, purging
 # them, purging XDG folders).
 #
-#   tools\windows\check-package.ps1 [-Installer dist\lookout-<version>-x86_64-setup.exe] [-Here] [-RequireSignature]
+#   tools\windows\check-package.ps1 [-Installer dist\lookout-<version>-x86_64-setup.exe] [-Here]
 #
 # By default it runs in Windows Sandbox, which it starts. -Here runs it on this machine, which must then be Windows
 # Sandbox or a CI runner: it changes the user's PATH, Start menu and installed apps. It downloads Quake II and UT2004
@@ -11,7 +11,6 @@
 param(
 	[string] $Installer,
 	[switch] $Here,
-	[switch] $RequireSignature,
 	[string] $ResultsDir
 )
 
@@ -165,18 +164,6 @@ function Invoke-Checks([string] $setup, [string] $version)
 	$work = Join-Path ([IO.Path]::GetTempPath()) "lookout-check-$PID"
 	New-Item -ItemType Directory -Force $work | Out-Null
 
-	if ($RequireSignature)
-	{
-		$status = (Get-AuthenticodeSignature -LiteralPath $setup).Status
-
-		if ($status -ne 'Valid')
-		{
-			Fail "the setup's signature is $status"
-		}
-
-		Write-Ok "the setup is signed"
-	}
-
 	# Longer than NSIS's default 1024 characters, ending in ; as Windows' own default does.
 	$original = (Get-UserPath).TrimEnd(';')
 	$fillers = (1..40 | ForEach-Object { "C:\lookout-check\an-entry-that-only-makes-the-path-long-$_" }) -join ';'
@@ -212,21 +199,6 @@ function Invoke-Checks([string] $setup, [string] $version)
 	}
 
 	Write-Ok "installed in ${dir}: files, uninstall entry, Start menu shortcut, PATH entry after $($planted.Length) characters, version check on"
-
-	if ($RequireSignature)
-	{
-		foreach ($file in 'lookout.exe', 'lookout.com', 'uninstall.exe')
-		{
-			$status = (Get-AuthenticodeSignature -LiteralPath (Join-Path $dir $file)).Status
-
-			if ($status -ne 'Valid')
-			{
-				Fail "$file's signature is $status"
-			}
-		}
-
-		Write-Ok "lookout.exe, lookout.com and uninstall.exe are signed"
-	}
 
 	$result = Invoke-Lookout '--version' 30
 
@@ -444,11 +416,6 @@ function Invoke-InSandbox([string] $setup)
 
 	$setupName = Split-Path $setup -Leaf
 	$command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\check\tools\check-package.ps1 -Installer C:\check\setup\$setupName -Here -ResultsDir C:\check\results"
-
-	if ($RequireSignature)
-	{
-		$command += ' -RequireSignature'
-	}
 
 	$config = @"
 <Configuration>
