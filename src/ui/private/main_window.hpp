@@ -82,6 +82,7 @@ private:
 	Download::CLatestRelease m_latestRelease{};
 	Browser::CMasterProbes m_masterProbes{};
 	std::string_view m_version{};
+	std::string_view m_configDir{};
 	std::filesystem::path m_userDir{};
 	std::function<void()> m_requestReload{};
 	std::vector<uint64_t> m_selectedKeys{};

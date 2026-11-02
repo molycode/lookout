@@ -25,6 +25,7 @@ struct SFrameIntents final
 	std::optional<Config::SServerFilter> filter{};
 	std::optional<Config::SSortOrder> sort{};
 	std::optional<uint32_t> autoRefreshSeconds{};
+	std::optional<bool> versionCheck{};
 	SServerAction action{};
 	bool refresh{ false };
 	bool openAddServer{ false };

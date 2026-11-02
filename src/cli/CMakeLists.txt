@@ -17,6 +17,7 @@ target_link_libraries(LktCli
 		Tge::Net
 	PRIVATE
 		Lkt::Browser
+		Lkt::Config
 		Lkt::Download
 		Lkt::Games
 		Tge::IO

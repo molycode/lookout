@@ -11,6 +11,7 @@
 #include "theme.hpp"
 #include "theme_colors.hpp"
 #include "browser/browser.hpp"
+#include "config/version_check.hpp"
 #include "download/lookout_games.hpp"
 #include "download/lookout_release.hpp"
 #include "net/clock.hpp"
@@ -38,6 +39,8 @@ constexpr float MinSidebarEm{ 13.0f };
 constexpr float MinTableEm{ 28.0f };
 constexpr float MinDetailsEm{ 14.0f };
 constexpr float MaxDetailsEm{ 40.0f };
+constexpr float VersionPopupEm{ 20.0f };
+constexpr char const* VersionPopupId{ "###version" };
 
 //////////////////////////////////////////////////////////////////////////
 std::string_view DescribeLatestRelease(Download::CLatestRelease const& latestRelease, std::string_view version, std::array<char, 256>& buffer)
@@ -46,7 +49,11 @@ std::string_view DescribeLatestRelease(Download::CLatestRelease const& latestRel
 	std::string_view const problem{ latestRelease.GetProblem() };
 	std::string_view description{};
 
-	if (latest.empty() && problem.empty())
+	if (!latestRelease.IsEnabled())
+	{
+		description = FormatTo(buffer, "Lookout does not check for new versions");
+	}
+	else if (latest.empty() && problem.empty())
 	{
 		description = FormatTo(buffer, "Not known yet whether Lookout {} is the latest version", version);
 	}
@@ -56,7 +63,7 @@ std::string_view DescribeLatestRelease(Download::CLatestRelease const& latestRel
 	}
 	else if (Download::IsNewerLookout(latest, version))
 	{
-		description = FormatTo(buffer, "Lookout {} is out; you have {}. Click to get it.", latest, version);
+		description = FormatTo(buffer, "Lookout {} is out; you have {}.", latest, version);
 	}
 	else if (Download::IsNewerLookout(version, latest))
 	{
@@ -71,44 +78,91 @@ std::string_view DescribeLatestRelease(Download::CLatestRelease const& latestRel
 }
 
 //////////////////////////////////////////////////////////////////////////
-// At the menu bar's right end; only a newer release stands out, and only it can be clicked.
-void DrawLatestRelease(Download::CLatestRelease const& latestRelease, std::string_view version)
+std::string_view GetLatestReleaseIcon(Download::CLatestRelease const& latestRelease)
+{
+	std::string_view icon{ LKT_ICON_CIRCLE_CHECK };
+
+	if (!latestRelease.IsEnabled())
+	{
+		icon = LKT_ICON_BELL_SLASH;
+	}
+	else if (latestRelease.GetVersion().empty())
+	{
+		icon = LKT_ICON_QUESTION;
+	}
+
+	return icon;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void DrawLatestReleasePopup(Download::CLatestRelease const& latestRelease, std::string_view version, std::string_view description, SFrameIntents& intents)
+{
+	std::string_view const latest{ latestRelease.GetVersion() };
+	bool isEnabled{ latestRelease.IsEnabled() };
+	std::array<char, 48> buttonBuffer{};
+
+	ImGui::PushTextWrapPos(ImGui::GetFontSize() * VersionPopupEm);
+	ImGui::TextUnformatted(description.data(), description.data() + description.size());
+
+	if (Download::IsNewerLookout(latest, version))
+	{
+		ImGui::Spacing();
+
+		if (ImGui::Button(FormatTo(buttonBuffer, LKT_ICON_DOWNLOAD " Get Lookout {}", latest).data()))
+		{
+			if (!SDL_OpenURL(Download::LookoutReleaseUrl.data()))
+			{
+				gLog.Warning("Cannot open {}: {}", Download::LookoutReleaseUrl, SDL_GetError());
+			}
+
+			ImGui::CloseCurrentPopup();
+		}
+	}
+
+	ImGui::Separator();
+
+	if (ImGui::Checkbox("Check for new versions", &isEnabled))
+	{
+		intents.versionCheck = isEnabled;
+	}
+
+	ImGui::TextDisabled("Lookout asks GitHub for its latest release at start and once a day; the request names only Lookout and its version.");
+	ImGui::PopTextWrapPos();
+}
+
+//////////////////////////////////////////////////////////////////////////
+// At the menu bar's right end; only a newer release stands out.
+void DrawLatestRelease(Download::CLatestRelease const& latestRelease, std::string_view version, SFrameIntents& intents)
 {
 	SThemeColors const& colors{ GetThemeColors() };
 	std::string_view const latest{ latestRelease.GetVersion() };
 	bool const isNewerOut{ Download::IsNewerLookout(latest, version) };
-	float const spacing{ ImGui::GetStyle().ItemSpacing.x };
 	std::array<char, 32> labelBuffer{};
-	std::array<char, 256> tooltipBuffer{};
-	std::string_view const label{ isNewerOut ? FormatTo(labelBuffer, LKT_ICON_CIRCLE_UP " {}", latest)
-		: FormatTo(labelBuffer, "{}", latest.empty() ? LKT_ICON_QUESTION : LKT_ICON_CIRCLE_CHECK) };
-	std::string_view const tooltip{ DescribeLatestRelease(latestRelease, version, tooltipBuffer) };
-	float const width{ ImGui::CalcTextSize(label.data(), label.data() + label.size()).x + spacing };
+	std::array<char, 256> descriptionBuffer{};
+	std::string_view const label{ isNewerOut ? FormatTo(labelBuffer, LKT_ICON_CIRCLE_UP " {}", latest) : FormatTo(labelBuffer, "{}", GetLatestReleaseIcon(latestRelease)) };
+	std::string_view const description{ DescribeLatestRelease(latestRelease, version, descriptionBuffer) };
+	float const width{ ImGui::CalcTextSize(label.data(), label.data() + label.size()).x + ImGui::GetStyle().ItemSpacing.x };
 
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - width));
+	ImGui::PushStyleColor(ImGuiCol_Text, isNewerOut ? colors.amber : colors.textDisabled);
 
-	if (isNewerOut)
+	bool const isClicked{ ImGui::MenuItem(label.data()) };
+	ImVec2 const anchor{ ImGui::GetItemRectMax() };
+
+	ImGui::PopStyleColor();
+	ImGui::SetItemTooltip("%.*s", static_cast<int>(description.size()), description.data());
+
+	if (isClicked)
 	{
-		ImGui::PushStyleColor(ImGuiCol_Text, colors.amber);
-
-		bool const isClicked{ ImGui::MenuItem(label.data()) };
-
-		ImGui::PopStyleColor();
-		ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
-
-		if (isClicked && !SDL_OpenURL(Download::LookoutReleaseUrl.data()))
-		{
-			gLog.Warning("Cannot open {}: {}", Download::LookoutReleaseUrl, SDL_GetError());
-		}
+		ImGui::OpenPopup(VersionPopupId);
 	}
-	else
+
+	ImGui::SetNextWindowPos(anchor, ImGuiCond_Appearing, ImVec2{ 1.0f, 0.0f });
+
+	if (ImGui::BeginPopup(VersionPopupId))
 	{
-		// Where a menu item's text would start, so the icon does not move when it becomes one.
-		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + spacing * 0.5f);
-		ImGui::PushStyleColor(ImGuiCol_Text, colors.textDisabled);
-		ImGui::TextUnformatted(label.data(), label.data() + label.size());
-		ImGui::PopStyleColor();
-		ImGui::SetItemTooltip("%.*s", static_cast<int>(tooltip.size()), tooltip.data());
+		DrawLatestReleasePopup(latestRelease, version, description, intents);
+		ImGui::EndPopup();
 	}
 }
 
@@ -125,7 +179,7 @@ void DrawMenuBar(Download::CLatestRelease const& latestRelease, std::string_view
 			ImGui::EndMenu();
 		}
 
-		DrawLatestRelease(latestRelease, version);
+		DrawLatestRelease(latestRelease, version, intents);
 		ImGui::EndMenuBar();
 	}
 }
@@ -173,8 +227,10 @@ void CMainWindow::Initialize(SDL_Window* pWindow, uint32_t detailsWidth, SAboutI
 {
 	m_userDir = userDir;
 	m_version = about.version;
+	m_configDir = about.configDir;
 	m_requestReload = std::move(requestReload);
 	m_masterProbes.Initialize(wake);
+	m_latestRelease.SetEnabled(Config::IsVersionCheckOn(m_configDir));
 
 	if (!m_latestRelease.Initialize(Download::GetLookoutReleaseOrigin(about.version), wake))
 	{
@@ -448,6 +504,12 @@ void CMainWindow::Apply(Browser::CBrowser& browser, SFrameIntents const& intents
 	if (intents.autoRefreshSeconds.has_value())
 	{
 		browser.SetAutoRefresh(*intents.autoRefreshSeconds);
+	}
+
+	if (intents.versionCheck.has_value())
+	{
+		Config::SetVersionCheck(m_configDir, *intents.versionCheck);
+		m_latestRelease.SetEnabled(*intents.versionCheck);
 	}
 
 	if (intents.refresh)

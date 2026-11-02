@@ -25,3 +25,4 @@
 #define LKT_ICON_PEN "\xef\x8c\x84"
 #define LKT_ICON_QUESTION "\xef\x81\x99"
 #define LKT_ICON_ROTATE_LEFT "\xef\x83\xa2"
+#define LKT_ICON_BELL_SLASH "\xef\x87\xb6"

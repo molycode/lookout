@@ -7,6 +7,7 @@
 #include "run_context.hpp"
 #include "browser/browser.hpp"
 #include "browser/server_list.hpp"
+#include "config/version_check.hpp"
 #include "download/game_downloads.hpp"
 #include "download/latest_release.hpp"
 #include "download/lookout_games.hpp"
@@ -409,6 +410,8 @@ bool CSession::RunDownload(std::span<std::string const> keys)
 	} };
 
 	bool success{ downloads.Initialize(m_userDir, m_cacheDir, Download::GetLookoutGamesSource(LKT_VERSION), onResults) };
+
+	latestRelease.SetEnabled(Config::IsVersionCheckOn(m_configDir));
 
 	if (!latestRelease.Initialize(Download::GetLookoutReleaseOrigin(LKT_VERSION), onResults))
 	{
