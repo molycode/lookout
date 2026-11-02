@@ -1,7 +1,7 @@
 # Lookout
 
-A native Linux game server browser. It lists the servers from each game's masters, filters and sorts them, shows
-who is playing, and joins with a double-click through the game's own launcher.
+A native game server browser for Linux and Windows. It lists the servers from each game's masters, filters and sorts
+them, shows who is playing, and joins with a double-click through the game's own launcher.
 
 Lookout knows no game by itself. Each game is a description and each query protocol a sandboxed Lua script, downloaded
 from [lookout-games](https://github.com/molycode/lookout-games) or written by you, so adding a game, even one still in
@@ -14,8 +14,8 @@ development, needs no new Lookout.
 A game is a description, `games/<key>/game.json`, and a protocol a Lua script, `protocols/<name>.lua`. The published
 ones are in [lookout-games](https://github.com/molycode/lookout-games), which Lookout downloads, updates and removes
 from the download button above the game list (or `lookout --download`), into `~/.local/share/lookout/downloaded/` (or
-`$XDG_DATA_HOME/lookout/downloaded/`), checking each file against the repository's index. Yours go in
-`~/.local/share/lookout/`, where a description under a downloaded game's key changes only what it names, so it survives
+`$XDG_DATA_HOME/lookout/downloaded/`; on Windows `%APPDATA%\Lookout\downloaded\`), checking each file against the
+repository's index. Yours go in `~/.local/share/lookout/` (`%APPDATA%\Lookout\`), where a description under a downloaded game's key changes only what it names, so it survives
 the game's updates. In the app, click the pencil on a game to edit its description, or click the gamepad above the game
 list to add one; Lookout checks it as you type and reloads the games whenever that folder changes. The editor tests each
 master as you open and edit it: a check with the number of servers it listed, or a cross with the reason. A protocol of
@@ -26,9 +26,18 @@ icon at the right of the menu bar says whether a newer Lookout is out; Lookout a
 
 ![Download games on a first start: every game in lookout-games, ready to download](docs/download-games.png)
 
+## Installing
+
+On Linux, unpack `lookout-<version>-x86_64.tar.xz` from the [releases](https://github.com/molycode/lookout/releases)
+and run its `install.sh`, which installs to `~/.local`. On Windows 10 22H2 or 11 (64-bit), run
+`lookout-<version>-x86_64-setup.exe`, which installs for you alone, needs no administrator rights, and can put
+`lookout` on your PATH for the command line. Both come with a README on where Lookout keeps its files and how to
+uninstall it.
+
 ## Building
 
-Needs CMake 4.3 or newer, Ninja, and GCC 14+ or Clang 19+.
+Needs CMake 4.3 or newer, Ninja, and GCC 14+ or Clang 19+ on Linux, Visual Studio 2026's C++ tools (MSVC, or its
+clang-cl) on Windows.
 
 ```bash
 cmake --preset linux-gcc-release
@@ -36,10 +45,16 @@ cmake --build --preset linux-gcc-release
 ./build/gcc-Release/lookout
 ```
 
+On Windows, from an x64 Native Tools prompt, `cmake --preset windows-msvc-release` and `cmake --build --preset
+windows-msvc-release` build `build\msvc-Release\lookout.exe` (the window) and `lookout.com` (the command line).
+
 The first configure fetches the submodules and Mbed TLS's release tarball, checked against its published
 SHA-256. `tools/build-release.sh` builds the distributable binary in a
 container, so that it runs on Ubuntu 22.04, Debian 12 and anything newer. `tools/make-package.sh` then wraps it into
 `dist/lookout-<version>-x86_64.tar.xz`, with a menu entry, an icon and an `install.sh` that installs to `~/.local`.
+On Windows, `tools/windows/build-release.ps1` builds both programs with the C runtime linked in, and
+`tools/windows/make-installer.ps1` wraps them with [NSIS](https://nsis.sourceforge.io) into
+`dist/lookout-<version>-x86_64-setup.exe`.
 
 ## License
 
