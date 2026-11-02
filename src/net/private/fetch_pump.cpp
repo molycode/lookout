@@ -273,7 +273,7 @@ void CFetchPump::CheckConnected()
 	}
 	else
 	{
-		std::expected<void, std::string> const secured{ m_tls.Initialize(m_config, m_origin.host, m_socket) };
+		std::expected<void, std::string> const secured{ m_tls.Initialize(m_config, m_origin.host, m_socket, m_origin.caFile.empty()) };
 
 		m_watch = secured.has_value() ? m_loop.Watch(m_socket.GetWaitable(), [this]() { Advance(); }) : std::nullopt;
 

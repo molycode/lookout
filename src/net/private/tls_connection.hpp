@@ -3,10 +3,12 @@
 #include <mbedtls/ssl.h>
 #include <tge/non_copyable.hpp>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 namespace Tge::Net
 {
@@ -25,7 +27,8 @@ public:
 	~CTlsConnection() = default;
 
 	// config must outlive the connection; host is the name the certificate must carry.
-	std::expected<void, std::string> Initialize(mbedtls_ssl_config const& config, std::string_view host, Tge::Net::CStreamSocket const& socket);
+	std::expected<void, std::string> Initialize(mbedtls_ssl_config const& config, std::string_view host, Tge::Net::CStreamSocket const& socket,
+		bool hasSystemRoots);
 	void Terminate();
 
 	std::expected<void, int> Handshake();
@@ -40,9 +43,17 @@ private:
 
 	static int Send(void* pContext, unsigned char const* pData, size_t size);
 	static int Receive(void* pContext, unsigned char* pBuffer, size_t size);
+	static int Verify(void* pContext, mbedtls_x509_crt* pCertificate, int depth, uint32_t* pFlags);
+
+	bool IsTrustedBySystem(mbedtls_x509_crt const* pServer);
 
 	mbedtls_ssl_context m_ssl{};
 	Tge::Net::CStreamSocket const* m_pSocket{ nullptr };
+	std::string m_hostName{};
+	std::error_code m_systemVerdict{};
+	bool m_hasSeenTop{ false };
+	bool m_isRootLeftToSystem{ false };
+	bool m_hasOtherFlaw{ false };
 	bool m_isInitialized{ false };
 };
 } // namespace Lkt::Net

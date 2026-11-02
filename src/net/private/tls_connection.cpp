@@ -3,11 +3,13 @@
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/x509_crt.h>
 #include <tge/net/stream_socket.hpp>
+#include <tge/net/verify_server_chain.hpp>
 #include <algorithm>
 #include <array>
 #include <format>
 #include <string>
 #include <system_error>
+#include <vector>
 
 namespace Lkt::Net
 {
@@ -23,21 +25,31 @@ bool IsWouldBlock(std::error_code error)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-std::expected<void, std::string> CTlsConnection::Initialize(mbedtls_ssl_config const& config, std::string_view host, Tge::Net::CStreamSocket const& socket)
+std::expected<void, std::string> CTlsConnection::Initialize(mbedtls_ssl_config const& config, std::string_view host, Tge::Net::CStreamSocket const& socket,
+	bool hasSystemRoots)
 {
-	std::string const hostName{ host };
 	std::expected<void, std::string> result{};
 
 	mbedtls_ssl_init(&m_ssl);
 	m_pSocket = &socket;
+	m_hostName = host;
+	m_systemVerdict = std::error_code{};
+	m_hasSeenTop = false;
+	m_isRootLeftToSystem = false;
+	m_hasOtherFlaw = false;
 	m_isInitialized = true;
 
 	int const setUp{ mbedtls_ssl_setup(&m_ssl, &config) };
-	int const named{ (setUp == 0) ? mbedtls_ssl_set_hostname(&m_ssl, hostName.c_str()) : setUp };
+	int const named{ (setUp == 0) ? mbedtls_ssl_set_hostname(&m_ssl, m_hostName.c_str()) : setUp };
 
 	if (named == 0)
 	{
 		mbedtls_ssl_set_bio(&m_ssl, this, Send, Receive, nullptr);
+
+		if (hasSystemRoots)
+		{
+			mbedtls_ssl_set_verify(&m_ssl, Verify, this);
+		}
 	}
 	else
 	{
@@ -120,6 +132,11 @@ std::string CTlsConnection::Describe(int error) const
 			description += std::format("{}{}", (at == 0) ? "" : "; ", text.substr(at, end - at));
 			at = end + 1;
 		}
+
+		if (m_systemVerdict.value() != 0 && m_systemVerdict != std::errc::not_supported)
+		{
+			description += std::format("; the system's own check: {}", m_systemVerdict.message());
+		}
 	}
 	else
 	{
@@ -166,5 +183,63 @@ int CTlsConnection::Receive(void* pContext, unsigned char* pBuffer, size_t size)
 	}
 
 	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Called from the top of the built chain down to depth 0; only the top's missing issuer is the system's to judge.
+int CTlsConnection::Verify(void* pContext, mbedtls_x509_crt* pCertificate, int depth, uint32_t* pFlags)
+{
+	CTlsConnection* const pConnection{ static_cast<CTlsConnection*>(pContext) };
+	bool const isTop{ !pConnection->m_hasSeenTop };
+
+	pConnection->m_hasSeenTop = true;
+
+	if (isTop && *pFlags == MBEDTLS_X509_BADCERT_NOT_TRUSTED)
+	{
+		pConnection->m_isRootLeftToSystem = true;
+		*pFlags = 0;
+	}
+	else if (*pFlags != 0)
+	{
+		pConnection->m_hasOtherFlaw = true;
+	}
+
+	if (depth == 0 && pConnection->m_isRootLeftToSystem)
+	{
+		bool isTrusted{ false };
+
+		if (!pConnection->m_hasOtherFlaw)
+		{
+			isTrusted = pConnection->IsTrustedBySystem(pCertificate);
+		}
+
+		if (!isTrusted)
+		{
+			*pFlags |= MBEDTLS_X509_BADCERT_NOT_TRUSTED;
+		}
+	}
+
+	return 0;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Blocks the fetcher's loop while Windows fetches a root it lacks: once per root per machine, chosen over a thread.
+bool CTlsConnection::IsTrustedBySystem(mbedtls_x509_crt const* pServer)
+{
+	std::vector<std::span<std::byte const>> chain{};
+
+	for (mbedtls_x509_crt const* pLink{ pServer }; pLink != nullptr; pLink = pLink->next)
+	{
+		if (pLink->raw.len != 0)
+		{
+			chain.emplace_back(reinterpret_cast<std::byte const*>(pLink->raw.p), pLink->raw.len);
+		}
+	}
+
+	std::expected<void, std::error_code> const verified{ Tge::Net::VerifyServerChain(chain, m_hostName) };
+
+	m_systemVerdict = verified.has_value() ? std::error_code{} : verified.error();
+
+	return verified.has_value();
 }
 } // namespace Lkt::Net

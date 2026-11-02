@@ -213,6 +213,46 @@ TEST_F(CHttpsFetcherTest, CertificateForAnotherHostIsRefused)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Without a CA file the system's roots decide, and no system trusts the tests' CA.
+TEST_F(CHttpsFetcherTest, RootNoSystemTrustsIsRefused)
+{
+	SHttpsOrigin origin{ MakeOrigin() };
+
+	origin.caFile.clear();
+	m_server.SetReply("/index.json", Fixtures::SHttpsReply{ .body = "{}" });
+	ASSERT_TRUE(StartFetcher(std::move(origin)));
+
+	std::vector<SFetchResult> const results{ Fetch({ { "/index.json", MaxSize } }) };
+	std::string const error{ results.empty() ? "" : results.front().body.error_or("") };
+
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_TRUE(error.starts_with("localhost: its certificate is not trusted: ")) << error;
+#if defined(TGE_PLATFORM_WINDOWS)
+	EXPECT_NE(error.find("; the system's own check: "), std::string::npos) << error;
+#endif // defined(TGE_PLATFORM_WINDOWS)
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A flaw besides the missing root fails at once, so the system is never asked.
+TEST_F(CHttpsFetcherTest, CertificateForAnotherHostIsRefusedWithoutTheSystem)
+{
+	SHttpsOrigin origin{ MakeOrigin() };
+
+	origin.caFile.clear();
+	origin.host = "example.org";
+	m_server.SetReply("/index.json", Fixtures::SHttpsReply{ .body = "{}" });
+	ASSERT_TRUE(StartFetcher(std::move(origin)));
+
+	std::vector<SFetchResult> const results{ Fetch({ { "/index.json", MaxSize } }) };
+	std::string const error{ results.empty() ? "" : results.front().body.error_or("") };
+
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_TRUE(error.starts_with("example.org: its certificate is not trusted: ")) << error;
+	EXPECT_NE(error.find("The certificate Common Name (CN) does not match with the expected CN"), std::string::npos) << error;
+	EXPECT_EQ(error.find("; the system's own check: "), std::string::npos) << error;
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CHttpsFetcherTest, SilentServerTimesOut)
 {
 	m_server.SetReply("/slow", Fixtures::SHttpsReply{ .isSilent = true });
