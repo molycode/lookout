@@ -25,6 +25,9 @@ std::filesystem::path GetBaseFolder(SLaunchEnvironment const& environment, Query
 		case Query::EInstallDirBase::ProgramFilesX86:
 			folder = environment.programFilesX86;
 			break;
+		case Query::EInstallDirBase::AppData:
+			folder = environment.appData;
+			break;
 		case Query::EInstallDirBase::LocalAppData:
 			folder = environment.localAppData;
 			break;

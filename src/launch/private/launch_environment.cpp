@@ -83,6 +83,7 @@ SLaunchEnvironment ReadLaunchEnvironment()
 
 	environment.programFiles = ReadKnownFolder(FOLDERID_ProgramFiles, "Program Files");
 	environment.programFilesX86 = ReadKnownFolder(FOLDERID_ProgramFilesX86, "Program Files (x86)");
+	environment.appData = ReadKnownFolder(FOLDERID_RoamingAppData, "Roaming AppData");
 	environment.localAppData = ReadKnownFolder(FOLDERID_LocalAppData, "Local AppData");
 	environment.systemDrive = ReadKnownFolder(FOLDERID_Windows, "Windows").root_path();
 	environment.steamLibraries = ReadSteamLibraries(steamFolder.make_preferred());

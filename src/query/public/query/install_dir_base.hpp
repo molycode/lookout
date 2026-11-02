@@ -8,6 +8,7 @@ enum class EInstallDirBase : uint8_t
 {
 	ProgramFiles,
 	ProgramFilesX86,
+	AppData,
 	LocalAppData,
 	SystemDrive
 };

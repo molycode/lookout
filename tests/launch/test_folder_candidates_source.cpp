@@ -43,6 +43,7 @@ protected:
 		ASSERT_TRUE(m_tempDir.Initialize("lookout-folder-candidates"));
 		m_environment.programFiles = m_tempDir.GetPath() / "Program Files";
 		m_environment.programFilesX86 = m_tempDir.GetPath() / "Program Files (x86)";
+		m_environment.appData = m_tempDir.GetPath() / "Roaming";
 		m_environment.localAppData = m_tempDir.GetPath() / "Local";
 		m_environment.systemDrive = m_tempDir.GetPath() / "C";
 		m_hints.onWindows = Query::SWindowsLaunchHints{ 0, 0, {}, "kingpin.exe", { "main/pak0.pak" } };
@@ -83,9 +84,10 @@ protected:
 TEST_F(CFolderCandidatesSourceTest, EveryPlaceholderUsesItsFolder)
 {
 	CExpectedLog const expected{ LaunchChannel, 0, 0 };
-	std::array<std::pair<Query::EInstallDirBase, std::filesystem::path>, 4> const bases{ {
+	std::array<std::pair<Query::EInstallDirBase, std::filesystem::path>, 5> const bases{ {
 		{ Query::EInstallDirBase::ProgramFiles, m_environment.programFiles },
 		{ Query::EInstallDirBase::ProgramFilesX86, m_environment.programFilesX86 },
+		{ Query::EInstallDirBase::AppData, m_environment.appData },
 		{ Query::EInstallDirBase::LocalAppData, m_environment.localAppData },
 		{ Query::EInstallDirBase::SystemDrive, m_environment.systemDrive }
 	} };

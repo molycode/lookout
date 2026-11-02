@@ -15,6 +15,7 @@ struct SLaunchEnvironment final
 	std::string searchPath{};
 	std::filesystem::path programFiles{};
 	std::filesystem::path programFilesX86{};
+	std::filesystem::path appData{};
 	std::filesystem::path localAppData{};
 	std::filesystem::path systemDrive{};
 	std::vector<std::filesystem::path> steamLibraries{};

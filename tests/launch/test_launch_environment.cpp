@@ -16,6 +16,7 @@ TEST(LaunchEnvironment, KnownFoldersAreAbsolute)
 
 	EXPECT_TRUE(environment.programFiles.is_absolute()) << environment.programFiles.string();
 	EXPECT_TRUE(environment.programFilesX86.is_absolute()) << environment.programFilesX86.string();
+	EXPECT_TRUE(environment.appData.is_absolute()) << environment.appData.string();
 	EXPECT_TRUE(environment.localAppData.is_absolute()) << environment.localAppData.string();
 }
 

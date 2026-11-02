@@ -3,10 +3,13 @@
 #include "query/game_catalog.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <expected>
+#include <format>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace Lkt::Games
@@ -455,8 +458,33 @@ TEST(GameJson, InstallDirNeedsAKnownPlaceholder)
 
 		game["launch"]["windows"]["installDirs"].emplace_back(folder);
 
-		EXPECT_EQ(ReadProblem(game), "launch.windows.installDirs[0]: must start with {programFiles}, {programFilesX86}, {localAppData} or {systemDrive}, then /")
+		EXPECT_EQ(ReadProblem(game), "launch.windows.installDirs[0]: must start with {programFiles}, {programFilesX86}, {appData}, {localAppData} or {systemDrive}, then /")
 			<< folder;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, EveryInstallDirPlaceholderIsRead)
+{
+	std::array<std::pair<std::string_view, Query::EInstallDirBase>, 5> const placeholders{ {
+		{ "{programFiles}", Query::EInstallDirBase::ProgramFiles },
+		{ "{programFilesX86}", Query::EInstallDirBase::ProgramFilesX86 },
+		{ "{appData}", Query::EInstallDirBase::AppData },
+		{ "{localAppData}", Query::EInstallDirBase::LocalAppData },
+		{ "{systemDrive}", Query::EInstallDirBase::SystemDrive }
+	} };
+
+	for (std::pair<std::string_view, Query::EInstallDirBase> const& placeholder : placeholders)
+	{
+		JsonValue game = MakeLaunchGame(R"json({ "windows": { "installDirs": [], "program": "kingpin.exe", "requiredFiles": [] } })json");
+
+		game["launch"]["windows"]["installDirs"].emplace_back(std::format("{}/itch/apps/kingpin", placeholder.first));
+
+		std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+		ASSERT_TRUE(read.has_value()) << read.error();
+		EXPECT_EQ(read->launch.onWindows.installDirs,
+			(std::vector<Query::SInstallDirCandidate>{ Query::SInstallDirCandidate{ placeholder.second, "itch/apps/kingpin" } })) << placeholder.first;
 	}
 }
 

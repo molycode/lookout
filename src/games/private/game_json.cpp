@@ -47,9 +47,10 @@ constexpr std::string_view WindowsPath{ "launch.windows" };
 constexpr std::array<std::string_view, 3> InstallFields{ "installDir", "program", "requiredFiles" };
 constexpr std::array<std::string_view, 2> ProgramExtensions{ ".exe", ".com" };
 
-constexpr std::array<std::pair<std::string_view, Query::EInstallDirBase>, 4> InstallDirBases{ {
+constexpr std::array<std::pair<std::string_view, Query::EInstallDirBase>, 5> InstallDirBases{ {
 	{ "{programFiles}", Query::EInstallDirBase::ProgramFiles },
 	{ "{programFilesX86}", Query::EInstallDirBase::ProgramFilesX86 },
+	{ "{appData}", Query::EInstallDirBase::AppData },
 	{ "{localAppData}", Query::EInstallDirBase::LocalAppData },
 	{ "{systemDrive}", Query::EInstallDirBase::SystemDrive }
 } };
@@ -118,7 +119,7 @@ constexpr std::array<SGameField, 48> Fields{ {
 	{ "launch.windows", "steamAppId", "Steam app id", Number, false, {}, "Optional: the game's Steam app id, such as 38430; Lookout looks in every Steam library." },
 	{ "launch.windows", "gogId", "GOG game id", Number, false, {}, "Optional: the game's GOG id, as GOG's installers register it." },
 	{ "launch.windows", "installDirs", "Install folders", TextList, false, {},
-		"Optional: usual install folders, each {programFiles}, {programFilesX86}, {localAppData} or {systemDrive}, then / and the folder, such as "
+		"Optional: usual install folders, each {programFiles}, {programFilesX86}, {appData}, {localAppData} or {systemDrive}, then / and the folder, such as "
 		"{programFilesX86}/Kingpin." },
 	{ "launch.windows", "program", "Program", Text, true, {}, "The program to run, an .exe or .com inside the install folder, with / between folders." },
 	{ "launch.windows", "requiredFiles", "Required files", TextList, true, {},
@@ -542,7 +543,7 @@ void ReadInstallDirs(JsonValue const& json, std::vector<Query::SInstallDirCandid
 
 		if (base == InstallDirBases.end())
 		{
-			Fail(problem, std::format("{}[{}]", path, index), "must start with {programFiles}, {programFilesX86}, {localAppData} or {systemDrive}, then /");
+			Fail(problem, std::format("{}[{}]", path, index), "must start with {programFiles}, {programFilesX86}, {appData}, {localAppData} or {systemDrive}, then /");
 		}
 		else if (!IsInsidePath(folder))
 		{
