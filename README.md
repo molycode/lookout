@@ -1,5 +1,8 @@
 # Lookout
 
+[![Linux](https://github.com/molycode/lookout/actions/workflows/ci-linux.yml/badge.svg?branch=main&event=push)](https://github.com/molycode/lookout/actions/workflows/ci-linux.yml)
+[![Windows](https://github.com/molycode/lookout/actions/workflows/ci-windows.yml/badge.svg?branch=main&event=push)](https://github.com/molycode/lookout/actions/workflows/ci-windows.yml)
+
 A native game server browser for Linux and Windows. It lists the servers from each game's masters, filters and sorts
 them, shows who is playing, and joins with a double-click through the game's own launcher.
 
