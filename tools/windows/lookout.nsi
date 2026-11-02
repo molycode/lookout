@@ -22,6 +22,8 @@
 !endif
 
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Lookout"
+; Lookout reads this name too: src/config/private/version_check.cpp.
+!define VERSION_CHECK_OFF "version-check-off"
 
 Unicode true
 ManifestDPIAware true
@@ -51,11 +53,15 @@ VIAddVersionKey /LANG=1033 "LegalCopyright" "© 2026 moly"
 !include FileFunc.nsh
 !include LogicLib.nsh
 !include MUI2.nsh
+!include nsDialogs.nsh
 !include Sections.nsh
 !include WinMessages.nsh
 !include x64.nsh
 
 Var PreviousDir
+Var SettingsDir
+Var VersionCheck
+Var VersionCheckBox
 
 !define MUI_ICON "..\..\data\windows\lookout.ico"
 !define MUI_UNICON "..\..\data\windows\lookout.ico"
@@ -65,6 +71,7 @@ Var PreviousDir
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_COMPONENTS
+Page custom VersionCheckPage VersionCheckPageLeave
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipDirectoryOnUpgrade
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -327,6 +334,29 @@ Section "-Options"
 	${Else}
 		Delete "$DESKTOP\Lookout.lnk"
 	${EndIf}
+
+	${If} $SettingsDir == ""
+		DetailPrint "Version check not changed."
+		MessageBox MB_OK|MB_ICONINFORMATION "Setup cannot find Lookout's settings folder, so it leaves the version check as it is. To change it, click the icon at the right end of Lookout's menu bar." /SD IDOK
+	${ElseIf} $VersionCheck = 0
+		CreateDirectory $SettingsDir
+		ClearErrors
+		FileOpen $0 "$SettingsDir\${VERSION_CHECK_OFF}" w
+
+		${If} ${Errors}
+			DetailPrint "Version check not turned off."
+			MessageBox MB_OK|MB_ICONEXCLAMATION "Could not write $SettingsDir\${VERSION_CHECK_OFF}, so Lookout will still check for new versions. To turn that off, click the icon at the right end of Lookout's menu bar." /SD IDOK
+		${Else}
+			FileClose $0
+		${EndIf}
+	${Else}
+		Delete "$SettingsDir\${VERSION_CHECK_OFF}"
+
+		${If} ${FileExists} "$SettingsDir\${VERSION_CHECK_OFF}"
+			DetailPrint "Version check not turned on."
+			MessageBox MB_OK|MB_ICONEXCLAMATION "Could not remove $SettingsDir\${VERSION_CHECK_OFF}, so Lookout will not check for new versions. To turn that on, click the icon at the right end of Lookout's menu bar." /SD IDOK
+		${EndIf}
+	${EndIf}
 SectionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
@@ -337,11 +367,31 @@ SectionEnd
 
 !insertmacro DefineEnsureClosed ""
 !insertmacro DefineReadPath ""
+!insertmacro DefineUserFolder ""
 
 Function .onInit
 	${IfNot} ${RunningX64}
 		MessageBox MB_OK|MB_ICONSTOP "Lookout needs 64-bit Windows." /SD IDOK
 		Abort
+	${EndIf}
+
+	StrCpy $R0 "XDG_CONFIG_HOME"
+	StrCpy $R1 $APPDATA
+	Call UserFolder
+	StrCpy $SettingsDir $R2
+	StrCpy $VersionCheck 1
+
+	${If} $SettingsDir != ""
+	${AndIf} ${FileExists} "$SettingsDir\${VERSION_CHECK_OFF}"
+		StrCpy $VersionCheck 0
+	${EndIf}
+
+	${GetParameters} $0
+	ClearErrors
+	${GetOptions} $0 "/NOVERSIONCHECK" $1
+
+	${IfNot} ${Errors}
+		StrCpy $VersionCheck 0
 	${EndIf}
 
 	ReadRegStr $PreviousDir HKCU "${UNINSTALL_KEY}" "InstallLocation"
@@ -361,6 +411,38 @@ Function .onInit
 		${EndIf}
 	${Else}
 		StrCpy $PreviousDir ""
+	${EndIf}
+FunctionEnd
+
+; Shown on upgrades too, ticked as the settings folder says, so the box describes the result.
+Function VersionCheckPage
+	!insertmacro MUI_HEADER_TEXT "New versions" "Whether Lookout looks for newer versions of itself."
+	nsDialogs::Create 1018
+	Pop $0
+
+	${If} $0 == error
+		Abort
+	${EndIf}
+
+	${NSD_CreateLabel} 0 0 100% 84u "Lookout can ask GitHub (api.github.com) for its latest release when it starts and once a day, and show you when a newer one is out. The request names only Lookout and its version; like any connection, it shows GitHub your IP address. Nothing else about you or how you use Lookout is sent.$\r$\n$\r$\nYou can change this in Lookout at any time: click the icon at the right end of its menu bar."
+	Pop $0
+	${NSD_CreateCheckbox} 0 92u 100% 12u "Check for new versions"
+	Pop $VersionCheckBox
+
+	${If} $VersionCheck = 1
+		${NSD_Check} $VersionCheckBox
+	${EndIf}
+
+	nsDialogs::Show
+FunctionEnd
+
+Function VersionCheckPageLeave
+	${NSD_GetState} $VersionCheckBox $0
+
+	${If} $0 == ${BST_CHECKED}
+		StrCpy $VersionCheck 1
+	${Else}
+		StrCpy $VersionCheck 0
 	${EndIf}
 FunctionEnd
 

@@ -1,5 +1,6 @@
 # Check a Lookout setup in a clean Windows: install, download and list games, start the window, refuse to replace a
-# running Lookout, upgrade, and uninstall three ways (keeping the user's files, purging them, purging XDG folders).
+# running Lookout, upgrade turning the version check off, and uninstall three ways (keeping the user's files, purging
+# them, purging XDG folders).
 #
 #   tools\windows\check-package.ps1 [-Installer dist\lookout-<version>-x86_64-setup.exe] [-Here] [-RequireSignature]
 #
@@ -98,9 +99,9 @@ function Invoke-Lookout([string] $arguments, [int] $timeoutSeconds, [hashtable] 
 	Invoke-Process $env:ComSpec "/d /c lookout $arguments" $timeoutSeconds $all
 }
 
-function Invoke-Setup([string] $setup)
+function Invoke-Setup([string] $setup, [string] $options = '')
 {
-	(Invoke-Process $setup '/S' 120).ExitCode
+	(Invoke-Process $setup "/S $options".TrimEnd() 120).ExitCode
 }
 
 function Start-Window([string] $program)
@@ -160,6 +161,7 @@ function Invoke-Checks([string] $setup, [string] $version)
 	$desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Lookout.lnk'
 	$userData = Join-Path $env:APPDATA 'Lookout'
 	$userLocal = Join-Path $env:LOCALAPPDATA 'Lookout'
+	$versionCheckOff = Join-Path $userData 'version-check-off'
 	$work = Join-Path ([IO.Path]::GetTempPath()) "lookout-check-$PID"
 	New-Item -ItemType Directory -Force $work | Out-Null
 
@@ -202,13 +204,14 @@ function Invoke-Checks([string] $setup, [string] $version)
 
 	Assert-Exists $startMenu 'the Start menu shortcut'
 	Assert-Gone $desktop 'an unasked desktop shortcut'
+	Assert-Gone $versionCheckOff 'an unasked version-check-off'
 
 	if ((Get-UserPath) -ne "$planted$dir;")
 	{
 		Fail "PATH is '$(Get-UserPath)', not the planted value with '$dir;' added"
 	}
 
-	Write-Ok "installed in ${dir}: files, uninstall entry, Start menu shortcut, PATH entry after $($planted.Length) characters"
+	Write-Ok "installed in ${dir}: files, uninstall entry, Start menu shortcut, PATH entry after $($planted.Length) characters, version check on"
 
 	if ($RequireSignature)
 	{
@@ -291,14 +294,15 @@ function Invoke-Checks([string] $setup, [string] $version)
 
 	Write-Ok "the setup refuses to replace a running Lookout (exit $code)"
 
-	$code = Invoke-Setup $setup
+	$code = Invoke-Setup $setup '/NOVERSIONCHECK'
 
 	if ($code -ne 0 -or (Get-UserPath) -ne "$planted$dir;" -or -not (Test-Path $startMenu) -or (Test-Path $desktop))
 	{
 		Fail "the upgrade exited $code, or changed PATH or the shortcuts"
 	}
 
-	Write-Ok "an upgrade over the install keeps PATH and the shortcuts as they were"
+	Assert-Exists $versionCheckOff 'version-check-off after /NOVERSIONCHECK'
+	Write-Ok "an upgrade over the install keeps PATH and the shortcuts as they were; /NOVERSIONCHECK turns the version check off"
 
 	$iconCache = Join-Path $userLocal 'icons'
 	New-Item -ItemType Directory -Force $iconCache | Out-Null
@@ -323,6 +327,7 @@ function Invoke-Checks([string] $setup, [string] $version)
 	Assert-Gone $startMenu 'the Start menu shortcut'
 	Assert-Gone $iconCache 'the icon cache'
 	Assert-Exists (Join-Path $userData 'config.json') 'the settings'
+	Assert-Exists $versionCheckOff 'version-check-off'
 	Assert-Exists (Join-Path $userData 'downloaded\games\quake2') 'the downloaded Quake II'
 	Assert-Exists (Join-Path $userLocal 'logs') 'the logs'
 
@@ -339,6 +344,9 @@ function Invoke-Checks([string] $setup, [string] $version)
 	{
 		Fail "installing again exited $code"
 	}
+
+	Assert-Exists $versionCheckOff 'version-check-off after installing again'
+	Write-Ok "installing again keeps the version check off"
 
 	$kept = Join-Path $work 'kept'
 	New-Item -ItemType Directory -Force $kept | Out-Null
