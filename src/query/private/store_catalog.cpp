@@ -16,12 +16,10 @@ void InitializeStoreCatalog(std::span<SStoreDefinition const> stores)
 {
 	TGE_ASSERT(gStores.empty(), "The store catalog is already initialized");
 
-	gStores.assign(stores.begin(), stores.end());
+	TGE_ASSERT(std::ranges::all_of(stores, [&stores](SStoreDefinition const& store) { return std::ranges::count(stores, store.key, &SStoreDefinition::key) == 1; }),
+		"Two stores share a key");
 
-	for (SStoreDefinition const& store : gStores)
-	{
-		TGE_ASSERT(std::ranges::count(gStores, store.key, &SStoreDefinition::key) == 1, "Two stores share a key");
-	}
+	gStores.assign(stores.begin(), stores.end());
 }
 
 //////////////////////////////////////////////////////////////////////////
