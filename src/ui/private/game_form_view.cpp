@@ -34,6 +34,7 @@ using Games::SGameFormNode;
 constexpr float LabelWidthEm{ 13.0f };
 constexpr float HelpWidthEm{ 26.0f };
 constexpr float NumberWidthEm{ 6.0f };
+constexpr float StoreKeyWidthEm{ 7.0f };
 constexpr float MinListLines{ 2.0f };
 constexpr float MaxListLines{ 8.0f };
 constexpr char const* RequiredHint{ "required" };
@@ -97,6 +98,7 @@ bool IsMissing(SGameField const& field, SGameFormNode const& node)
 			break;
 		case EGameFieldKind::Version:
 		case EGameFieldKind::ProtocolOptions:
+		case EGameFieldKind::StoreIds:
 		case EGameFieldKind::Group:
 			break;
 	}
@@ -589,6 +591,59 @@ bool DrawProtocolOptions(SGameField const& field, SGameFormNode& parent, SGameFo
 }
 
 //////////////////////////////////////////////////////////////////////////
+// A row is a store's key and the game's id there; one left without an id is not written.
+bool DrawStoreIds(SGameField const& field, SGameFormNode& node, SGameFormNode const* pBase, std::string_view path, SFieldProblem const* pProblem)
+{
+	std::optional<size_t> removed{};
+	bool isEdited{ false };
+
+	DrawLabel(field.label, false, IsChanged(node, pBase));
+
+	if (ImGui::Button(LKT_ICON_PLUS " Store"))
+	{
+		node.children.emplace_back().isPresent = true;
+		isEdited = true;
+	}
+
+	DrawHelp(field.description, field.kind, {});
+	isEdited = DrawReset(node, pBase) || isEdited;
+	DrawNote(node);
+
+	for (size_t index{ 0 }; index < node.children.size(); ++index)
+	{
+		SGameFormNode& store{ node.children[index] };
+
+		ImGui::PushID(static_cast<int>(index));
+		ImGui::SetCursorPosX(GetControlX());
+		ImGui::SetNextItemWidth(StoreKeyWidthEm * ImGui::GetFontSize());
+		isEdited = ImGui::InputTextWithHint("##store", "store", &store.name) || isEdited;
+		ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+		ImGui::SetNextItemWidth(-GetButtonsWidth());
+		isEdited = ImGui::InputTextWithHint("##id", "id", &store.text) || isEdited;
+		ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+		AlignIconToFrame();
+
+		if (IconButton("##remove", LKT_ICON_TRASH))
+		{
+			removed = index;
+		}
+
+		ImGui::SetItemTooltip("Remove this store");
+		DrawNote(store);
+		DrawProblem(pProblem, JoinPath(path, store.name), false);
+		ImGui::PopID();
+	}
+
+	if (removed.has_value())
+	{
+		node.children.erase(node.children.begin() + static_cast<std::ptrdiff_t>(*removed));
+		isEdited = true;
+	}
+
+	return isEdited;
+}
+
+//////////////////////////////////////////////////////////////////////////
 bool DrawField(SGameField const& field, SGameFormNode& parent, SGameFormNode const* pBaseParent, std::string_view parentPath, SFieldProblem const* pProblem,
 	SFormContext const& context)
 {
@@ -615,6 +670,9 @@ bool DrawField(SGameField const& field, SGameFormNode& parent, SGameFormNode con
 			break;
 		case EGameFieldKind::ProtocolOptions:
 			isEdited = DrawProtocolOptions(field, parent, pBaseParent, parentPath, pProblem, context);
+			break;
+		case EGameFieldKind::StoreIds:
+			isEdited = DrawStoreIds(field, Games::GetFormField(parent, field.name), pBase, path, pProblem);
 			break;
 		case EGameFieldKind::TextList:
 			isEdited = DrawTextList(field, Games::GetFormField(parent, field.name), pBase, path, pProblem);

@@ -1,6 +1,7 @@
 #include "game_json.hpp"
 #include "json/json.hpp"
 #include "query/game_catalog.hpp"
+#include "query/store_id.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <array>
@@ -162,9 +163,9 @@ TEST(GameJson, NewerFormatAsksForANewerLookout)
 {
 	JsonValue game = MakeMinimalGame();
 
-	game["format"] = 4;
+	game["format"] = 5;
 
-	EXPECT_EQ(ReadProblem(game), "format: is 4, which needs a newer Lookout");
+	EXPECT_EQ(ReadProblem(game), "format: is 5, which needs a newer Lookout");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -184,7 +185,7 @@ TEST(GameJson, FormatZeroIsRejected)
 
 	game["format"] = 0;
 
-	EXPECT_EQ(ReadProblem(game), "format: must be 1 or 3");
+	EXPECT_EQ(ReadProblem(game), "format: must be 1, 3 or 4");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -354,8 +355,7 @@ TEST(GameJson, FormatThreeReadsLinuxAndWindowsFacts)
 
 	ASSERT_TRUE(read.has_value()) << read.error();
 	EXPECT_EQ(read->launch.onLinux.program, "run-game.sh");
-	EXPECT_EQ(read->launch.onWindows.steamAppId, 38430u);
-	EXPECT_EQ(read->launch.onWindows.gogId, 1207658912u);
+	EXPECT_EQ(read->launch.stores, (std::vector<Query::SStoreId>{ Query::SStoreId{ "steam", "38430" }, Query::SStoreId{ "gog", "1207658912" } }));
 	EXPECT_EQ(read->launch.onWindows.installDirs,
 		(std::vector<Query::SInstallDirCandidate>{ Query::SInstallDirCandidate{ Query::EInstallDirBase::ProgramFilesX86, "Xatrix/Kingpin" } }));
 	EXPECT_EQ(read->launch.onWindows.program, "kingpin.exe");
@@ -512,6 +512,95 @@ TEST(GameJson, SteamAppIdMustBeAWholeNumberFromOne)
 
 		EXPECT_EQ(ReadProblem(game), "launch.windows.steamAppId: must be a whole number from 1 to 4294967295") << id;
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatFourReadsStoreIds)
+{
+	JsonValue game = MakeLaunchGame(R"json({ "stores": { "steam": "38430", "epic": "Kingpin:2c1e" } })json");
+
+	game["format"] = 4;
+
+	std::expected<Query::SGameDefinition, std::string> const read{ ReadGameJson(game.dump(), MakeProtocols()) };
+
+	ASSERT_TRUE(read.has_value()) << read.error();
+	EXPECT_EQ(read->launch.stores, (std::vector<Query::SStoreId>{ Query::SStoreId{ "steam", "38430" }, Query::SStoreId{ "epic", "Kingpin:2c1e" } }));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatThreeTakesNoStoreIds)
+{
+	JsonValue const game = MakeLaunchGame(R"json({ "stores": { "steam": "38430" }, "linux": { "desktopFiles": [ "kingpin-native.desktop" ] } })json");
+
+	EXPECT_EQ(ReadProblem(game), "launch.stores: is not a field of format 3");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatFourTakesNoSteamAppId)
+{
+	JsonValue game = MakeLaunchGame(R"json({ "windows": { "steamAppId": 38430, "program": "kingpin.exe", "requiredFiles": [] } })json");
+
+	game["format"] = 4;
+
+	EXPECT_EQ(ReadProblem(game), "launch.windows.steamAppId: is not a field of format 4");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatFourWindowsFactsNeedAFolderOrASteamOrGogId)
+{
+	JsonValue game = MakeLaunchGame(R"json({ "stores": { "epic": "Kingpin" }, "windows": { "program": "kingpin.exe", "requiredFiles": [] } })json");
+
+	game["format"] = 4;
+
+	EXPECT_EQ(ReadProblem(game), "launch.windows: must name installDirs, unless launch.stores names steam or gog");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, FormatFourLaunchNeedsSomething)
+{
+	JsonValue game = MakeLaunchGame("{}");
+
+	game["format"] = 4;
+
+	EXPECT_EQ(ReadProblem(game), "launch: must hold stores, linux or windows");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, SteamStoreIdMustBeTheDigitsOfAnAppId)
+{
+	for (std::string_view const id : { "0", "038430", "38430x", "+38430", "4294967296", "" })
+	{
+		JsonValue game = MakeLaunchGame("{}");
+
+		game["format"] = 4;
+		game["launch"]["stores"]["steam"] = id;
+
+		EXPECT_EQ(ReadProblem(game), "launch.stores.steam: must be the digits of a number from 1 to 4294967295") << id;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, OtherStoreIdMustBeSafeAsAnArgument)
+{
+	for (std::string_view const id : { "-applaunch", "two words", "a/b", "" })
+	{
+		JsonValue game = MakeLaunchGame("{}");
+
+		game["format"] = 4;
+		game["launch"]["stores"]["epic"] = id;
+
+		EXPECT_EQ(ReadProblem(game), "launch.stores.epic: must be 1 to 128 letters, digits, '.', '_', ':' or '-', not starting with '-'") << id;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameJson, StoreKeyMustBeAKey)
+{
+	JsonValue game = MakeLaunchGame(R"json({ "stores": { "Steam": "38430" } })json");
+
+	game["format"] = 4;
+
+	EXPECT_EQ(ReadProblem(game), "launch.stores.Steam: is not a store's key: lower-case letters and digits, then also - and _");
 }
 
 //////////////////////////////////////////////////////////////////////////

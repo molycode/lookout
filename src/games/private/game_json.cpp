@@ -1,10 +1,13 @@
 #include "game_json.hpp"
 #include "format_problem.hpp"
+#include "format_three_ids.hpp"
 #include "games/game_fields.hpp"
+#include "games/game_files.hpp"
 #include "games/game_format.hpp"
 #include "games/read_game_fields.hpp"
 #include "json/json.hpp"
 #include "json/syntax_error.hpp"
+#include "query/store_ids.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -13,7 +16,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
-#include <limits>
 #include <map>
 #include <optional>
 #include <span>
@@ -42,8 +44,11 @@ constexpr std::array<std::string_view, 2> EncodingNames{ "ascii7", "utf8OrWindow
 constexpr std::array<std::string_view, 3> ColourCodeNames{ "alphanumeric", "printable", "rgb" };
 
 constexpr std::string_view LaunchPath{ "launch" };
+constexpr std::string_view StoresKey{ "stores" };
+constexpr std::string_view StoresPath{ "launch.stores" };
 constexpr std::string_view LinuxPath{ "launch.linux" };
 constexpr std::string_view WindowsPath{ "launch.windows" };
+constexpr size_t MaxStoreIdLength{ 128 };
 constexpr std::array<std::string_view, 3> InstallFields{ "installDir", "program", "requiredFiles" };
 constexpr std::array<std::string_view, 2> ProgramExtensions{ ".exe", ".com" };
 
@@ -57,8 +62,8 @@ constexpr std::array<std::pair<std::string_view, Query::EInstallDirBase>, 5> Ins
 
 using enum EGameFieldKind;
 
-constexpr std::array<SGameField, 48> Fields{ {
-	{ "", "format", "Format", Version, true, {}, "The format of this file: 1, or 3 for launch facts per platform." },
+constexpr std::array<SGameField, 47> Fields{ {
+	{ "", "format", "Format", Version, true, {}, "The format of this file, the lowest of 1, 3 and 4 that holds the game; Lookout sets it when saving." },
 	{ "", "name", "Name", Text, true, {}, "The game's name in the game list." },
 	{ "", "protocol", "Protocol", Protocol, true, {}, "The protocol script that queries the game's masters and servers, by name." },
 	{ "", "protocolOptions", "Protocol options", ProtocolOptions, false, {},
@@ -105,7 +110,10 @@ constexpr std::array<SGameField, 48> Fields{ {
 	{ "join.password", "maxLength", "Longest", Number, true, {}, "The longest password, 1 to 1024 characters." },
 	{ "join.password", "refusedCharacters", "Refused characters", Characters, false, {}, "Optional: characters a password cannot hold." },
 	{ "join.password", "refusedSequences", "Refused sequences", TextList, false, {}, "Optional: character sequences a password cannot hold." },
-	{ "", "launch", "Installed game", Group, false, {}, "Optional: how Lookout finds the installed game on Linux, on Windows or both, to join with it." },
+	{ "", "launch", "Installed game", Group, false, {},
+		"Optional: the stores that sell the game, and how Lookout finds it installed on Linux, on Windows or both, to join with it." },
+	{ "launch", "stores", "Store ids", StoreIds, false, {},
+		"Optional: the game's id in each store, by the store's key, such as steam 38430 or gog 1207658912." },
 	{ "launch", "linux", "Linux", Group, false, {},
 		"Optional: the game on Linux, found through its desktop entries, its install folder under the home folder, or both." },
 	{ "launch.linux", "desktopFiles", "Desktop files", TextList, false, {}, "Optional: desktop entries that start the game, by file name, in order of preference." },
@@ -115,15 +123,19 @@ constexpr std::array<SGameField, 48> Fields{ {
 	{ "launch.linux", "requiredFiles", "Required files", TextList, false, {},
 		"Optional, with Install folder and Program: files inside the install folder that show the game is there." },
 	{ "launch", "windows", "Windows", Group, false, {},
-		"Optional: the game on Windows, found through Steam, GOG or its usual install folders; at least one of the three." },
-	{ "launch.windows", "steamAppId", "Steam app id", Number, false, {}, "Optional: the game's Steam app id, such as 38430; Lookout looks in every Steam library." },
-	{ "launch.windows", "gogId", "GOG game id", Number, false, {}, "Optional: the game's GOG id, as GOG's installers register it." },
+		"Optional: the game on Windows, found through its Steam or GOG id or its usual install folders; at least one of the three." },
 	{ "launch.windows", "installDirs", "Install folders", TextList, false, {},
 		"Optional: usual install folders, each {programFiles}, {programFilesX86}, {appData}, {localAppData} or {systemDrive}, then / and the folder, such as "
 		"{programFilesX86}/Kingpin." },
 	{ "launch.windows", "program", "Program", Text, true, {}, "The program to run, an .exe or .com inside the install folder, with / between folders." },
 	{ "launch.windows", "requiredFiles", "Required files", TextList, true, {},
 		"Files inside the install folder that show the game is there, with / between folders." }
+} };
+
+// Format 3 kept the Steam and GOG ids among the Windows facts; format 4 and the form hold them as store ids.
+constexpr std::array<SGameField, 2> PlatformGroupsIdFields{ {
+	{ "launch.windows", "steamAppId", "Steam app id", Number, false, {}, {} },
+	{ "launch.windows", "gogId", "GOG game id", Number, false, {}, {} }
 } };
 
 constexpr std::array<std::pair<std::string_view, Query::ETextEncoding>, 2> Encodings{ {
@@ -211,13 +223,23 @@ std::string ToParent(std::string_view path)
 }
 
 //////////////////////////////////////////////////////////////////////////
+bool IsFieldOf(uint64_t format, std::string_view schemaParent, std::string_view key)
+{
+	auto const isThisField{ [schemaParent, key](SGameField const& field) { return field.parent == schemaParent && field.name == key; } };
+	bool const isStoreIds{ schemaParent == LaunchPath && key == StoresKey };
+
+	return (std::ranges::any_of(Fields, isThisField) && (!isStoreIds || format >= GameFormat))
+		|| (format == PlatformGroupsFormat && std::ranges::any_of(PlatformGroupsIdFields, isThisField));
+}
+
+//////////////////////////////////////////////////////////////////////////
 // A field the file's format does not know is a typo or a later format's, so it is never skipped silently.
 void CheckFieldsAs(JsonValue const& object, std::string_view path, std::string_view schemaParent, uint64_t format, SFieldProblem& problem)
 {
 	for (auto const& item : object.items())
 	{
 		std::string_view const key{ item.key() };
-		bool const isField{ std::ranges::any_of(Fields, [schemaParent, key](SGameField const& field) { return field.parent == schemaParent && field.name == key; }) };
+		bool const isField{ IsFieldOf(format, schemaParent, key) };
 
 		if (IsComment(key))
 		{
@@ -398,7 +420,7 @@ std::optional<uint64_t> ReadFormat(JsonValue const& root, SFieldProblem& problem
 	}
 	else if (!it->is_number_unsigned())
 	{
-		Fail(problem, "format", std::format("must be {} or {}", FirstGameFormat, GameFormat));
+		Fail(problem, "format", std::format("must be {}, {} or {}", FirstGameFormat, PlatformGroupsFormat, GameFormat));
 	}
 	else if (std::optional<std::string> const reason{ DescribeUnreadableFormat(it->get<uint64_t>()) }; reason.has_value())
 	{
@@ -525,6 +547,66 @@ std::optional<uint64_t> ReadId(JsonValue const& object, std::string_view key, ui
 }
 
 //////////////////////////////////////////////////////////////////////////
+// An id becomes part of a file name and a program argument of its own, so it keeps to characters safe in both.
+bool IsSafeStoreId(std::string_view id)
+{
+	auto const isSafe{ [](char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == ':' || c == '-'; } };
+
+	return !id.empty() && id.size() <= MaxStoreIdLength && id.front() != '-' && std::ranges::all_of(id, isSafe);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Steam's and GOG's ids are format 3's numbers, so a game whose ids are only theirs can still be written as format 3.
+std::optional<std::string> CheckStoreId(std::string_view store, std::string_view id)
+{
+	SFormatThreeId const* const pFormatThreeId{ FindFormatThreeId(store) };
+	std::optional<uint64_t> const number{ ReadCanonicalDecimal(id) };
+	std::optional<std::string> reason{};
+
+	if (pFormatThreeId != nullptr && (!number.has_value() || *number > pFormatThreeId->max))
+	{
+		reason = std::format("must be the digits of a number {}", pFormatThreeId->range);
+	}
+	else if (pFormatThreeId == nullptr && !IsSafeStoreId(id))
+	{
+		reason = "must be 1 to 128 letters, digits, '.', '_', ':' or '-', not starting with '-'";
+	}
+
+	return reason;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void ReadStoreIds(JsonValue const& object, std::vector<Query::SStoreId>& stores, SFieldProblem& problem)
+{
+	for (auto const& item : object.items())
+	{
+		std::string_view const key{ item.key() };
+		std::string const path{ JoinPath(StoresPath, key) };
+
+		if (IsComment(key))
+		{
+			CheckComment(object, StoresPath, key, item.value(), problem);
+		}
+		else if (!IsValidKey(key))
+		{
+			Fail(problem, path, "is not a store's key: lower-case letters and digits, then also - and _");
+		}
+		else if (!item.value().is_string())
+		{
+			Fail(problem, path, "must be a string");
+		}
+		else if (std::optional<std::string> const reason{ CheckStoreId(key, item.value().get_ref<std::string const&>()) }; reason.has_value())
+		{
+			Fail(problem, path, *reason);
+		}
+		else
+		{
+			stores.emplace_back(Query::SStoreId{ std::string{ key }, item.value().get<std::string>() });
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
 void ReadInstallDirs(JsonValue const& json, std::vector<Query::SInstallDirCandidate>& installDirs, SFieldProblem& problem)
 {
 	std::string const path{ JoinPath(WindowsPath, "installDirs") };
@@ -591,17 +673,24 @@ void ReadLinuxLaunch(JsonValue const& object, Query::SLinuxLaunchHints& facts, u
 }
 
 //////////////////////////////////////////////////////////////////////////
-void ReadWindowsLaunch(JsonValue const& object, Query::SWindowsLaunchHints& facts, uint64_t format, SFieldProblem& problem)
+// Format 3's Steam and GOG ids join the store ids, which format 4 has read before.
+void ReadWindowsLaunch(JsonValue const& object, Query::SLaunchHints& launch, uint64_t format, SFieldProblem& problem)
 {
+	Query::SWindowsLaunchHints& facts{ launch.onWindows };
 	JsonValue::const_iterator const installDirs{ object.find("installDirs") };
 
 	CheckFields(object, WindowsPath, format, problem);
 
-	std::optional<uint64_t> const steamAppId{ ReadId(object, "steamAppId", std::numeric_limits<uint32_t>::max(), "from 1 to 4294967295", problem) };
-	std::optional<uint64_t> const gogId{ ReadId(object, "gogId", std::numeric_limits<uint64_t>::max(), "from 1", problem) };
+	for (SFormatThreeId const& formatThreeId : GetFormatThreeIds())
+	{
+		std::optional<uint64_t> const id{ (format == PlatformGroupsFormat) ? ReadId(object, formatThreeId.field, formatThreeId.max, formatThreeId.range, problem)
+			: std::nullopt };
 
-	facts.steamAppId = static_cast<uint32_t>(steamAppId.value_or(0));
-	facts.gogId = gogId.value_or(0);
+		if (id.has_value())
+		{
+			launch.stores.emplace_back(Query::SStoreId{ std::string{ formatThreeId.store }, std::format("{}", *id) });
+		}
+	}
 
 	if (installDirs != object.cend())
 	{
@@ -624,14 +713,16 @@ void ReadWindowsLaunch(JsonValue const& object, Query::SWindowsLaunchHints& fact
 		}
 	}
 
-	if (!steamAppId.has_value() && !gogId.has_value() && facts.installDirs.empty())
+	if (Query::FindStoreId(launch, Query::SteamStore).empty() && Query::FindStoreId(launch, Query::GogStore).empty() && facts.installDirs.empty())
 	{
-		Fail(problem, WindowsPath, "must name steamAppId, gogId or installDirs");
+		Fail(problem, WindowsPath, (format == PlatformGroupsFormat) ? "must name steamAppId, gogId or installDirs"
+			: "must name installDirs, unless launch.stores names steam or gog");
 	}
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Format 1 holds Linux's facts in launch itself, all four or none; format 3 gives each platform an object of its own.
+// Format 1 holds Linux's facts in launch itself, all four or none; format 3 gives each platform an object of its own, and
+// format 4 the store ids one too.
 void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, uint64_t format, SFieldProblem& problem)
 {
 	JsonValue const* const pLaunch{ FindObject(root, {}, LaunchPath, false, problem) };
@@ -648,8 +739,15 @@ void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, uint64_t for
 	{
 		CheckFields(*pLaunch, LaunchPath, format, problem);
 
+		bool const hasStoreIds{ format >= GameFormat };
+		JsonValue const* const pStores{ hasStoreIds ? FindObject(*pLaunch, LaunchPath, StoresKey, false, problem) : nullptr };
 		JsonValue const* const pLinux{ FindObject(*pLaunch, LaunchPath, "linux", false, problem) };
 		JsonValue const* const pWindows{ FindObject(*pLaunch, LaunchPath, "windows", false, problem) };
+
+		if (pStores != nullptr)
+		{
+			ReadStoreIds(*pStores, launch.stores, problem);
+		}
 
 		if (pLinux != nullptr)
 		{
@@ -658,12 +756,12 @@ void ReadLaunch(JsonValue const& root, Query::SLaunchHints& launch, uint64_t for
 
 		if (pWindows != nullptr)
 		{
-			ReadWindowsLaunch(*pWindows, launch.onWindows, format, problem);
+			ReadWindowsLaunch(*pWindows, launch, format, problem);
 		}
 
-		if (!pLaunch->contains("linux") && !pLaunch->contains("windows"))
+		if (!pLaunch->contains("linux") && !pLaunch->contains("windows") && (!hasStoreIds || !pLaunch->contains(StoresKey)))
 		{
-			Fail(problem, LaunchPath, "must hold linux, windows or both");
+			Fail(problem, LaunchPath, hasStoreIds ? "must hold stores, linux or windows" : "must hold linux, windows or both");
 		}
 	}
 }

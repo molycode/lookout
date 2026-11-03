@@ -243,7 +243,7 @@ TEST(GameForm, NoteThatIsNotTextCannotBeShown)
 //////////////////////////////////////////////////////////////////////////
 TEST(GameForm, NewerFormatCannotBeShown)
 {
-	EXPECT_EQ(ProblemOf(R"json({ "format": 4, "name": "Mine" })json"), "format: is 4, which needs a newer Lookout");
+	EXPECT_EQ(ProblemOf(R"json({ "format": 5, "name": "Mine" })json"), "format: is 5, which needs a newer Lookout");
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -280,10 +280,11 @@ TEST(GameForm, EditedFormatOneGameStaysFormatOne)
 TEST(GameForm, WindowsFactsMakeFormatThree)
 {
 	SGameFormNode form{ ReadForm(FormatOneKingpin) };
-	SGameFormNode& windows{ GetFormField(GetFormField(form, "launch"), "windows") };
+	SGameFormNode& launch{ GetFormField(form, "launch") };
+	SGameFormNode& windows{ GetFormField(launch, "windows") };
 
 	windows.isPresent = true;
-	GetFormField(windows, "steamAppId").text = "38430";
+	GetFormField(GetFormField(launch, "stores"), "steam").text = "38430";
 	GetFormField(windows, "program").text = "kingpin.exe";
 	GetFormField(windows, "requiredFiles").texts = { "main/pak0.pak" };
 
@@ -395,6 +396,56 @@ TEST(GameForm, FlatLaunchPathsMapIntoTheLinuxGroup)
 	EXPECT_EQ(ToFormPath("launch.program"), "launch.linux.program");
 	EXPECT_EQ(ToFormPath("launch.windows.program"), "launch.windows.program");
 	EXPECT_EQ(ToFormPath("keys.map"), "keys.map");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, FormatThreeIdPathsMapToTheStoreIds)
+{
+	EXPECT_EQ(ToFormPath("launch.windows.steamAppId"), "launch.stores.steam");
+	EXPECT_EQ(ToFormPath("launch.windows.gogId"), "launch.stores.gog");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, FormatThreeIdsOpenAsStoreIds)
+{
+	SGameFormNode const form{ ReadForm(ReadDownloaded("rtcw")) };
+	SGameFormNode const* const pStores{ FindFormField(*FindFormField(form, "launch"), "stores") };
+
+	ASSERT_NE(pStores, nullptr);
+	ASSERT_EQ(pStores->children.size(), 2u);
+	EXPECT_EQ(pStores->children[0].name, "steam");
+	EXPECT_EQ(pStores->children[0].text, "9010");
+	EXPECT_EQ(pStores->children[1].name, "gog");
+	EXPECT_FALSE(pStores->children[1].note.empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, StoreOtherThanSteamOrGogMakesFormatFour)
+{
+	SGameFormNode form{ ReadForm(ReadDownloaded("kingpin")) };
+
+	GetFormField(GetFormField(GetFormField(form, "launch"), "stores"), "epic").text = "Kingpin";
+
+	JsonValue written = JsonValue::parse(WriteGameForm(form));
+
+	EXPECT_EQ(written["format"], 4);
+	EXPECT_EQ(written["launch"]["stores"]["steam"], "38430");
+	EXPECT_EQ(written["launch"]["stores"]["epic"], "Kingpin");
+	EXPECT_FALSE(written["launch"]["windows"].contains("steamAppId"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(GameForm, SteamIdWithoutWindowsFactsMakesFormatFour)
+{
+	SGameFormNode form{ ReadForm(FormatOneKingpin) };
+
+	GetFormField(GetFormField(GetFormField(form, "launch"), "stores"), "steam").text = "38430";
+
+	JsonValue written = JsonValue::parse(WriteGameForm(form));
+
+	EXPECT_EQ(written["format"], 4);
+	EXPECT_EQ(written["launch"]["stores"]["steam"], "38430");
+	EXPECT_EQ(written["launch"]["linux"]["program"], "run-game.sh");
 }
 } // namespace
 } // namespace Lkt::Games

@@ -2,6 +2,7 @@
 #include "launch/launcher_ids.hpp"
 #include "steam_source.hpp"
 #include "temp_dir.hpp"
+#include "query/store_id.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <filesystem>
@@ -43,7 +44,8 @@ protected:
 		m_library = m_tempDir.GetPath() / "SteamLibrary";
 		m_folder = m_library / "steamapps" / "common" / "Kingpin";
 		m_environment.steamLibraries = { m_library };
-		m_hints.onWindows = Query::SWindowsLaunchHints{ AppId, 0, {}, "kingpin.exe", { "main/pak0.pak" } };
+		m_hints.onWindows = Query::SWindowsLaunchHints{ {}, "kingpin.exe", { "main/pak0.pak" } };
+		m_hints.stores = { Query::SStoreId{ "steam", std::format("{}", AppId) } };
 		WriteFile(m_folder / "kingpin.exe", "");
 		std::filesystem::permissions(m_folder / "kingpin.exe", Executable);
 		WriteFile(m_folder / "main" / "pak0.pak", "");
@@ -154,7 +156,17 @@ TEST_F(CSteamSourceTest, GameWithoutASteamAppReadsNothing)
 {
 	CExpectedLog const expected{ LaunchChannel, 0, 0 };
 
-	m_hints.onWindows.steamAppId = 0;
+	m_hints.stores.clear();
+
+	EXPECT_TRUE(Find().empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CSteamSourceTest, GameWithoutWindowsFactsReadsNothing)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 0 };
+
+	m_hints.onWindows = Query::SWindowsLaunchHints{};
 
 	EXPECT_TRUE(Find().empty());
 }

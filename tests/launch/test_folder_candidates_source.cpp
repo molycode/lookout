@@ -46,7 +46,7 @@ protected:
 		m_environment.appData = m_tempDir.GetPath() / "Roaming";
 		m_environment.localAppData = m_tempDir.GetPath() / "Local";
 		m_environment.systemDrive = m_tempDir.GetPath() / "C";
-		m_hints.onWindows = Query::SWindowsLaunchHints{ 0, 0, {}, "kingpin.exe", { "main/pak0.pak" } };
+		m_hints.onWindows = Query::SWindowsLaunchHints{ {}, "kingpin.exe", { "main/pak0.pak" } };
 	}
 
 	void TearDown() override

@@ -7,11 +7,13 @@
 #include "json/json.hpp"
 #include "json/syntax_error.hpp"
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cstdint>
 #include <format>
 #include <iterator>
 #include <optional>
+#include <string_view>
 #include <utility>
 
 namespace Lkt::Games
@@ -33,6 +35,10 @@ constexpr std::string_view LinuxSchema{ "launch.linux" };
 constexpr std::string_view InstallDirField{ "installDir" };
 constexpr std::string_view ProgramField{ "program" };
 constexpr std::string_view RequiredFilesField{ "requiredFiles" };
+constexpr std::array<std::pair<std::string_view, std::string_view>, 2> FormatThreeIdPaths{ {
+	{ "launch.windows.steamAppId", "launch.stores.steam" },
+	{ "launch.windows.gogId", "launch.stores.gog" }
+} };
 constexpr int HexBase{ 16 };
 constexpr size_t HexDigits{ 4 };
 constexpr unsigned char FirstPrintable{ 0x20 };
@@ -337,6 +343,7 @@ SGameFormNode ReadField(JsonValue const& value, SGameField const& field, std::st
 
 			break;
 		case EGameFieldKind::ProtocolOptions:
+		case EGameFieldKind::StoreIds:
 			if (value.is_object())
 			{
 				ReadOptions(value, path, node, problem);
@@ -495,6 +502,7 @@ std::optional<JsonValue> WriteField(SGameFormNode const& node, SGameField const&
 
 			break;
 		case EGameFieldKind::ProtocolOptions:
+		case EGameFieldKind::StoreIds:
 			if (node.isPresent || std::ranges::any_of(node.children, HasText))
 			{
 				JsonValue options = JsonValue::object();
@@ -548,7 +556,8 @@ JsonValue WriteFields(SGameFormNode const& node, std::string_view schemaParent)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-// Format 1's launch facts open in the Linux group, as the form holds every format in format 3's layout.
+// Format 1's launch facts open in the Linux group, and format 3's Steam and GOG ids among the store ids, as the form
+// holds every format in format 4's layout.
 std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text)
 {
 	JsonValue root = JsonValue::parse(text, nullptr, AllowExceptions, IgnoreComments);
@@ -574,6 +583,7 @@ std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text)
 		std::string const nestedPrefix{ std::format("{}.", LinuxSchema) };
 
 		NestLinuxFacts(root);
+		LiftStoreIds(root);
 		ReadFields(root, {}, {}, format, form, problem);
 
 		// The text is fixed in an editor, so a problem names the field where the file keeps it.
@@ -598,14 +608,8 @@ std::expected<SGameFormNode, std::string> ReadGameForm(std::string_view text)
 std::string WriteGameForm(SGameFormNode const& form)
 {
 	JsonValue game = WriteFields(form, {});
-	bool const isFirstFormat{ !NeedsPlatformGroups(game) };
 
-	if (isFirstFormat)
-	{
-		FlattenLinuxFacts(game);
-	}
-
-	game["format"] = isFirstFormat ? FirstGameFormat : GameFormat;
+	ShapeForFormat(game, FindLowestFormat(game));
 
 	return WriteJsonLayout(game);
 }
@@ -615,8 +619,13 @@ std::string ToFormPath(std::string_view path)
 {
 	std::string formPath{ path };
 	std::string const launchPrefix{ std::format("{}.", LaunchField) };
+	auto const formatThreeId{ std::ranges::find(FormatThreeIdPaths, path, &std::pair<std::string_view, std::string_view>::first) };
 
-	if (path.starts_with(launchPrefix))
+	if (formatThreeId != FormatThreeIdPaths.end())
+	{
+		formPath = formatThreeId->second;
+	}
+	else if (path.starts_with(launchPrefix))
 	{
 		std::string_view const rest{ path.substr(launchPrefix.size()) };
 		std::string_view const name{ rest.substr(0, rest.find_first_of(".[")) };

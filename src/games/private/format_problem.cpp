@@ -26,7 +26,7 @@ std::optional<std::string> DescribeUnreadableFormat(uint64_t format)
 	}
 	else if (!IsReadableGameFormat(format))
 	{
-		reason = std::format("must be {} or {}", FirstGameFormat, GameFormat);
+		reason = std::format("must be {}, {} or {}", FirstGameFormat, PlatformGroupsFormat, GameFormat);
 	}
 
 	return reason;

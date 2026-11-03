@@ -87,7 +87,7 @@ TEST_F(CFolderOptionTest, ProgramInASubfolderStartsInItsFolder)
 {
 	Query::SGameDefinition game{ Fixtures::GetGameByKey("jka") };
 
-	game.launch.onWindows = Query::SWindowsLaunchHints{ 6020, 0, {}, "GameData/jamp.exe", { "GameData/base/assets0.pk3" } };
+	game.launch.onWindows = Query::SWindowsLaunchHints{ {}, "GameData/jamp.exe", { "GameData/base/assets0.pk3" } };
 	WriteFile(m_folder / "GameData" / "jamp.exe", "");
 	WriteFile(m_folder / "GameData" / "base" / "assets0.pk3", "");
 

@@ -3,6 +3,7 @@
 #include "launch/launcher_ids.hpp"
 #include "loggers.hpp"
 #include "steam_file.hpp"
+#include "query/store_ids.hpp"
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
@@ -95,13 +96,14 @@ void CSteamSource::Terminate()
 std::vector<SLaunchOption> CSteamSource::Find(Query::SLaunchHints const& hints, std::string_view gameName) const
 {
 	Query::SWindowsLaunchHints const& facts{ hints.onWindows };
+	std::string_view const appId{ Query::FindStoreId(hints, Query::SteamStore) };
 	std::vector<std::filesystem::path> const& libraries{ m_pEnvironment->steamLibraries };
 	std::vector<SLaunchOption> options{};
 	bool isFound{ false };
 
-	for (size_t index{ 0 }; facts.steamAppId != 0 && !isFound && index < libraries.size(); ++index)
+	for (size_t index{ 0 }; !appId.empty() && !facts.program.empty() && !isFound && index < libraries.size(); ++index)
 	{
-		std::filesystem::path const manifest{ libraries[index] / "steamapps" / std::format("appmanifest_{}.acf", facts.steamAppId) };
+		std::filesystem::path const manifest{ libraries[index] / "steamapps" / std::format("appmanifest_{}.acf", appId) };
 		std::error_code error{};
 
 		isFound = std::filesystem::exists(manifest, error);

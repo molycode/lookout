@@ -19,6 +19,11 @@ constexpr std::string_view FormatThreeDownload{ R"json({ "format": 3, "name": "K
 	"linux": { "desktopFiles": [ "kingpin-native.desktop" ], "installDir": "Games/Kingpin", "program": "run-game.sh", "requiredFiles": [ "kingpin.x86" ] },
 	"windows": { "steamAppId": 38430, "program": "kingpin.exe", "requiredFiles": [ "main/pak0.pak" ] } } })json" };
 
+constexpr std::string_view FormatFourDownload{ R"json({ "format": 4, "name": "Kingpin", "launch": {
+	"stores": { "steam": "38430", "epic": "Kingpin" },
+	"linux": { "desktopFiles": [ "kingpin-native.desktop" ], "installDir": "Games/Kingpin", "program": "run-game.sh", "requiredFiles": [ "kingpin.x86" ] },
+	"windows": { "program": "kingpin.exe", "requiredFiles": [ "main/pak0.pak" ] } } })json" };
+
 constexpr std::string_view WindowsFacts{ R"json({ "steamAppId": 38430, "program": "kingpin.exe", "requiredFiles": [ "main/pak0.pak" ] })json" };
 
 //////////////////////////////////////////////////////////////////////////
@@ -175,6 +180,39 @@ TEST(MergePatch, ThatPatchFlattensTheDownload)
 	JsonValue game = Apply(FormatThreeDownload, R"json({ "format": 1, "launch": { "windows": null } })json");
 
 	EXPECT_EQ(game, JsonValue::parse(FormatOneDownload));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(MergePatch, FormatThreeIdChangeAppliesToAFormatFourDownload)
+{
+	JsonValue game = Apply(FormatFourDownload, R"json({ "launch": { "windows": { "steamAppId": 2200 } } })json");
+
+	EXPECT_EQ(game["format"], 4);
+	EXPECT_EQ(game["launch"]["stores"], JsonValue::parse(R"json({ "steam": "2200", "epic": "Kingpin" })json"));
+	EXPECT_FALSE(game["launch"]["windows"].contains("steamAppId"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(MergePatch, StoreAddedToAFormatThreeDownloadMakesItFormatFour)
+{
+	JsonValue game = Apply(FormatThreeDownload, R"json({ "format": 4, "launch": { "stores": { "epic": "Kingpin" } } })json");
+
+	EXPECT_EQ(game["format"], 4);
+	EXPECT_EQ(game["launch"]["stores"], JsonValue::parse(R"json({ "steam": "38430", "epic": "Kingpin" })json"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(MergePatch, StoreRemovedFromAFormatFourDownloadGoesBackToFormatThree)
+{
+	JsonValue game = Apply(FormatFourDownload, R"json({ "launch": { "stores": { "epic": null } } })json");
+
+	EXPECT_EQ(game, JsonValue::parse(FormatThreeDownload));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(MergePatch, StoreAddedToAFormatThreeDownloadMakesAPatchOfItAlone)
+{
+	EXPECT_EQ(Make(FormatThreeDownload, JsonValue::parse(FormatFourDownload)), JsonValue::parse(R"json({ "format": 4, "launch": { "stores": { "epic": "Kingpin" } } })json"));
 }
 } // namespace
 } // namespace Lkt::Games

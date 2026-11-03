@@ -2,6 +2,7 @@
 #include "hinted_discovery.hpp"
 #include "launch/launcher_ids.hpp"
 #include "temp_dir.hpp"
+#include "query/store_id.hpp"
 #include <tge/platform.hpp>
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
@@ -55,8 +56,9 @@ protected:
 		m_environment.steamLibraries = { m_library };
 		m_environment.gogInstalls = { SGogInstall{ 1207658912, m_gogFolder, "Kingpin (GOG)" } };
 		m_environment.systemDrive = m_tempDir.GetPath();
-		m_hints.onWindows = Query::SWindowsLaunchHints{ 38430, 1207658912, { Query::SInstallDirCandidate{ Query::EInstallDirBase::SystemDrive, "Kingpin" } },
-			"kingpin.exe", { "main/pak0.pak" } };
+		m_hints.onWindows = Query::SWindowsLaunchHints{ { Query::SInstallDirCandidate{ Query::EInstallDirBase::SystemDrive, "Kingpin" } }, "kingpin.exe",
+			{ "main/pak0.pak" } };
+		m_hints.stores = { Query::SStoreId{ "steam", "38430" }, Query::SStoreId{ "gog", "1207658912" } };
 		WriteFile(m_library / "steamapps" / "appmanifest_38430.acf", "\"AppState\" { \"name\" \"Kingpin\" \"StateFlags\" \"4\" \"installdir\" \"Kingpin\" }");
 	}
 
@@ -105,7 +107,7 @@ TEST_F(CWindowsDiscoveryTest, FolderThatSteamHoldsIsListedOnce)
 
 	WriteGame(m_steamFolder);
 	m_environment.systemDrive = m_library / "steamapps" / "common";
-	m_hints.onWindows.gogId = 0;
+	m_hints.stores = { Query::SStoreId{ "steam", "38430" } };
 
 	EXPECT_EQ(FindIds(), (std::vector<std::string>{ std::string{ SteamLauncherId } }));
 }

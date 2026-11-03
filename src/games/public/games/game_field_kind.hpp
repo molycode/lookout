@@ -13,6 +13,7 @@ enum class EGameFieldKind : uint8_t
 	Choice,
 	Protocol,
 	ProtocolOptions,
+	StoreIds,
 	TextList,
 	Group,
 	GroupList

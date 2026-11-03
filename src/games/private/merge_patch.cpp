@@ -1,7 +1,6 @@
 #include "merge_patch.hpp"
 #include "json_layout.hpp"
 #include "launch_layout.hpp"
-#include "games/game_format.hpp"
 #include "json/json.hpp"
 #include "json/syntax_error.hpp"
 #include <format>
@@ -72,8 +71,8 @@ JsonValue Diff(JsonValue const& from, JsonValue const& to)
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-// A change written while the download was format 1 is moved into format 3's layout once the download has it. Its
-// format 1 said only that the game fitted format 1 then, so the merged game decides whether it still does.
+// A change written against an older format of the download is moved into the layout the download has now. The
+// format either side names said only what the game needed then, so the merged game decides which it needs now.
 std::expected<std::string, std::string> ApplyPatch(std::string_view baseText, std::string_view patchText)
 {
 	JsonValue game = JsonValue::parse(baseText, nullptr, AllowExceptions, IgnoreComments);
@@ -83,6 +82,7 @@ std::expected<std::string, std::string> ApplyPatch(std::string_view baseText, st
 	if (patch.has_value())
 	{
 		bool const isNested{ HasPlatformGroups(game) || HasPlatformGroups(*patch) };
+		bool const hasStoreIds{ HasStoreIds(game) || HasStoreIds(*patch) };
 
 		if (isNested)
 		{
@@ -90,17 +90,17 @@ std::expected<std::string, std::string> ApplyPatch(std::string_view baseText, st
 			NestLinuxFacts(*patch);
 		}
 
+		if (hasStoreIds)
+		{
+			LiftStoreIds(game);
+			LiftStoreIds(*patch);
+		}
+
 		game.merge_patch(*patch);
 
-		bool const isFirstFormat{ isNested && game.is_object() && game.contains("format") && game["format"] == FirstGameFormat };
-
-		if (isFirstFormat && NeedsPlatformGroups(game))
+		if ((isNested || hasStoreIds) && game.is_object() && game.contains("format"))
 		{
-			game["format"] = GameFormat;
-		}
-		else if (isFirstFormat)
-		{
-			FlattenLinuxFacts(game);
+			ShapeForFormat(game, FindLowestFormat(game));
 		}
 
 		result = WriteJsonLayout(game);
@@ -114,7 +114,7 @@ std::expected<std::string, std::string> ApplyPatch(std::string_view baseText, st
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Compared in one layout, so a change of format names only what changed rather than moving every Linux fact.
+// Compared in one layout, so a change of format names only what changed rather than moving every Linux fact or id.
 std::expected<std::optional<std::string>, std::string> MakePatch(std::string_view baseText, std::string_view gameText)
 {
 	JsonValue base = JsonValue::parse(baseText, nullptr, AllowExceptions, IgnoreComments);
@@ -127,6 +127,12 @@ std::expected<std::optional<std::string>, std::string> MakePatch(std::string_vie
 		{
 			NestLinuxFacts(base);
 			NestLinuxFacts(*game);
+		}
+
+		if (HasStoreIds(base) != HasStoreIds(*game))
+		{
+			LiftStoreIds(base);
+			LiftStoreIds(*game);
 		}
 
 		JsonValue const patch = Diff(base, *game);

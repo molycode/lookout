@@ -409,7 +409,7 @@ TEST_F(CGameDownloadsTest, NewerFormatNeedsANewerLookout)
 {
 	JsonValue index = MakeIndex();
 
-	index["games"]["kingpin"]["format"] = 4;
+	index["games"]["kingpin"]["format"] = 5;
 	Serve(index);
 	Start();
 	ReadIndex();
@@ -519,7 +519,7 @@ TEST_F(CGameDownloadsTest, DownloadedGameThatNeedsANewerLookoutIsStillOnDisk)
 	Start();
 	ReadIndex();
 	Download("kingpin");
-	index["games"]["kingpin"]["format"] = 4;
+	index["games"]["kingpin"]["format"] = 5;
 	Serve(index);
 	ReadIndex();
 

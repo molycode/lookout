@@ -2,9 +2,11 @@
 #include "gog_source.hpp"
 #include "launch/launcher_ids.hpp"
 #include "temp_dir.hpp"
+#include "query/store_id.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -41,7 +43,8 @@ protected:
 		ASSERT_TRUE(m_tempDir.Initialize("lookout-gog-source"));
 		m_folder = m_tempDir.GetPath() / "GOG Games" / "Kingpin";
 		m_environment.gogInstalls = { SGogInstall{ GogId, m_folder, "Kingpin: Life of Crime (GOG)" } };
-		m_hints.onWindows = Query::SWindowsLaunchHints{ 0, GogId, {}, "kingpin.exe", { "main/pak0.pak" } };
+		m_hints.onWindows = Query::SWindowsLaunchHints{ {}, "kingpin.exe", { "main/pak0.pak" } };
+		m_hints.stores = { Query::SStoreId{ "gog", std::format("{}", GogId) } };
 		WriteFile(m_folder / "kingpin.exe", "");
 		std::filesystem::permissions(m_folder / "kingpin.exe", Executable);
 		WriteFile(m_folder / "main" / "pak0.pak", "");
@@ -89,7 +92,7 @@ TEST_F(CGogSourceTest, UnregisteredGameIsSilent)
 {
 	CExpectedLog const expected{ LaunchChannel, 0, 0 };
 
-	m_hints.onWindows.gogId = GogId + 1;
+	m_hints.stores = { Query::SStoreId{ "gog", std::format("{}", GogId + 1) } };
 
 	EXPECT_TRUE(Find().empty());
 }

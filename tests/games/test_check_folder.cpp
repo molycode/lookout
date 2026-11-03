@@ -118,6 +118,21 @@ TEST_F(CCheckFolderTest, InstallFolderAloneNeedsNoFormatThree)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Format 3 holds Steam's id among the Windows facts, so format 4 is not needed for it.
+TEST_F(CCheckFolderTest, SteamIdBesideWindowsFactsNeedsNoFormatFour)
+{
+	std::ifstream file{ m_dir / "games" / "mygame" / "game.json", std::ios::binary };
+	nlohmann::ordered_json game = nlohmann::ordered_json::parse(std::string{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} });
+
+	file.close();
+	game["format"] = 4;
+	game["launch"] = nlohmann::ordered_json::parse(R"json({ "stores": { "steam": "2320" }, "windows": { "program": "quake2.exe", "requiredFiles": [] } })json");
+	WriteFile("games/mygame/game.json", game.dump());
+
+	EXPECT_TRUE(CheckForOneProblem().ends_with("/games/mygame/game.json: format: is 4, but nothing in it needs more than 3"));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CCheckFolderTest, IconWithoutItsLicenceIsAProblem)
 {
 	std::filesystem::remove(m_dir / "games" / "mygame" / "icon-licence.txt");

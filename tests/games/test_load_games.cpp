@@ -6,6 +6,7 @@
 #include "query/game_problem.hpp"
 #include "query/protocol_definition.hpp"
 #include "query/protocol_origin.hpp"
+#include "query/store_ids.hpp"
 #include "temp_dir.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
@@ -127,7 +128,7 @@ TEST_F(CLoadGamesTest, FormatOneChangeAppliesOnceTheDownloadIsFormatThree)
 	EXPECT_TRUE(content.problems.empty()) << content.problems.front().text;
 	ASSERT_NE(pGame, nullptr);
 	EXPECT_EQ(pGame->launch.onLinux.installDir, "Games/Mine");
-	EXPECT_EQ(pGame->launch.onWindows.steamAppId, 38430u);
+	EXPECT_EQ(Query::FindStoreId(pGame->launch, Query::SteamStore), "38430");
 }
 
 //////////////////////////////////////////////////////////////////////////

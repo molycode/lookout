@@ -94,9 +94,12 @@ void CheckFormat(std::filesystem::path const& path, std::string_view shownAs, st
 	nlohmann::ordered_json const game = text.has_value() ? nlohmann::ordered_json::parse(*text, nullptr, AllowExceptions, IgnoreComments) : nlohmann::ordered_json{};
 	nlohmann::ordered_json::const_iterator const format{ game.is_object() ? game.find("format") : game.cend() };
 
-	if (format != game.cend() && format->is_number_unsigned() && format->get<uint64_t>() == GameFormat && !NeedsPlatformGroups(game))
+	uint64_t const value{ (format != game.cend() && format->is_number_unsigned()) ? format->get<uint64_t>() : 0 };
+	uint64_t const lowest{ IsReadableGameFormat(value) ? FindLowestFormat(game) : value };
+
+	if (value > lowest)
 	{
-		problems.emplace_back(Query::SGameProblem{ std::format("{}: format: is {}, but nothing in it needs more than {}", shownAs, GameFormat, FirstGameFormat), {} });
+		problems.emplace_back(Query::SGameProblem{ std::format("{}: format: is {}, but nothing in it needs more than {}", shownAs, value, lowest), {} });
 	}
 }
 
