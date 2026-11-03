@@ -1,6 +1,7 @@
 #include "game_json.hpp"
 #include "format_problem.hpp"
 #include "format_three_ids.hpp"
+#include "json_fields.hpp"
 #include "games/game_fields.hpp"
 #include "games/game_files.hpp"
 #include "games/game_format.hpp"
@@ -30,7 +31,6 @@ using JsonValue = nlohmann::ordered_json;
 
 constexpr bool AllowExceptions{ false };
 constexpr bool IgnoreComments{ false };
-constexpr std::string_view CommentPrefix{ "//" };
 constexpr uint64_t MaxPort{ 65535 };
 // Any larger offset leaves no port that both the query and the join could use.
 constexpr int64_t MaxPortOffset{ 65534 };
@@ -150,59 +150,6 @@ constexpr std::array<std::pair<std::string_view, Query::EColorCodes>, 3> ColourC
 } };
 
 //////////////////////////////////////////////////////////////////////////
-std::string JoinPath(std::string_view parent, std::string_view key)
-{
-	return parent.empty() ? std::string{ key } : std::format("{}.{}", parent, key);
-}
-
-//////////////////////////////////////////////////////////////////////////
-// Only the first problem is kept, so the message names where the file first went wrong.
-void Fail(SFieldProblem& problem, std::string_view path, std::string_view reason)
-{
-	if (problem.reason.empty())
-	{
-		problem = SFieldProblem{ std::string{ path }, std::string{ reason } };
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-// Every string names a rule, a host or a path, so an empty one or a NUL is always a mistake.
-void ReadString(JsonValue const& json, std::string_view path, std::string& value, SFieldProblem& problem)
-{
-	bool const isValid{ json.is_string() && !json.get_ref<std::string const&>().empty() && !json.get_ref<std::string const&>().contains('\0') };
-
-	if (isValid)
-	{
-		value = json.get<std::string>();
-	}
-	else
-	{
-		Fail(problem, path, "must be a non-empty string without NUL");
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-bool IsComment(std::string_view key)
-{
-	return key.starts_with(CommentPrefix);
-}
-
-//////////////////////////////////////////////////////////////////////////
-// Its field must be beside it, so a comment left behind by a removed or renamed field is caught.
-void CheckComment(JsonValue const& object, std::string_view path, std::string_view key, JsonValue const& comment, SFieldProblem& problem)
-{
-	std::string_view const field{ key.substr(CommentPrefix.size()) };
-	std::string text{};
-
-	if (object.find(field) == object.cend())
-	{
-		Fail(problem, JoinPath(path, key), std::format("is a comment on '{}', which is not in this object", field));
-	}
-
-	ReadString(comment, JoinPath(path, key), text, problem);
-}
-
-//////////////////////////////////////////////////////////////////////////
 // "masters[2]" is held by "masters[]": the table names an array's objects without an index.
 std::string ToParent(std::string_view path)
 {
@@ -256,105 +203,6 @@ void CheckFieldsAs(JsonValue const& object, std::string_view path, std::string_v
 void CheckFields(JsonValue const& object, std::string_view path, uint64_t format, SFieldProblem& problem)
 {
 	CheckFieldsAs(object, path, ToParent(path), format, problem);
-}
-
-//////////////////////////////////////////////////////////////////////////
-void ReadStrings(JsonValue const& json, std::string_view path, std::vector<std::string>& values, SFieldProblem& problem)
-{
-	if (json.is_array())
-	{
-		size_t index{ 0 };
-
-		for (JsonValue const& element : json)
-		{
-			ReadString(element, std::format("{}[{}]", path, index), values.emplace_back(), problem);
-			++index;
-		}
-	}
-	else
-	{
-		Fail(problem, path, "must be an array of strings");
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-void ReadRequiredString(JsonValue const& object, std::string_view parent, std::string_view key, std::string& value, SFieldProblem& problem)
-{
-	JsonValue::const_iterator const it{ object.find(key) };
-
-	if (it != object.cend())
-	{
-		ReadString(*it, JoinPath(parent, key), value, problem);
-	}
-	else
-	{
-		Fail(problem, JoinPath(parent, key), "is missing");
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-void ReadRequiredStrings(JsonValue const& object, std::string_view parent, std::string_view key, std::vector<std::string>& values, SFieldProblem& problem)
-{
-	JsonValue::const_iterator const it{ object.find(key) };
-
-	if (it != object.cend())
-	{
-		ReadStrings(*it, JoinPath(parent, key), values, problem);
-	}
-	else
-	{
-		Fail(problem, JoinPath(parent, key), "is missing");
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-template<typename TEnum, size_t NumNames>
-void ReadName(JsonValue const& object, std::string_view parent, std::string_view key, std::array<std::pair<std::string_view, TEnum>, NumNames> const& names,
-	TEnum& value, SFieldProblem& problem)
-{
-	std::string name{};
-
-	ReadRequiredString(object, parent, key, name, problem);
-
-	auto const it{ std::ranges::find(names, std::string_view{ name }, &std::pair<std::string_view, TEnum>::first) };
-
-	if (it != names.end())
-	{
-		value = it->second;
-	}
-	else if (!name.empty())
-	{
-		std::string known{};
-
-		for (std::pair<std::string_view, TEnum> const& entry : names)
-		{
-			known += std::format("{}{}", known.empty() ? "" : ", ", entry.first);
-		}
-
-		Fail(problem, JoinPath(parent, key), std::format("'{}' is not one of {}", name, known));
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-JsonValue const* FindObject(JsonValue const& object, std::string_view parent, std::string_view key, bool isRequired, SFieldProblem& problem)
-{
-	JsonValue const* pFound{ nullptr };
-	JsonValue::const_iterator const it{ object.find(key) };
-
-	if (it != object.cend() && it->is_object())
-	{
-		pFound = &*it;
-	}
-	else if (it != object.cend())
-	{
-		Fail(problem, JoinPath(parent, key), "must be an object");
-	}
-	else if (isRequired)
-	{
-		Fail(problem, JoinPath(parent, key), "is missing");
-	}
-
-	return pFound;
 }
 
 //////////////////////////////////////////////////////////////////////////
