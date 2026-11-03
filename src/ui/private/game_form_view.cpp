@@ -9,6 +9,8 @@
 #include "games/game_fields.hpp"
 #include "games/game_form.hpp"
 #include "query/protocol_definition.hpp"
+#include "query/store_catalog.hpp"
+#include "query/store_ids.hpp"
 #include <imgui.h>
 #include <imgui_stdlib.h>
 #include <algorithm>
@@ -19,7 +21,9 @@
 #include <optional>
 #include <ranges>
 #include <span>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace Lkt::Ui
@@ -591,6 +595,28 @@ bool DrawProtocolOptions(SGameField const& field, SGameFormNode& parent, SGameFo
 }
 
 //////////////////////////////////////////////////////////////////////////
+// The stores Lookout has files for, then Steam and GOG, whose ids it also reads itself to find a game.
+std::vector<std::pair<std::string, std::string>> FindKnownStores()
+{
+	std::vector<std::pair<std::string, std::string>> stores{};
+
+	for (Query::SStoreDefinition const& store : Query::GetStoreCatalog())
+	{
+		stores.emplace_back(store.key, std::format("{} ({})", store.name, store.key));
+	}
+
+	for (std::string_view const key : { Query::SteamStore, Query::GogStore })
+	{
+		if (!std::ranges::contains(stores, key, &std::pair<std::string, std::string>::first))
+		{
+			stores.emplace_back(std::string{ key }, std::string{ key });
+		}
+	}
+
+	return stores;
+}
+
+//////////////////////////////////////////////////////////////////////////
 // A row is a store's key and the game's id there; one left without an id is not written.
 bool DrawStoreIds(SGameField const& field, SGameFormNode& node, SGameFormNode const* pBase, std::string_view path, SFieldProblem const* pProblem)
 {
@@ -601,8 +627,30 @@ bool DrawStoreIds(SGameField const& field, SGameFormNode& node, SGameFormNode co
 
 	if (ImGui::Button(LKT_ICON_PLUS " Store"))
 	{
-		node.children.emplace_back().isPresent = true;
-		isEdited = true;
+		ImGui::OpenPopup("##stores");
+	}
+
+	if (ImGui::BeginPopup("##stores"))
+	{
+		for (auto const& [key, label] : FindKnownStores())
+		{
+			if (!std::ranges::contains(node.children, key, &SGameFormNode::name) && ImGui::Selectable(label.c_str()))
+			{
+				SGameFormNode& store{ node.children.emplace_back() };
+
+				store.name = key;
+				store.isPresent = true;
+				isEdited = true;
+			}
+		}
+
+		if (ImGui::Selectable("Other…"))
+		{
+			node.children.emplace_back().isPresent = true;
+			isEdited = true;
+		}
+
+		ImGui::EndPopup();
 	}
 
 	DrawHelp(field.description, field.kind, {});
