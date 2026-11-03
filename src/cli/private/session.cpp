@@ -82,8 +82,8 @@ int CheckFolder(std::filesystem::path const& folder)
 		std::println("{}", problem.text);
 	}
 
-	std::println("{} games, {} protocols, {} {}", content.games.size(), content.protocols.size(), (numProblems == 0) ? std::string{ "no" }
-		: std::to_string(numProblems), (numProblems == 1) ? "problem" : "problems");
+	std::println("{} games, {} protocols, {} stores, {} {}", content.games.size(), content.protocols.size(), content.stores.size(),
+		(numProblems == 0) ? std::string{ "no" } : std::to_string(numProblems), (numProblems == 1) ? "problem" : "problems");
 
 	return (numProblems == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
