@@ -171,7 +171,7 @@ std::expected<void, ELaunchError> CGameLauncher::Spawn(Query::SGameDefinition co
 		pChild->gameName = game.name;
 		pChild->logPath = hasLog ? logPath.string() : std::string{};
 		m_children.emplace_back(std::move(pChild));
-		gLog.Info("Starting {} for {} through {} · {}: {}{}", game.name, Query::FormatAddress(request.address), option.name, option.location, option.argv.front(),
+		gLog.Info("Starting {} for {} with {} · {}: {}{}", game.name, Query::FormatAddress(request.address), option.name, option.location, option.argv.front(),
 			request.password.empty() ? "" : " (with a password)");
 	}
 	else
