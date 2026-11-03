@@ -132,6 +132,17 @@ protected:
 		m_files[std::format("games/{}/icon.png", key)] = icon;
 	}
 
+	// Steam's store, which Kingpin names; Serve the index afterwards.
+	void AddStore(JsonValue& index, std::string text)
+	{
+		JsonValue store = DescribeFile(text);
+
+		store["format"] = 1;
+		index["stores"]["steam"] = std::move(store);
+		index["games"]["kingpin"]["stores"] = JsonValue::array({ "steam" });
+		m_files["stores/steam.json"] = std::move(text);
+	}
+
 	void Start()
 	{
 		SDownloadSource source{};
@@ -880,6 +891,102 @@ TEST_F(CGameDownloadsTest, IconAskedForDuringItsGamesDownloadIsHeld)
 
 	EXPECT_EQ(GetState("kingpin"), EOfferState::Installed);
 	EXPECT_TRUE(IsIconHeld("kingpin"));
+}
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, DownloadInstallsTheStoreItsGameNames)
+{
+	JsonValue index = MakeIndex();
+
+	AddStore(index, "{ \"name\": \"Steam\" }");
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	EXPECT_TRUE(Download("kingpin"));
+	EXPECT_EQ(ReadText(m_dir / "downloaded/stores/steam.json"), m_files.at("stores/steam.json"));
+	EXPECT_EQ(GetState("kingpin"), EOfferState::Installed);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, ChangedStoreMakesItsGameAnUpdate)
+{
+	JsonValue index = MakeIndex();
+
+	AddStore(index, "{ \"name\": \"Steam\" }");
+	Serve(index);
+	Start();
+	ReadIndex();
+	Download("kingpin");
+	AddStore(index, "{ \"name\": \"Steam, changed\" }");
+	Serve(index);
+	ReadIndex();
+
+	EXPECT_EQ(GetState("kingpin"), EOfferState::UpdateAvailable);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, StoreOfANewerFormatIsLeftOut)
+{
+	JsonValue index = MakeIndex();
+
+	AddStore(index, "{ \"name\": \"Steam\" }");
+	index["stores"]["steam"]["format"] = 2;
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	EXPECT_TRUE(Download("kingpin"));
+	EXPECT_FALSE(std::filesystem::exists(m_dir / "downloaded/stores/steam.json"));
+	EXPECT_EQ(GetState("kingpin"), EOfferState::Installed);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, RemoveTakesTheStoreNoGameNames)
+{
+	std::vector<std::string> const keys{ "kingpin" };
+	JsonValue index = MakeIndex();
+
+	AddStore(index, "{ \"name\": \"Steam\" }");
+	Serve(index);
+	Start();
+	ReadIndex();
+	Download("kingpin");
+	m_downloads.Remove(keys);
+
+	EXPECT_TRUE(m_downloads.Update(Net::Clock::now()));
+	EXPECT_FALSE(std::filesystem::exists(m_dir / "downloaded/stores/steam.json"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, RemoveKeepsAStoreAUserGameNames)
+{
+	std::vector<std::string> const keys{ "kingpin" };
+	JsonValue index = MakeIndex();
+
+	std::filesystem::create_directories(m_dir / "games/mygame");
+	std::ofstream{ m_dir / "games/mygame/game.json" } << R"json({ "format": 4, "launch": { "stores": { "steam": "38430" } } })json";
+	AddStore(index, "{ \"name\": \"Steam\" }");
+	Serve(index);
+	Start();
+	ReadIndex();
+	Download("kingpin");
+	m_downloads.Remove(keys);
+
+	EXPECT_TRUE(std::filesystem::exists(m_dir / "downloaded/stores/steam.json"));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameDownloadsTest, GameNamingAStoreTheIndexLacksRefusesTheIndex)
+{
+	JsonValue index = MakeIndex();
+
+	index["games"]["kingpin"]["stores"] = JsonValue::array({ "steam" });
+	Serve(index);
+	Start();
+	ReadIndex();
+
+	ASSERT_EQ(m_downloads.GetProblems().size(), 1u);
+	EXPECT_EQ(m_downloads.GetProblems().front(), "index.json: games.kingpin.stores: 'steam' is not one of its stores");
 }
 } // namespace
 } // namespace Lkt::Download

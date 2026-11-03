@@ -1,6 +1,7 @@
 #include "downloaded_files.hpp"
 #include "sha256.hpp"
 #include "games/game_files.hpp"
+#include "games/named_stores.hpp"
 #include "json/json.hpp"
 #include <tge/io/read_whole_file.hpp>
 #include <tge/io/write_file_atomically.hpp>
@@ -19,6 +20,7 @@ constexpr bool AllowExceptions{ false };
 constexpr bool IgnoreComments{ false };
 constexpr size_t MaxFileSize{ 1024 * 1024 };
 constexpr std::string_view ProtocolExtension{ ".lua" };
+constexpr std::string_view StoreExtension{ ".json" };
 
 //////////////////////////////////////////////////////////////////////////
 std::filesystem::path GetStagingFolder(std::filesystem::path const& downloadedDir, std::string const& key)
@@ -90,10 +92,63 @@ void AddNamedProtocols(std::filesystem::path const& gamesFolder, std::set<std::s
 		}
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////
+void AddNamedStores(std::filesystem::path const& gamesFolder, std::set<std::string>& names)
+{
+	for (std::filesystem::path const& folder : ListEntries(gamesFolder))
+	{
+		for (std::string& store : Games::FindNamedStores(ReadGame(folder / "game.json")))
+		{
+			names.insert(std::move(store));
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::expected<void, std::string> WriteDownloadedFile(std::filesystem::path const& downloadedDir, std::string_view kind, std::string const& fileName,
+	std::string const& text)
+{
+	std::filesystem::path const folder{ downloadedDir / kind };
+	std::error_code error{};
+
+	std::filesystem::create_directories(folder, error);
+
+	std::expected<void, std::error_code> const written{ (error.value() == 0) ? Tge::IO::WriteFileAtomically(folder / fileName, text)
+		: std::expected<void, std::error_code>{ std::unexpected{ error } } };
+
+	return written.has_value() ? std::expected<void, std::string>{}
+		: std::expected<void, std::string>{ std::unexpected{ std::format("downloaded/{}/{}: {}", kind, fileName, written.error().message()) } };
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::vector<std::string> RemoveUnnamed(std::filesystem::path const& downloadedDir, std::string_view kind, std::string_view extension,
+	std::set<std::string> const& named)
+{
+	std::vector<std::string> problems{};
+
+	for (std::filesystem::path const& path : ListEntries(downloadedDir / kind))
+	{
+		std::error_code error{};
+
+		if (path.extension() == extension && !named.contains(path.stem().string()))
+		{
+			std::filesystem::remove(path, error);
+		}
+
+		if (error.value() != 0)
+		{
+			problems.emplace_back(std::format("downloaded/{}/{}: {}", kind, path.filename().string(), error.message()));
+		}
+	}
+
+	return problems;
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SIndexGame const& game, SIndexProtocol const& protocol)
+EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SIndexGame const& game, SIndexProtocol const& protocol,
+	std::span<SIndexStore const> stores)
 {
 	std::filesystem::path const folder{ downloadedDir / "games" / game.key };
 	std::error_code error{};
@@ -107,7 +162,10 @@ EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SInde
 			return !std::ranges::contains(game.files, path.filename().string(), &SIndexFile::name);
 		}) };
 
-		state = (hasIndexFiles && !hasOtherFiles && IsProtocolCurrent(downloadedDir, protocol)) ? EOfferState::Installed : EOfferState::UpdateAvailable;
+		bool const areStoresCurrent{ std::ranges::all_of(stores, [&downloadedDir](SIndexStore const& store) { return IsStoreCurrent(downloadedDir, store); }) };
+
+		state = (hasIndexFiles && !hasOtherFiles && IsProtocolCurrent(downloadedDir, protocol) && areStoresCurrent) ? EOfferState::Installed
+			: EOfferState::UpdateAvailable;
 	}
 
 	return state;
@@ -117,6 +175,12 @@ EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SInde
 bool IsProtocolCurrent(std::filesystem::path const& downloadedDir, SIndexProtocol const& protocol)
 {
 	return HasContent(downloadedDir / "protocols" / protocol.file.name, protocol.file);
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool IsStoreCurrent(std::filesystem::path const& downloadedDir, SIndexStore const& store)
+{
+	return HasContent(downloadedDir / "stores" / store.file.name, store.file);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -224,17 +288,13 @@ void DiscardStagedGame(std::filesystem::path const& downloadedDir, std::string c
 //////////////////////////////////////////////////////////////////////////
 std::expected<void, std::string> InstallProtocol(std::filesystem::path const& downloadedDir, std::string const& name, std::string const& source)
 {
-	std::filesystem::path const folder{ downloadedDir / "protocols" };
-	std::error_code error{};
+	return WriteDownloadedFile(downloadedDir, "protocols", std::format("{}{}", name, ProtocolExtension), source);
+}
 
-	std::filesystem::create_directories(folder, error);
-
-	std::expected<void, std::error_code> const written{ (error.value() == 0)
-		? Tge::IO::WriteFileAtomically(folder / std::format("{}{}", name, ProtocolExtension), source)
-		: std::expected<void, std::error_code>{ std::unexpected{ error } } };
-
-	return written.has_value() ? std::expected<void, std::string>{}
-		: std::expected<void, std::string>{ std::unexpected{ std::format("downloaded/protocols/{}{}: {}", name, ProtocolExtension, written.error().message()) } };
+//////////////////////////////////////////////////////////////////////////
+std::expected<void, std::string> InstallStore(std::filesystem::path const& downloadedDir, std::string const& key, std::string const& text)
+{
+	return WriteDownloadedFile(downloadedDir, "stores", std::format("{}{}", key, StoreExtension), text);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -260,7 +320,6 @@ std::expected<void, std::string> RemoveGame(std::filesystem::path const& downloa
 std::vector<std::string> RemoveUnusedProtocols(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir)
 {
 	std::set<std::string> named{};
-	std::vector<std::string> problems{};
 
 	AddNamedProtocols(downloadedDir / "games", named);
 
@@ -269,21 +328,21 @@ std::vector<std::string> RemoveUnusedProtocols(std::filesystem::path const& down
 		AddNamedProtocols(userDir / "games", named);
 	}
 
-	for (std::filesystem::path const& path : ListEntries(downloadedDir / "protocols"))
+	return RemoveUnnamed(downloadedDir, "protocols", ProtocolExtension, named);
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::vector<std::string> RemoveUnusedStores(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir)
+{
+	std::set<std::string> named{};
+
+	AddNamedStores(downloadedDir / "games", named);
+
+	if (!userDir.empty())
 	{
-		std::error_code error{};
-
-		if (path.extension() == ProtocolExtension && !named.contains(path.stem().string()))
-		{
-			std::filesystem::remove(path, error);
-		}
-
-		if (error.value() != 0)
-		{
-			problems.emplace_back(std::format("downloaded/protocols/{}: {}", path.filename().string(), error.message()));
-		}
+		AddNamedStores(userDir / "games", named);
 	}
 
-	return problems;
+	return RemoveUnnamed(downloadedDir, "stores", StoreExtension, named);
 }
 } // namespace Lkt::Download

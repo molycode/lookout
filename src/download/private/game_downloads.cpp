@@ -7,6 +7,7 @@
 #include "sha256.hpp"
 #include "games/game_files.hpp"
 #include "games/game_format.hpp"
+#include "games/store_format.hpp"
 #include "script/script_api.hpp"
 #include <tge/assert.hpp>
 #include <tge/io/is_busy.hpp>
@@ -57,6 +58,25 @@ SIndexProtocol const* FindProtocol(SGameIndex const& index, std::string_view nam
 	auto const it{ std::ranges::find(index.protocols, name, &SIndexProtocol::name) };
 
 	return (it != index.protocols.end()) ? &*it : nullptr;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A store of a format this Lookout cannot read is left as if the game named none.
+std::vector<SIndexStore> FindReadableStores(SGameIndex const& index, SIndexGame const& game)
+{
+	std::vector<SIndexStore> stores{};
+
+	for (std::string const& key : game.stores)
+	{
+		auto const store{ std::ranges::find(index.stores, key, &SIndexStore::key) };
+
+		if (store != index.stores.end() && store->format == Games::StoreFormat)
+		{
+			stores.emplace_back(*store);
+		}
+	}
+
+	return stores;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -148,6 +168,7 @@ void CGameDownloads::Download(std::span<std::string const> keys)
 
 	std::vector<Net::SFetchRequest> requests{};
 	std::set<std::string> protocols{};
+	std::set<std::string> stores{};
 
 	m_problems.clear();
 	m_downloadKeys.clear();
@@ -181,6 +202,14 @@ void CGameDownloads::Download(std::span<std::string const> keys)
 			{
 				requests.emplace_back(MakePath(m_pIndex->commit, std::format("protocols/{}", pProtocol->file.name)), pProtocol->file.size);
 			}
+
+			for (SIndexStore const& store : FindReadableStores(*m_pIndex, *pGame))
+			{
+				if (!IsStoreCurrent(m_downloadedDir, store) && stores.insert(store.key).second)
+				{
+					requests.emplace_back(MakePath(m_pIndex->commit, std::format("stores/{}", store.file.name)), store.file.size);
+				}
+			}
 		}
 	}
 
@@ -211,6 +240,11 @@ void CGameDownloads::Remove(std::span<std::string const> keys)
 	}
 
 	for (std::string& problem : RemoveUnusedProtocols(m_downloadedDir, m_userDir))
+	{
+		AddProblem(std::move(problem));
+	}
+
+	for (std::string& problem : RemoveUnusedStores(m_downloadedDir, m_userDir))
 	{
 		AddProblem(std::move(problem));
 	}
@@ -457,14 +491,35 @@ std::optional<std::string> CGameDownloads::FindHeldIcon(SIndexFile const& icon) 
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Protocols first, so a game never lands without the protocol it names. A game whose folder Windows holds stays staged
-// and is swapped in again shortly; the reload waits for all of them, so no reload pairs new protocols with old games.
+// Protocols and stores first, so a game never lands without them. A game whose folder Windows holds stays staged and is
+// swapped in again shortly; the reload waits for all of them, so no reload pairs new protocols with old games. A store
+// that fails costs only itself: a game starts without it, just not through it.
 void CGameDownloads::InstallFetched(Net::Clock::time_point now)
 {
 	std::set<std::string> failedProtocols{};
 
 	m_numInstalled = 0;
 	m_hasNewProtocols = false;
+	m_hasNewStores = false;
+
+	for (SIndexStore const& store : m_pIndex->stores)
+	{
+		auto const fetched{ m_fetched.find(MakePath(m_pIndex->commit, std::format("stores/{}", store.file.name))) };
+
+		if (fetched != m_fetched.end())
+		{
+			std::expected<std::string const*, std::string> const verified{ Verify(fetched->second, store.file) };
+			std::expected<void, std::string> const installed{ verified.has_value() ? InstallStore(m_downloadedDir, store.key, **verified)
+				: std::expected<void, std::string>{ std::unexpected{ verified.error() } } };
+
+			m_hasNewStores = m_hasNewStores || installed.has_value();
+
+			if (!installed.has_value())
+			{
+				AddProblem(std::format("The store {}: {}", store.key, installed.error()));
+			}
+		}
+	}
 
 	for (SIndexProtocol const& protocol : m_pIndex->protocols)
 	{
@@ -587,7 +642,7 @@ void CGameDownloads::FinishInstall()
 {
 	gLog.Info("Downloaded {} of {} {} from {}", m_numInstalled, m_downloadKeys.size(), (m_downloadKeys.size() == 1) ? "game" : "games",
 		m_source.origin.host);
-	m_hasChanged = m_hasChanged || m_hasNewProtocols || m_numInstalled > 0;
+	m_hasChanged = m_hasChanged || m_hasNewProtocols || m_hasNewStores || m_numInstalled > 0;
 	m_downloadKeys.clear();
 	m_nextRetry.reset();
 	m_phase = EDownloadPhase::Idle;
@@ -607,7 +662,8 @@ void CGameDownloads::RefreshOffers()
 		for (SIndexGame const& game : m_pIndex->games)
 		{
 			SIndexProtocol const& protocol{ *FindProtocol(*m_pIndex, game.protocol) };
-			EOfferState const state{ IsSupported(game, protocol) ? FindInstalledState(m_downloadedDir, game, protocol) : EOfferState::NeedsNewerLookout };
+			EOfferState const state{ IsSupported(game, protocol) ? FindInstalledState(m_downloadedDir, game, protocol, FindReadableStores(*m_pIndex, game))
+				: EOfferState::NeedsNewerLookout };
 
 			SIndexFile const* const pIcon{ FindIcon(game) };
 

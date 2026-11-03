@@ -2,6 +2,7 @@
 
 #include "index_game.hpp"
 #include "index_protocol.hpp"
+#include "index_store.hpp"
 #include <string>
 #include <vector>
 
@@ -13,5 +14,6 @@ struct SGameIndex final
 	std::string commit{};
 	std::vector<SIndexGame> games{};
 	std::vector<SIndexProtocol> protocols{};
+	std::vector<SIndexStore> stores{};
 };
 } // namespace Lkt::Download

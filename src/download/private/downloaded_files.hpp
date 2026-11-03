@@ -3,9 +3,11 @@
 #include "download/offer_state.hpp"
 #include "index_game.hpp"
 #include "index_protocol.hpp"
+#include "index_store.hpp"
 #include <expected>
 #include <filesystem>
 #include <map>
+#include <span>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -13,8 +15,10 @@
 namespace Lkt::Download
 {
 // How the downloaded copy of a game compares with the index: its files and its protocol's, by checksum.
-EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SIndexGame const& game, SIndexProtocol const& protocol);
+EOfferState FindInstalledState(std::filesystem::path const& downloadedDir, SIndexGame const& game, SIndexProtocol const& protocol,
+	std::span<SIndexStore const> stores);
 bool IsProtocolCurrent(std::filesystem::path const& downloadedDir, SIndexProtocol const& protocol);
+bool IsStoreCurrent(std::filesystem::path const& downloadedDir, SIndexStore const& store);
 
 // Keys of the games in the folder, and the name each one's game.json gives, or its key.
 std::map<std::string, std::string> ListDownloadedGames(std::filesystem::path const& downloadedDir);
@@ -25,7 +29,9 @@ std::expected<void, std::string> StageGame(std::filesystem::path const& download
 std::expected<void, std::error_code> SwapInGame(std::filesystem::path const& downloadedDir, std::string const& key);
 void DiscardStagedGame(std::filesystem::path const& downloadedDir, std::string const& key);
 std::expected<void, std::string> InstallProtocol(std::filesystem::path const& downloadedDir, std::string const& name, std::string const& source);
+std::expected<void, std::string> InstallStore(std::filesystem::path const& downloadedDir, std::string const& key, std::string const& text);
 std::expected<void, std::string> RemoveGame(std::filesystem::path const& downloadedDir, std::string const& key);
 // Removes each downloaded protocol that neither a downloaded game nor one of the user's games names any more.
 std::vector<std::string> RemoveUnusedProtocols(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir);
+std::vector<std::string> RemoveUnusedStores(std::filesystem::path const& downloadedDir, std::filesystem::path const& userDir);
 } // namespace Lkt::Download

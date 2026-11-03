@@ -90,5 +90,6 @@ private:
 	EDownloadPhase m_phase{ EDownloadPhase::Idle };
 	bool m_hasChanged{ false };
 	bool m_hasNewProtocols{ false };
+	bool m_hasNewStores{ false };
 };
 } // namespace Lkt::Download

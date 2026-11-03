@@ -14,5 +14,6 @@ struct SIndexGame final
 	uint64_t format{ 0 };
 	std::string protocol{};
 	std::vector<SIndexFile> files{};
+	std::vector<std::string> stores{};
 };
 } // namespace Lkt::Download

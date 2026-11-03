@@ -21,6 +21,7 @@ constexpr uint64_t IndexFormat{ 1 };
 constexpr size_t CommitLength{ 40 };
 constexpr size_t Sha256Length{ 64 };
 constexpr size_t MaxScriptSize{ 256 * 1024 };
+constexpr size_t MaxStoreSize{ 64 * 1024 };
 
 // A file a game may hold, and the most it may weigh.
 constexpr std::array<std::pair<std::string_view, size_t>, 3> GameFiles{ {
@@ -80,6 +81,7 @@ void ReadGame(std::string const& key, JsonValue const& json, SIndexGame& game, s
 	JsonValue::const_iterator const format{ json.is_object() ? json.find("format") : json.cend() };
 	JsonValue::const_iterator const protocol{ json.is_object() ? json.find("protocol") : json.cend() };
 	JsonValue::const_iterator const files{ json.is_object() ? json.find("files") : json.cend() };
+	JsonValue::const_iterator const stores{ json.is_object() ? json.find("stores") : json.cend() };
 
 	game.key = key;
 
@@ -103,11 +105,26 @@ void ReadGame(std::string const& key, JsonValue const& json, SIndexGame& game, s
 	{
 		Fail(problem, std::format("{}.files", path), "must be an object holding game.json");
 	}
+	else if (stores != json.cend() && (!stores->is_array() || !std::ranges::all_of(*stores, [](JsonValue const& store)
+	{
+		return store.is_string() && Games::IsValidKey(store.get_ref<std::string const&>());
+	})))
+	{
+		Fail(problem, std::format("{}.stores", path), "must be an array of store keys");
+	}
 	else
 	{
 		game.name = name->get<std::string>();
 		game.format = format->get<uint64_t>();
 		game.protocol = protocol->get<std::string>();
+
+		if (stores != json.cend())
+		{
+			for (JsonValue const& store : *stores)
+			{
+				game.stores.emplace_back(store.get<std::string>());
+			}
+		}
 
 		for (auto const& item : files->items())
 		{
@@ -156,11 +173,36 @@ void ReadProtocol(std::string const& name, JsonValue const& json, SIndexProtocol
 }
 
 //////////////////////////////////////////////////////////////////////////
+void ReadStore(std::string const& key, JsonValue const& json, SIndexStore& store, std::string& problem)
+{
+	std::string const path{ std::format("stores.{}", key) };
+	JsonValue::const_iterator const format{ json.is_object() ? json.find("format") : json.cend() };
+
+	store.key = key;
+
+	if (!Games::IsValidKey(key))
+	{
+		Fail(problem, path, "is not a key: small letters, digits, '-' and '_'");
+	}
+	else if (format == json.cend() || !format->is_number_unsigned())
+	{
+		Fail(problem, std::format("{}.format", path), "must be a whole number");
+	}
+	else
+	{
+		store.format = format->get<uint64_t>();
+		ReadFile(json, path, std::format("{}.json", key), MaxStoreSize, store.file, problem);
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Stores came with 1.7, so an index without them is older, not wrong.
 void ReadContent(JsonValue const& root, SGameIndex& index, std::string& problem)
 {
 	JsonValue::const_iterator const commit{ root.find("commit") };
 	JsonValue::const_iterator const games{ root.find("games") };
 	JsonValue::const_iterator const protocols{ root.find("protocols") };
+	JsonValue::const_iterator const stores{ root.find("stores") };
 
 	if (commit == root.cend() || !commit->is_string() || !IsLowerHex(commit->get_ref<std::string const&>(), CommitLength))
 	{
@@ -174,6 +216,10 @@ void ReadContent(JsonValue const& root, SGameIndex& index, std::string& problem)
 	{
 		Fail(problem, "protocols", "must be an object");
 	}
+	else if (stores != root.cend() && !stores->is_object())
+	{
+		Fail(problem, "stores", "must be an object");
+	}
 	else
 	{
 		index.commit = commit->get<std::string>();
@@ -181,6 +227,14 @@ void ReadContent(JsonValue const& root, SGameIndex& index, std::string& problem)
 		for (auto const& item : protocols->items())
 		{
 			ReadProtocol(item.key(), item.value(), index.protocols.emplace_back(), problem);
+		}
+
+		if (stores != root.cend())
+		{
+			for (auto const& item : stores->items())
+			{
+				ReadStore(item.key(), item.value(), index.stores.emplace_back(), problem);
+			}
 		}
 
 		for (auto const& item : games->items())
@@ -193,6 +247,14 @@ void ReadContent(JsonValue const& root, SGameIndex& index, std::string& problem)
 			if (problem.empty() && !std::ranges::contains(index.protocols, game.protocol, &SIndexProtocol::name))
 			{
 				Fail(problem, std::format("games.{}.protocol", game.key), std::format("'{}' is not one of its protocols", game.protocol));
+			}
+
+			for (std::string const& store : game.stores)
+			{
+				if (problem.empty() && !std::ranges::contains(index.stores, store, &SIndexStore::key))
+				{
+					Fail(problem, std::format("games.{}.stores", game.key), std::format("'{}' is not one of its stores", store));
+				}
 			}
 		}
 	}
