@@ -740,5 +740,57 @@ TEST_F(CBrowserCatalogTest, ChangedStoresAloneReplaceTheStoreCatalog)
 	EXPECT_NE(Query::FindStore("teststore"), nullptr);
 }
 
+#if defined(TGE_PLATFORM_LINUX)
+//////////////////////////////////////////////////////////////////////////
+// The fake game stands in for Steam's program, so what Steam would be started with lands in the game's log.
+class CBrowserStoreTest : public CBrowserCatalogTest
+{
+protected:
+
+	Query::SStoreDefinition MakeStore() const
+	{
+		return Query::SStoreDefinition{ "steam", "Steam", { "-applaunch", "{id}" }, Query::EStoreLibraries::Steam, {},
+			{ Query::SLinuxStoreInstall{ "{dataHome}/Steam", { m_game.string() } } } };
+	}
+
+	void InstallInSteam() const
+	{
+		std::filesystem::create_directories(m_environment.dataHome / "Steam" / "steamapps");
+		WriteText(m_environment.dataHome / "Steam" / "steamapps" / "appmanifest_38430.acf",
+			"\"AppState\" { \"name\" \"Kingpin\" \"StateFlags\" \"4\" \"installdir\" \"Kingpin\" }");
+	}
+
+	void UseStores(std::vector<Query::SStoreDefinition> const& stores) const
+	{
+		Query::TerminateStoreCatalog();
+		Query::InitializeStoreCatalog(stores);
+	}
+};
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserStoreTest, JoinThroughAStoreStartsItsProgramWithTheGamesId)
+{
+	Query::SServerAddress const address{ 0xCB007107, 31510 };
+
+	InstallInSteam();
+	UseStores({ MakeStore() });
+	Initialize();
+	ASSERT_TRUE(m_browser.Join(address, {}, "store:steam").has_value());
+
+	EXPECT_EQ(WaitForGameLog("-applaunch\n38430\n+connect\n203.0.113.7:31510\n"), "-applaunch\n38430\n+connect\n203.0.113.7:31510\n");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserStoreTest, StoreAReloadAddsReachesTheLaunchers)
+{
+	InstallInSteam();
+	UseStores({});
+	Initialize();
+	ASSERT_FALSE(std::ranges::contains(m_browser.GetLaunchOptions(Fixtures::GetGameId("kingpin")), "store:steam", &Launch::SLaunchOption::id));
+	m_browser.ReplaceCatalog(m_protocols, { MakeStore() }, m_games);
+
+	EXPECT_TRUE(std::ranges::contains(m_browser.GetLaunchOptions(Fixtures::GetGameId("kingpin")), "store:steam", &Launch::SLaunchOption::id));
+}
+#endif // defined(TGE_PLATFORM_LINUX)
 } // namespace
 } // namespace Lkt::Browser

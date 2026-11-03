@@ -91,7 +91,7 @@ protected:
 
 	std::vector<SLaunchOption> Find() const
 	{
-		return FindLaunchOptions(m_hints, GameName, m_environment);
+		return FindLaunchOptions(m_hints, GameName, m_environment, {});
 	}
 
 	Query::SLaunchHints m_hints{};

@@ -72,7 +72,7 @@ protected:
 	{
 		std::vector<std::string> ids{};
 
-		for (SLaunchOption const& option : FindLaunchOptions(m_hints, GameName, m_environment))
+		for (SLaunchOption const& option : FindLaunchOptions(m_hints, GameName, m_environment, {}))
 		{
 			ids.emplace_back(option.id);
 		}

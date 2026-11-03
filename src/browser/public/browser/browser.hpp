@@ -12,6 +12,7 @@
 #include "config/settings_store.hpp"
 #include "config/sort_order.hpp"
 #include "config/window_settings.hpp"
+#include "launch/found_store.hpp"
 #include "launch/game_launcher.hpp"
 #include "launch/launch_environment.hpp"
 #include "launch/launch_error.hpp"
@@ -100,6 +101,7 @@ private:
 	void SetUpGame(Query::SGameDefinition const& game);
 	SInstallLauncher ResolveInstall(Query::EGame game, Config::SGameInstall const& install) const;
 	std::optional<size_t> FindInstallIndex(Query::EGame game, uint32_t id) const;
+	void FindStoresAgain();
 	void UpdateJoinLauncher(Query::EGame game);
 	void Recount(Query::EGame game);
 	void RebuildRows();
@@ -109,6 +111,7 @@ private:
 	Config::CSettingsStore m_settingsStore{};
 	Config::SSettings m_settings{};
 	Launch::SLaunchEnvironment m_environment{};
+	std::vector<Launch::SFoundStore> m_stores{};
 	Launch::CGameLauncher m_launcher{};
 	Net::CQueryEngine m_engine{};
 	std::function<void()> m_onEventsReady{};

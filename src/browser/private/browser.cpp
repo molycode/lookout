@@ -9,6 +9,7 @@
 #include "launch/command_option.hpp"
 #include "launch/connect_request.hpp"
 #include "launch/folder_option.hpp"
+#include "launch/found_stores.hpp"
 #include "launch/home_path.hpp"
 #include "launch/launch_discovery.hpp"
 #include "query/game_catalog.hpp"
@@ -84,6 +85,7 @@ void CBrowser::Initialize(std::string_view configDir, std::string_view logsDir, 
 	m_hasChanged.assign(numGames, false);
 	m_autoRefresh.Initialize(numGames);
 	m_environment = std::move(environment);
+	m_stores = Launch::FindStores(Query::GetStoreCatalog(), m_environment);
 	m_settingsStore.Initialize(configDir);
 	m_settings = m_settingsStore.Load();
 	m_launcher.Initialize(logsDir);
@@ -484,6 +486,11 @@ bool CBrowser::ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols,
 		SwapCatalog(std::move(protocols), std::move(games));
 	}
 
+	if (areStoresChanged)
+	{
+		FindStoresAgain();
+	}
+
 	return areGamesChanged || areStoresChanged;
 }
 
@@ -687,7 +694,7 @@ void CBrowser::SetUpGame(Query::SGameDefinition const& game)
 		m_lists[index]->SetFavourite(game, favourite, true);
 	}
 
-	state.options = Launch::FindLaunchOptions(game, m_environment);
+	state.options = Launch::FindLaunchOptions(game, m_environment, m_stores);
 	state.installs.clear();
 
 	for (Config::SGameInstall const& install : m_settings.games[index].installs)
@@ -726,6 +733,19 @@ std::optional<size_t> CBrowser::FindInstallIndex(Query::EGame game, uint32_t id)
 	TGE_ASSERT(it != installs.end(), "An install is changed by an id the game does not have");
 
 	return (it != installs.end()) ? std::optional<size_t>{ static_cast<size_t>(it - installs.begin()) } : std::nullopt;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A game whose description did not change keeps its list, but what it offers through the stores follows them.
+void CBrowser::FindStoresAgain()
+{
+	m_stores = Launch::FindStores(Query::GetStoreCatalog(), m_environment);
+
+	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
+	{
+		m_launchStates[ToIndex(game.game)].options = Launch::FindLaunchOptions(game, m_environment, m_stores);
+		UpdateJoinLauncher(game.game);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////

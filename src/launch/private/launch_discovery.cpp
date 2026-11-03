@@ -5,10 +5,12 @@
 #include "hinted_discovery.hpp"
 #include "home_install_source.hpp"
 #include "steam_source.hpp"
+#include "store_source.hpp"
 #include "query/game_definition.hpp"
 #include <tge/platform.hpp>
 #include <algorithm>
 #include <filesystem>
+#include <iterator>
 #include <system_error>
 #include <utility>
 
@@ -38,9 +40,12 @@ void AppendDistinct(std::vector<SLaunchOption> found, std::vector<SLaunchOption>
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<SLaunchOption> FindLaunchOptions(Query::SLaunchHints const& hints, std::string_view gameName, SLaunchEnvironment const& environment)
+// Through a store after the rest: those start the game itself, where Lookout keeps its output.
+std::vector<SLaunchOption> FindLaunchOptions(Query::SLaunchHints const& hints, std::string_view gameName, SLaunchEnvironment const& environment,
+	std::span<SFoundStore const> stores)
 {
 	std::vector<SLaunchOption> options{};
+	CStoreSource storeSource{};
 
 #if defined(TGE_PLATFORM_WINDOWS)
 	CSteamSource steam{};
@@ -71,12 +76,16 @@ std::vector<SLaunchOption> FindLaunchOptions(Query::SLaunchHints const& hints, s
 #error "Unsupported platform"
 #endif // defined(TGE_PLATFORM_WINDOWS)
 
+	storeSource.Initialize(stores);
+	std::ranges::move(storeSource.Find(hints, gameName), std::back_inserter(options));
+	storeSource.Terminate();
+
 	return options;
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::vector<SLaunchOption> FindLaunchOptions(Query::SGameDefinition const& game, SLaunchEnvironment const& environment)
+std::vector<SLaunchOption> FindLaunchOptions(Query::SGameDefinition const& game, SLaunchEnvironment const& environment, std::span<SFoundStore const> stores)
 {
-	return FindLaunchOptions(game.launch, game.name, environment);
+	return FindLaunchOptions(game.launch, game.name, environment, stores);
 }
 } // namespace Lkt::Launch
