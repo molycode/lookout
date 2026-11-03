@@ -12,7 +12,6 @@ enum class EColorCodes : uint8_t
 	Alphanumeric,
 	// Any printable ASCII character but the escape, indexing the palette.
 	Printable,
-	// Three bytes, red, green and blue.
 	Rgb
 };
 } // namespace Lkt::Query

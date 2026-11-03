@@ -91,7 +91,7 @@ constexpr std::array<SGameField, 48> Fields{ {
 	{ "text.colourCodes", "escape", "Escape", Characters, true, {}, "The ASCII character that starts a colour code, such as \"^\"." },
 	{ "text.colourCodes", "codes", "Codes", Choice, true, ColourCodeNames,
 		"What follows the escape: alphanumeric (a letter or digit), printable (any printable character but the escape) "
-		"or rgb (three bytes of red, green and blue)." },
+		"or rgb (red, green and blue, a byte each, or a character each where the text is UTF-8)." },
 	{ "text.colourCodes", "palette", "Palette", TextList, true, {},
 		"The colours the codes pick, each \"#rrggbb\", a power of two of them up to 256; not for rgb." },
 	{ "text.colourCodes", "hexCodes", "Hex codes", TextList, false, {},

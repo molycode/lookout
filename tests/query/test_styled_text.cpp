@@ -203,6 +203,22 @@ TEST(StyledText, CutRgbCodeIsDropped)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(StyledText, RgbComponentsOfUtf8TextAreCharacters)
+{
+	SStyledText const text{ DecodeText(MakeRgbStyle(), "\x1B\xC3\xB8@@Red") };
+
+	ASSERT_EQ(text.runs.size(), 1u);
+	EXPECT_EQ(text.runs[0].text, "Red");
+	EXPECT_TRUE(IsColor(text.runs[0], 0xF8, 0x40, 0x40));
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(StyledText, RgbCodeCutInUtf8TextIsText)
+{
+	EXPECT_EQ(DecodeText(MakeRgbStyle(), "ab\x1B\xC3\xB8@").plain, "ab\xC3\xB8@");
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(StyledText, HexCodeCarriesItsColour)
 {
 	SStyledText const text{ DecodeText(MakeHexStyle(), "^x1dFName") };

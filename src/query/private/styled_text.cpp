@@ -16,6 +16,7 @@ constexpr std::array<char32_t, 32> Windows1252HighControls
 	U'\u02DC', U'\u2122', U'\u0161', U'\u203A', U'\u0153', 0, U'\u017E', U'\u0178'
 };
 constexpr uint8_t NotHex{ 0xFF };
+constexpr size_t NumRgbComponents{ 3 };
 
 //////////////////////////////////////////////////////////////////////////
 void AppendCodePoint(char32_t codePoint, std::string& run, std::string& plain)
@@ -146,10 +147,82 @@ Tge::SColor ReadHexColor(std::string_view digits)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Zero when no colour code starts at index; a lone escape is text.
-size_t GetCodeLength(STextStyle const& style, std::string_view raw, size_t index)
+// A server sending UTF-8 writes each component as a character, so one from 0x80 takes two bytes.
+size_t GetRgbComponentLength(std::string_view raw, size_t index, bool areComponentsCharacters)
 {
-	constexpr size_t RgbCodeLength{ 4 };
+	unsigned char const lead{ static_cast<unsigned char>(raw[index]) };
+	size_t length{ 1 };
+
+	if (areComponentsCharacters && lead >= 0xF0)
+	{
+		length = 4;
+	}
+	else if (areComponentsCharacters && lead >= 0xE0)
+	{
+		length = 3;
+	}
+	else if (areComponentsCharacters && lead >= 0xC0)
+	{
+		length = 2;
+	}
+
+	return length;
+}
+
+//////////////////////////////////////////////////////////////////////////
+size_t GetRgbCodeLength(std::string_view raw, size_t index, bool areComponentsCharacters)
+{
+	size_t end{ index + 1 };
+	size_t numComponents{ 0 };
+
+	while (numComponents < NumRgbComponents && end < raw.size())
+	{
+		end += GetRgbComponentLength(raw, end, areComponentsCharacters);
+		++numComponents;
+	}
+
+	return (numComponents == NumRgbComponents) ? end - index : 0;
+}
+
+//////////////////////////////////////////////////////////////////////////
+uint8_t ReadRgbComponent(std::string_view component)
+{
+	uint32_t value{ static_cast<unsigned char>(component[0]) };
+
+	if (component.size() > 1)
+	{
+		value &= 0x7Fu >> component.size();
+
+		for (char const continuation : component.substr(1))
+		{
+			value = (value << 6) | (static_cast<unsigned char>(continuation) & 0x3Fu);
+		}
+	}
+
+	return static_cast<uint8_t>(value);
+}
+
+//////////////////////////////////////////////////////////////////////////
+Tge::SColor ReadRgbColor(std::string_view raw, size_t index, bool areComponentsCharacters)
+{
+	std::array<uint8_t, NumRgbComponents> components{};
+	size_t position{ index + 1 };
+
+	for (uint8_t& component : components)
+	{
+		size_t const length{ GetRgbComponentLength(raw, position, areComponentsCharacters) };
+
+		component = ReadRgbComponent(raw.substr(position, length));
+		position += length;
+	}
+
+	return Tge::SColor{ components[0], components[1], components[2] };
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Zero when no colour code starts at index; a lone escape is text.
+size_t GetCodeLength(STextStyle const& style, std::string_view raw, size_t index, bool areComponentsCharacters)
+{
 	constexpr size_t PaletteCodeLength{ 2 };
 	bool const isEscape{ style.codes != EColorCodes::None && raw[index] == style.escape };
 	SHexColorCode const* const pHexCode{ isEscape ? FindHexCode(style, raw, index) : nullptr };
@@ -159,11 +232,11 @@ size_t GetCodeLength(STextStyle const& style, std::string_view raw, size_t index
 	{
 		length = 1 + pHexCode->prefix.size() + pHexCode->numDigits;
 	}
-	else if (isEscape && style.codes == EColorCodes::Rgb && raw.size() - index >= RgbCodeLength)
+	else if (isEscape && style.codes == EColorCodes::Rgb)
 	{
-		length = RgbCodeLength;
+		length = GetRgbCodeLength(raw, index, areComponentsCharacters);
 	}
-	else if (isEscape && style.codes != EColorCodes::Rgb && index + 1 < raw.size() && IsPaletteCode(style, static_cast<unsigned char>(raw[index + 1])))
+	else if (isEscape && index + 1 < raw.size() && IsPaletteCode(style, static_cast<unsigned char>(raw[index + 1])))
 	{
 		length = PaletteCodeLength;
 	}
@@ -172,7 +245,7 @@ size_t GetCodeLength(STextStyle const& style, std::string_view raw, size_t index
 }
 
 //////////////////////////////////////////////////////////////////////////
-Tge::SColor GetCodeColor(STextStyle const& style, std::string_view raw, size_t index)
+Tge::SColor GetCodeColor(STextStyle const& style, std::string_view raw, size_t index, bool areComponentsCharacters)
 {
 	SHexColorCode const* const pHexCode{ FindHexCode(style, raw, index) };
 	Tge::SColor color{};
@@ -183,7 +256,7 @@ Tge::SColor GetCodeColor(STextStyle const& style, std::string_view raw, size_t i
 	}
 	else if (style.codes == EColorCodes::Rgb)
 	{
-		color = Tge::SColor{ static_cast<uint8_t>(raw[index + 1]), static_cast<uint8_t>(raw[index + 2]), static_cast<uint8_t>(raw[index + 3]) };
+		color = ReadRgbColor(raw, index, areComponentsCharacters);
 	}
 	else
 	{
@@ -205,7 +278,7 @@ bool IsEveryPieceUtf8(STextStyle const& style, std::string_view raw)
 
 	while (index < raw.size())
 	{
-		size_t const codeLength{ GetCodeLength(style, raw, index) };
+		size_t const codeLength{ GetCodeLength(style, raw, index, false) };
 
 		if (codeLength != 0)
 		{
@@ -227,21 +300,22 @@ bool IsEveryPieceUtf8(STextStyle const& style, std::string_view raw)
 SStyledText DecodeText(STextStyle const& style, std::string_view raw)
 {
 	bool const isAscii7{ style.encoding == ETextEncoding::Ascii7 };
+	bool const isWholeUtf8{ !isAscii7 && IsValidUtf8(raw) };
 	// Newer servers send UTF-8; older ones send Windows-1252, which is never valid UTF-8 once it uses accents.
-	bool const isUtf8{ !isAscii7 && IsEveryPieceUtf8(style, raw) };
+	bool const isUtf8{ isWholeUtf8 || (!isAscii7 && IsEveryPieceUtf8(style, raw)) };
 	SStyledText text{};
 	STextRun run{};
 	size_t index{ 0 };
 
 	while (index < raw.size())
 	{
-		size_t const codeLength{ GetCodeLength(style, raw, index) };
+		size_t const codeLength{ GetCodeLength(style, raw, index, isWholeUtf8) };
 		unsigned char const c{ static_cast<unsigned char>(raw[index]) };
 
 		if (codeLength != 0)
 		{
 			FinishRun(run, text);
-			run.color = GetCodeColor(style, raw, index);
+			run.color = GetCodeColor(style, raw, index, isWholeUtf8);
 			run.hasColor = true;
 			index += codeLength;
 		}
