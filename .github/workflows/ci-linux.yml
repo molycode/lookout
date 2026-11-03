@@ -9,11 +9,38 @@ permissions:
   contents: read
 
 jobs:
-  linux-gcc:
-    name: Linux (GCC 15, release build)
+  linux:
+    name: Linux (${{ matrix.name }})
     runs-on: ubuntu-24.04
     # The image and toolset tools/build-release.sh ships with.
     container: almalinux:9@sha256:3a3fa7f043b142bc8008c8b308d39b47d2c84008addcd52f9f9a7a82d2a90474
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GCC 15, release build
+            packages: ''
+            configure: >-
+              -DCMAKE_BUILD_TYPE=Release
+              -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/linux/gcc.cmake
+              -DLKT_STATIC_RUNTIME=ON
+          # AlmaLinux's Clang selects gcc-toolset-15's libstdc++ through its own config file.
+          - name: Clang, debug build
+            packages: llvm-toolset
+            configure: >-
+              -DCMAKE_BUILD_TYPE=Debug
+              -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/linux/clang.cmake
+          # UBSan only reports unless told not to recover.
+          - name: GCC 15, ASan and UBSan
+            packages: gcc-toolset-15-libasan-devel gcc-toolset-15-libubsan-devel
+            configure: >-
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo
+              -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/linux/gcc.cmake
+              -DLKT_SANITIZER=address,undefined
+              -DTGE_DEBUG_ENABLED=ON
+              -DTGE_ENABLE_GLOBAL_ALLOCATOR=OFF
+              -DCMAKE_C_FLAGS=-fno-sanitize-recover=all
+              -DCMAKE_CXX_FLAGS=-fno-sanitize-recover=all
     env:
       TOOLSET: gcc-toolset-15
     steps:
@@ -21,7 +48,7 @@ jobs:
         run: |
           dnf -y install dnf-plugins-core
           dnf config-manager --set-enabled crb
-          dnf -y install git bzip2 unzip "$TOOLSET-gcc-c++" "$TOOLSET-libstdc++-devel" libstdc++-static \
+          dnf -y install git bzip2 unzip "$TOOLSET-gcc-c++" "$TOOLSET-libstdc++-devel" libstdc++-static ${{ matrix.packages }} \
             libX11-devel libXext-devel libXcursor-devel libXi-devel libXfixes-devel libXrandr-devel libXrender-devel \
             libxkbcommon-devel wayland-devel wayland-protocols-devel libdecor-devel \
             mesa-libEGL-devel mesa-libGL-devel dbus-devel
@@ -52,12 +79,10 @@ jobs:
       - name: Configure
         run: |
           source "/opt/rh/$TOOLSET/enable"
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/linux/gcc.cmake \
-            -DLKT_STATIC_RUNTIME=ON \
+          cmake -S . -B build -G Ninja ${{ matrix.configure }} \
             -DLKT_AUTO_INIT_SUBMODULES=OFF \
             -DTGE_CORE_BUILD_TESTS=ON
+          echo "LSAN_OPTIONS=suppressions=$GITHUB_WORKSPACE/tools/lsan.supp" >> "$GITHUB_ENV"
 
       # Before Lookout's own build, so tge-core, which other projects share, is checked even when that build fails.
       - name: Build tge-core
