@@ -211,12 +211,16 @@ TEST_F(CGameLauncherTest, BareNameNoFolderOfPathHoldsIsNotInPath)
 // Executable on Linux, so the kernel itself refuses it; Windows refuses the extension.
 TEST_F(CGameLauncherTest, FileThatIsNoProgramIsNotRunnable)
 {
+#if defined(TGE_PLATFORM_LINUX) && defined(LKT_SANITIZER_ENABLED)
+	GTEST_SKIP() << "Under ASan on glibc 2.34, posix_spawn runs a file the kernel refuses through /bin/sh";
+#else
 	CExpectedLog const expected{ LaunchChannel, 0, 1 };
 	std::filesystem::path const file{ WriteFile("not-a-program.txt") };
 
 	std::filesystem::permissions(file, std::filesystem::perms::owner_exec, std::filesystem::perm_options::add);
 
 	EXPECT_EQ(LaunchProgram(file.string()), ELaunchError::ProgramNotRunnable);
+#endif // defined(TGE_PLATFORM_LINUX) && defined(LKT_SANITIZER_ENABLED)
 }
 
 //////////////////////////////////////////////////////////////////////////
