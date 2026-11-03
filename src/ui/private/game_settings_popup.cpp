@@ -10,6 +10,7 @@
 #include "config/install_ids.hpp"
 #include "launch/folder_option.hpp"
 #include "launch/quote_argument.hpp"
+#include "launch/split_parameters.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include "query/protocol_definition.hpp"
@@ -54,7 +55,7 @@ std::string DescribeJoinArguments(Query::SJoinCommand const& join)
 //////////////////////////////////////////////////////////////////////////
 void DrawOptionTooltip(Launch::SLaunchOption const& option)
 {
-	std::string_view const program{ option.argv.empty() ? std::string_view{} : std::string_view{ option.argv.front() } };
+	std::string_view const program{ option.argv.empty() ? std::string_view{ "" } : std::string_view{ option.argv.front() } };
 
 	ImGui::SetItemTooltip("%.*s", static_cast<int>(program.size()), program.data());
 }
@@ -67,6 +68,27 @@ void DrawError(std::string_view text, float width)
 	ImGui::TextUnformatted(text.data(), text.data() + text.size());
 	ImGui::PopTextWrapPos();
 	ImGui::PopStyleColor();
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Edited in place: ImGui keeps the field's own text while it is active, so a fresh copy each frame loses nothing.
+void DrawParameters(Browser::CBrowser& browser, Query::EGame game, std::string_view launcherId, float width)
+{
+	std::string text{ browser.GetLaunchParameters(game, launcherId) };
+
+	ImGui::SetNextItemWidth(width);
+
+	if (ImGui::InputTextWithHint("##parameters", "extra parameters", &text))
+	{
+		browser.SetLaunchParameters(game, launcherId, text);
+	}
+
+	ImGui::SetItemTooltip("Added after the program and before the arguments that join a server");
+
+	if (!Launch::SplitParameters(text).has_value())
+	{
+		DrawError(Launch::ToString(Launch::ELaunchError::BadParameters), width);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -206,17 +228,22 @@ void CGameSettingsPopup::SyncEdits(Browser::CBrowser const& browser)
 
 //////////////////////////////////////////////////////////////////////////
 // A store whose libraries hold the game but whose program Lookout cannot find asks the user where it is.
-void CGameSettingsPopup::DrawFound(Browser::CBrowser const& browser)
+void CGameSettingsPopup::DrawFound(Browser::CBrowser& browser)
 {
 	std::span<Launch::SLaunchOption const> const options{ browser.GetLaunchOptions(m_game) };
 	std::span<std::string const> const unstartable{ browser.GetUnstartableStores(m_game) };
+	float const width{ FieldEm * ImGui::GetFontSize() };
 
 	ImGui::SeparatorText("Found");
 
 	for (Launch::SLaunchOption const& option : options)
 	{
+		ImGui::PushID(option.id.c_str());
 		DrawLauncherLabel(option.name, option.location);
 		DrawOptionTooltip(option);
+		DrawParameters(browser, m_game, option.id, width);
+		ImGui::Spacing();
+		ImGui::PopID();
 	}
 
 	for (std::string const& key : unstartable)
@@ -383,6 +410,11 @@ std::optional<uint32_t> CGameSettingsPopup::DrawInstall(Browser::CBrowser& brows
 	if (!launcher.option.has_value())
 	{
 		DrawError(Launch::ToString(launcher.option.error()), width);
+	}
+
+	if (isFolder)
+	{
+		DrawParameters(browser, m_game, Config::ToLauncherId(install.id), width);
 	}
 
 	ImGui::Spacing();

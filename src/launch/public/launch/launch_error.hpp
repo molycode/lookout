@@ -11,6 +11,7 @@ enum class ELaunchError : uint8_t
 	ChosenLauncherMissing,
 	EmptyCustomCommand,
 	BadCustomCommand,
+	BadParameters,
 	BrokenInstallFolder,
 	FolderInstallUnsupported,
 	UnsupportedPassword,

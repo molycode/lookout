@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/game_install.hpp"
+#include "config/launch_parameters.hpp"
 #include "config/server_filter.hpp"
 #include "config/sort_order.hpp"
 #include "query/server_address.hpp"
@@ -14,6 +15,7 @@ struct SGameSettings final
 	SServerFilter filter{};
 	SSortOrder sort{};
 	std::vector<SGameInstall> installs{};
+	std::vector<SLaunchParameters> parameters{};
 	std::vector<Query::SServerAddress> favourites{};
 
 	bool operator==(SGameSettings const&) const = default;

@@ -449,6 +449,40 @@ TEST_F(CBrowserTest, LastListedGameStaysListed)
 	m_browser.Terminate();
 }
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserTest, JoinAddsTheLaunchersParametersBeforeTheJoinArguments)
+{
+	Query::SServerAddress const address{ 0xCB007107, 31510 };
+
+	Initialize();
+	m_browser.SetLaunchParameters(Fixtures::GetGameId("kingpin"), "install:1", "-windowed \"+set name\"");
+	ASSERT_TRUE(m_browser.Join(address, {}, "install:1").has_value());
+
+	EXPECT_EQ(WaitForGameLog("-windowed\n+set name\n+connect\n203.0.113.7:31510\n"), "-windowed\n+set name\n+connect\n203.0.113.7:31510\n");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserTest, ParametersThatCannotBeSplitRefuseTheJoin)
+{
+	CExpectedLog const expected{ BrowserChannel, 1, 0 };
+	Query::SServerAddress const address{ 0xCB007107, 31510 };
+
+	Initialize();
+	m_browser.SetLaunchParameters(Fixtures::GetGameId("kingpin"), "install:1", "\"unclosed");
+
+	EXPECT_EQ(m_browser.Join(address, {}, "install:1").error_or(Launch::ELaunchError::NoLauncher), Launch::ELaunchError::BadParameters);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserTest, RemovedInstallTakesItsParameters)
+{
+	Initialize();
+	m_browser.SetLaunchParameters(Fixtures::GetGameId("kingpin"), "install:1", "-windowed");
+	m_browser.RemoveInstall(Fixtures::GetGameId("kingpin"), 1);
+
+	EXPECT_TRUE(m_browser.GetLaunchParameters(Fixtures::GetGameId("kingpin"), "install:1").empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Its catalog's masters are on loopback, so the refresh a replace may start never leaves the machine; the suite's
 // catalog is put back afterwards.
 class CBrowserCatalogTest : public CBrowserTest

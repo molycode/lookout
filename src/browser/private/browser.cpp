@@ -11,6 +11,7 @@
 #include "launch/folder_option.hpp"
 #include "launch/found_stores.hpp"
 #include "launch/home_path.hpp"
+#include "launch/split_parameters.hpp"
 #include "launch/launch_discovery.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
@@ -423,11 +424,35 @@ void CBrowser::RemoveInstall(Query::EGame game, uint32_t id)
 		Config::SGameSettings& settings{ m_settings.games[ToIndex(game)] };
 		std::vector<SInstallLauncher>& launchers{ m_launchStates[ToIndex(game)].installs };
 
+		std::erase_if(settings.parameters, [id](Config::SLaunchParameters const& entry) { return entry.launcherId == Config::ToLauncherId(id); });
 		settings.installs.erase(settings.installs.begin() + static_cast<std::ptrdiff_t>(*index));
 		launchers.erase(launchers.begin() + static_cast<std::ptrdiff_t>(*index));
 		UpdateJoinLauncher(game);
 		m_settingsStore.Save(m_settings);
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Saved with the rest, as the filter is: it changes with every key typed. Empty parameters are no entry.
+void CBrowser::SetLaunchParameters(Query::EGame game, std::string_view launcherId, std::string_view parameters)
+{
+	std::vector<Config::SLaunchParameters>& entries{ m_settings.games[ToIndex(game)].parameters };
+	auto const it{ std::ranges::find(entries, launcherId, &Config::SLaunchParameters::launcherId) };
+
+	if (it != entries.end() && parameters.empty())
+	{
+		entries.erase(it);
+	}
+	else if (it != entries.end())
+	{
+		it->text = parameters;
+	}
+	else if (!parameters.empty())
+	{
+		entries.emplace_back(Config::SLaunchParameters{ std::string{ launcherId }, std::string{ parameters } });
+	}
+
+	UpdateJoinLauncher(game);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -699,6 +724,15 @@ std::span<SInstallLauncher const> CBrowser::GetInstallLaunchers(Query::EGame gam
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::string_view CBrowser::GetLaunchParameters(Query::EGame game, std::string_view launcherId) const
+{
+	std::vector<Config::SLaunchParameters> const& entries{ m_settings.games[ToIndex(game)].parameters };
+	auto const it{ std::ranges::find(entries, launcherId, &Config::SLaunchParameters::launcherId) };
+
+	return (it != entries.end()) ? std::string_view{ it->text } : std::string_view{};
+}
+
+//////////////////////////////////////////////////////////////////////////
 std::span<std::string const> CBrowser::GetUnstartableStores(Query::EGame game) const
 {
 	return m_launchStates[ToIndex(game)].unstartableStores;
@@ -715,7 +749,7 @@ std::expected<Launch::SLaunchOption, Launch::ELaunchError> CBrowser::ResolveLaun
 {
 	SLaunchState const& state{ m_launchStates[ToIndex(game)] };
 
-	return ChooseLauncher(state.options, state.installs, launcherId);
+	return WithParameters(game, ChooseLauncher(state.options, state.installs, launcherId));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -792,11 +826,31 @@ void CBrowser::FindStoresAgain()
 }
 
 //////////////////////////////////////////////////////////////////////////
+// After the program, or the store's arguments, and before the join arguments the launcher adds.
+std::expected<Launch::SLaunchOption, Launch::ELaunchError> CBrowser::WithParameters(Query::EGame game,
+	std::expected<Launch::SLaunchOption, Launch::ELaunchError> launcher) const
+{
+	std::string_view const parameters{ launcher.has_value() ? GetLaunchParameters(game, launcher->id) : std::string_view{} };
+	std::expected<std::vector<std::string>, Launch::ELaunchError> const split{ Launch::SplitParameters(parameters) };
+
+	if (launcher.has_value() && split.has_value())
+	{
+		launcher->argv.insert(launcher->argv.end(), split->begin(), split->end());
+	}
+	else if (launcher.has_value())
+	{
+		launcher = std::unexpected{ split.error() };
+	}
+
+	return launcher;
+}
+
+//////////////////////////////////////////////////////////////////////////
 void CBrowser::UpdateJoinLauncher(Query::EGame game)
 {
 	SLaunchState& state{ m_launchStates[ToIndex(game)] };
 
-	state.joinLauncher = ChooseLauncher(state.options, state.installs, {});
+	state.joinLauncher = WithParameters(game, ChooseLauncher(state.options, state.installs, {}));
 }
 
 //////////////////////////////////////////////////////////////////////////

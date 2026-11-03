@@ -71,6 +71,7 @@ public:
 	void SetInstallFolder(Query::EGame game, uint32_t id, std::string_view folder);
 	void RemoveInstall(Query::EGame game, uint32_t id);
 	void SetStoreProgram(std::string_view key, std::string_view program);
+	void SetLaunchParameters(Query::EGame game, std::string_view launcherId, std::string_view parameters);
 	void SetGameListed(Query::EGame game, bool isListed);
 	void MoveGame(Query::EGame game, Query::EGame target);
 	// False, with nothing touched, when the catalog is the one that runs.
@@ -94,6 +95,7 @@ public:
 	std::span<Launch::SLaunchOption const> GetLaunchOptions(Query::EGame game) const;
 	std::span<SInstallLauncher const> GetInstallLaunchers(Query::EGame game) const;
 	std::span<std::string const> GetUnstartableStores(Query::EGame game) const;
+	std::string_view GetLaunchParameters(Query::EGame game, std::string_view launcherId) const;
 	std::expected<Launch::SLaunchOption, Launch::ELaunchError> const& GetJoinLauncher(Query::EGame game) const;
 	std::expected<Launch::SLaunchOption, Launch::ELaunchError> ResolveLauncher(Query::EGame game, std::string_view launcherId) const;
 
@@ -104,6 +106,8 @@ private:
 	SInstallLauncher ResolveInstall(Query::EGame game, Config::SGameInstall const& install) const;
 	std::optional<size_t> FindInstallIndex(Query::EGame game, uint32_t id) const;
 	void FindStoresAgain();
+	std::expected<Launch::SLaunchOption, Launch::ELaunchError> WithParameters(Query::EGame game,
+		std::expected<Launch::SLaunchOption, Launch::ELaunchError> launcher) const;
 	void UpdateJoinLauncher(Query::EGame game);
 	void Recount(Query::EGame game);
 	void RebuildRows();

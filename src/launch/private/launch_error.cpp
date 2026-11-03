@@ -8,9 +8,13 @@ namespace
 #if defined(TGE_PLATFORM_WINDOWS)
 constexpr std::string_view BadCommandText{ "the command cannot be split: close every quote, and put any argument holding a space or one of & | < > ^ % in "
 	"double quotes, writing \\\" for a quote inside them" };
+constexpr std::string_view BadParametersText{ "the parameters cannot be split: close every quote, and put any parameter holding a space or one of & | < > ^ % "
+	"in double quotes, writing \\\" for a quote inside them" };
 #elif defined(TGE_PLATFORM_LINUX)
 constexpr std::string_view BadCommandText{ "the command cannot be split: close every quote, put any argument holding a space or one of ' ~ $ ` ; | & < > ( ) * ? # "
 	"in double quotes, and inside them write \\ for a backslash" };
+constexpr std::string_view BadParametersText{ "the parameters cannot be split: close every quote, put any parameter holding a space or one of ' ~ $ ` ; | & < > "
+	"( ) * ? # in double quotes, and inside them write \\ for a backslash" };
 #else
 #error "Unsupported platform"
 #endif // defined(TGE_PLATFORM_WINDOWS)
@@ -34,6 +38,9 @@ std::string_view ToString(ELaunchError error)
 			break;
 		case ELaunchError::BadCustomCommand:
 			text = BadCommandText;
+			break;
+		case ELaunchError::BadParameters:
+			text = BadParametersText;
 			break;
 		case ELaunchError::BrokenInstallFolder:
 			text = "the folder does not hold the game's files";

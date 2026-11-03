@@ -71,6 +71,7 @@ SSettings MakeVariedSettings()
 			SGameInstall{ 7 + offset, {}, EInstallKind::Folder, std::format("{}/{}", FolderRoot, index) }
 		};
 		game.favourites = { Query::SServerAddress{ Favourite.ipv4 + offset, Favourite.port }, OtherFavourite };
+		game.parameters = { SLaunchParameters{ std::format("install:{}", 7 + offset), std::format("+set fov {}", 90 + offset) } };
 	}
 
 	return settings;

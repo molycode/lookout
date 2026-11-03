@@ -39,6 +39,7 @@ constexpr std::string_view GameOrderKey{ "gameOrder" };
 constexpr uint32_t MaxAutoRefreshSeconds{ 3600 };
 constexpr std::string_view InstallsKey{ "installs" };
 constexpr std::string_view StoresKey{ "stores" };
+constexpr std::string_view ParametersKey{ "parameters" };
 
 //////////////////////////////////////////////////////////////////////////
 constexpr std::string_view ToName(ESortColumn column)
@@ -388,6 +389,33 @@ void ReadLocatedStores(Json const& root, std::vector<SLocatedStore>& located, SS
 }
 
 //////////////////////////////////////////////////////////////////////////
+// By launcher id, so an install's or a found launcher's parameters stay with it whatever else is listed.
+void ReadParameters(Json const& object, std::string_view path, std::vector<SLaunchParameters>& parameters, SSettingsDocument& document)
+{
+	ReadValue(object, path, ParametersKey, document, [path, &parameters, &document](Json const& json)
+	{
+		bool const isObject{ json.is_object() };
+
+		if (isObject)
+		{
+			for (auto const& [launcherId, text] : json.items())
+			{
+				if (!launcherId.empty() && !launcherId.contains('\0') && IsCleanString(text))
+				{
+					parameters.emplace_back(SLaunchParameters{ launcherId, text.get<std::string>() });
+				}
+				else
+				{
+					Reject(document, std::format("{}.{}.{}", path, ParametersKey, launcherId));
+				}
+			}
+		}
+
+		return isObject;
+	});
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Format 1 kept one custom command per game: it becomes an install.
 void MigrateCustomCommand(Json const& object, std::string_view path, SGameSettings& game, SSettingsDocument& document)
 {
@@ -421,6 +449,7 @@ void ReadGame(Json const& object, std::string_view path, SGameSettings& game, SS
 	}
 
 	ReadInstalls(object, path, game.installs, document);
+	ReadParameters(object, path, game.parameters, document);
 	ReadFavourites(object, path, game.favourites, document);
 	MigrateCustomCommand(object, path, game, document);
 }
@@ -639,6 +668,19 @@ Json WriteGame(SGameSettings const& game)
 	object["filter"] = WriteFilter(game.filter);
 	object["sort"] = WriteSort(game.sort);
 	object[InstallsKey] = std::move(installs);
+
+	if (!game.parameters.empty())
+	{
+		Json parameters = Json::object();
+
+		for (SLaunchParameters const& entry : game.parameters)
+		{
+			parameters[entry.launcherId] = entry.text;
+		}
+
+		object[ParametersKey] = std::move(parameters);
+	}
+
 	object["favourites"] = std::move(favourites);
 
 	return object;

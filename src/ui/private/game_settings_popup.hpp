@@ -43,7 +43,7 @@ private:
 	void TakeDialogResult(Browser::CBrowser& browser, std::string& message);
 	void UsePickedPath(Browser::CBrowser& browser, std::string_view path);
 	void SyncEdits(Browser::CBrowser const& browser);
-	void DrawFound(Browser::CBrowser const& browser);
+	void DrawFound(Browser::CBrowser& browser);
 	void DrawInstalls(Browser::CBrowser& browser);
 	void DrawProtocol() const;
 	std::optional<uint32_t> DrawInstall(Browser::CBrowser& browser, SInstallEdit& edit, Config::SGameInstall const& install,
