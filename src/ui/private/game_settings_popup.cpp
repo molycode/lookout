@@ -13,6 +13,7 @@
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include "query/protocol_definition.hpp"
+#include "query/store_catalog.hpp"
 #include "query/utf8.hpp"
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -168,6 +169,10 @@ void CGameSettingsPopup::UsePickedPath(Browser::CBrowser& browser, std::string_v
 	{
 		browser.SetInstallFolder(m_dialogGame, m_dialogInstallId, path);
 	}
+	else if (m_dialogPurpose == EFileDialogPurpose::LocateStore)
+	{
+		browser.SetStoreProgram(m_dialogStore, path);
+	}
 	else
 	{
 		std::string const command{ Launch::QuoteArgument(path) };
@@ -200,9 +205,11 @@ void CGameSettingsPopup::SyncEdits(Browser::CBrowser const& browser)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CGameSettingsPopup::DrawFound(Browser::CBrowser const& browser) const
+// A store whose libraries hold the game but whose program Lookout cannot find asks the user where it is.
+void CGameSettingsPopup::DrawFound(Browser::CBrowser const& browser)
 {
 	std::span<Launch::SLaunchOption const> const options{ browser.GetLaunchOptions(m_game) };
+	std::span<std::string const> const unstartable{ browser.GetUnstartableStores(m_game) };
 
 	ImGui::SeparatorText("Found");
 
@@ -212,7 +219,35 @@ void CGameSettingsPopup::DrawFound(Browser::CBrowser const& browser) const
 		DrawOptionTooltip(option);
 	}
 
-	if (options.empty())
+	for (std::string const& key : unstartable)
+	{
+		Query::SStoreDefinition const* const pStore{ Query::FindStore(key) };
+		std::string const name{ (pStore != nullptr) ? pStore->name : key };
+
+		ImGui::PushID(key.c_str());
+		ImGui::BeginGroup();
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted(name.c_str());
+		ImGui::SameLine(0.0f, 0.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColors().textDisabled);
+		ImGui::TextUnformatted(" · not found");
+		ImGui::PopStyleColor();
+		ImGui::EndGroup();
+		ImGui::SetItemTooltip("%s holds %s, but Lookout cannot find %s itself to start it with", name.c_str(), Query::GetGame(m_game).name.c_str(), name.c_str());
+		ImGui::SameLine();
+		ImGui::BeginDisabled(IsFileDialogPending());
+
+		if (ImGui::Button("Locate…"))
+		{
+			m_dialogStore = key;
+			OpenDialog(EFileDialogPurpose::LocateStore, 0, {});
+		}
+
+		ImGui::EndDisabled();
+		ImGui::PopID();
+	}
+
+	if (options.empty() && unstartable.empty())
 	{
 		ImGui::PushStyleColor(ImGuiCol_Text, GetThemeColors().textDisabled);
 		ImGui::TextUnformatted("None found");
@@ -363,7 +398,7 @@ void CGameSettingsPopup::OpenDialog(EFileDialogPurpose purpose, uint32_t install
 	m_dialogInstallId = installId;
 	m_dialogPurpose = purpose;
 
-	if (purpose == EFileDialogPurpose::PickProgram)
+	if (purpose == EFileDialogPurpose::PickProgram || purpose == EFileDialogPurpose::LocateStore)
 	{
 		OpenProgramDialog(m_pWindow);
 	}

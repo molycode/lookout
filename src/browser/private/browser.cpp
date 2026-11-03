@@ -60,6 +60,19 @@ bool IsUnchanged(Query::SGameDefinition old, Query::SProtocolDefinition oldProto
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::vector<Launch::SLocatedProgram> ToLocatedPrograms(std::span<Config::SLocatedStore const> located)
+{
+	std::vector<Launch::SLocatedProgram> programs{};
+
+	for (Config::SLocatedStore const& store : located)
+	{
+		programs.emplace_back(Launch::SLocatedProgram{ store.key, std::filesystem::path{ store.program } });
+	}
+
+	return programs;
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Loaded games have no ids yet: the catalog numbers them by position.
 bool IsRunning(std::span<Query::SProtocolDefinition const> protocols, std::span<Query::SGameDefinition const> games)
 {
@@ -85,9 +98,9 @@ void CBrowser::Initialize(std::string_view configDir, std::string_view logsDir, 
 	m_hasChanged.assign(numGames, false);
 	m_autoRefresh.Initialize(numGames);
 	m_environment = std::move(environment);
-	m_stores = Launch::FindStores(Query::GetStoreCatalog(), m_environment);
 	m_settingsStore.Initialize(configDir);
 	m_settings = m_settingsStore.Load();
+	m_stores = Launch::FindStores(Query::GetStoreCatalog(), m_environment, ToLocatedPrograms(m_settings.locatedStores));
 	m_launcher.Initialize(logsDir);
 
 	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
@@ -418,6 +431,26 @@ void CBrowser::RemoveInstall(Query::EGame game, uint32_t id)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Saved at once; every game's store entries follow, as a store serves many.
+void CBrowser::SetStoreProgram(std::string_view key, std::string_view program)
+{
+	std::vector<Config::SLocatedStore>& located{ m_settings.locatedStores };
+	auto const it{ std::ranges::find(located, key, &Config::SLocatedStore::key) };
+
+	if (it != located.end())
+	{
+		it->program = program;
+	}
+	else
+	{
+		located.emplace_back(Config::SLocatedStore{ std::string{ key }, std::string{ program } });
+	}
+
+	m_settingsStore.Save(m_settings);
+	FindStoresAgain();
+}
+
+//////////////////////////////////////////////////////////////////////////
 void CBrowser::SetGameListed(Query::EGame game, bool isListed)
 {
 	Config::SGameSettings& settings{ m_settings.games[ToIndex(game)] };
@@ -666,6 +699,12 @@ std::span<SInstallLauncher const> CBrowser::GetInstallLaunchers(Query::EGame gam
 }
 
 //////////////////////////////////////////////////////////////////////////
+std::span<std::string const> CBrowser::GetUnstartableStores(Query::EGame game) const
+{
+	return m_launchStates[ToIndex(game)].unstartableStores;
+}
+
+//////////////////////////////////////////////////////////////////////////
 std::expected<Launch::SLaunchOption, Launch::ELaunchError> const& CBrowser::GetJoinLauncher(Query::EGame game) const
 {
 	return m_launchStates[ToIndex(game)].joinLauncher;
@@ -695,6 +734,7 @@ void CBrowser::SetUpGame(Query::SGameDefinition const& game)
 	}
 
 	state.options = Launch::FindLaunchOptions(game, m_environment, m_stores);
+	state.unstartableStores = Launch::FindStoresWithoutTheirProgram(game, m_stores);
 	state.installs.clear();
 
 	for (Config::SGameInstall const& install : m_settings.games[index].installs)
@@ -739,11 +779,14 @@ std::optional<size_t> CBrowser::FindInstallIndex(Query::EGame game, uint32_t id)
 // A game whose description did not change keeps its list, but what it offers through the stores follows them.
 void CBrowser::FindStoresAgain()
 {
-	m_stores = Launch::FindStores(Query::GetStoreCatalog(), m_environment);
+	m_stores = Launch::FindStores(Query::GetStoreCatalog(), m_environment, ToLocatedPrograms(m_settings.locatedStores));
 
 	for (Query::SGameDefinition const& game : Query::GetGameCatalog())
 	{
-		m_launchStates[ToIndex(game.game)].options = Launch::FindLaunchOptions(game, m_environment, m_stores);
+		SLaunchState& state{ m_launchStates[ToIndex(game.game)] };
+
+		state.options = Launch::FindLaunchOptions(game, m_environment, m_stores);
+		state.unstartableStores = Launch::FindStoresWithoutTheirProgram(game, m_stores);
 		UpdateJoinLauncher(game.game);
 	}
 }

@@ -38,6 +38,7 @@ constexpr std::string_view FavouritesKey{ "favourites" };
 constexpr std::string_view GameOrderKey{ "gameOrder" };
 constexpr uint32_t MaxAutoRefreshSeconds{ 3600 };
 constexpr std::string_view InstallsKey{ "installs" };
+constexpr std::string_view StoresKey{ "stores" };
 
 //////////////////////////////////////////////////////////////////////////
 constexpr std::string_view ToName(ESortColumn column)
@@ -355,6 +356,38 @@ void ReadInstalls(Json const& object, std::string_view path, std::vector<SGameIn
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Programs the user located for stores Lookout could not find, by store key.
+void ReadLocatedStores(Json const& root, std::vector<SLocatedStore>& located, SSettingsDocument& document)
+{
+	ReadValue(root, {}, StoresKey, document, [&located, &document](Json const& json)
+	{
+		bool const isObject{ json.is_object() };
+
+		if (isObject)
+		{
+			for (auto const& [key, entry] : json.items())
+			{
+				std::string const path{ std::format("{}.{}", StoresKey, key) };
+				Json::const_iterator const program{ entry.is_object() ? entry.find("program") : entry.cend() };
+				bool const isValid{ !key.empty() && !key.contains('\0') && program != entry.cend() && IsCleanString(*program)
+					&& std::filesystem::path{ program->get_ref<std::string const&>() }.is_absolute() };
+
+				if (isValid)
+				{
+					located.emplace_back(SLocatedStore{ key, program->get<std::string>() });
+				}
+				else
+				{
+					Reject(document, path);
+				}
+			}
+		}
+
+		return isObject;
+	});
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Format 1 kept one custom command per game: it becomes an install.
 void MigrateCustomCommand(Json const& object, std::string_view path, SGameSettings& game, SSettingsDocument& document)
 {
@@ -529,6 +562,7 @@ void ReadDocument(Json const& root, SSettingsDocument& document)
 		}
 	}
 
+	ReadLocatedStores(root, document.settings.locatedStores, document);
 	ReadGameOrder(root, document);
 	CheckListedGames(document);
 }
@@ -710,6 +744,18 @@ std::string WriteSettingsJson(SSettings const& settings, std::string_view kept)
 	root["games"] = std::move(games);
 	root[GameOrderKey] = std::move(gameOrder);
 	root["autoRefreshSeconds"] = settings.autoRefreshSeconds;
+
+	if (!settings.locatedStores.empty())
+	{
+		Json stores = Json::object();
+
+		for (SLocatedStore const& store : settings.locatedStores)
+		{
+			stores[store.key] = Json{ { "program", store.program } };
+		}
+
+		root[StoresKey] = std::move(stores);
+	}
 
 	// Replacing invalid UTF-8 rather than failing, which without exceptions would be an abort.
 	return root.dump(IndentWidth, IndentCharacter, EnsureAscii, Json::error_handler_t::replace) + '\n';

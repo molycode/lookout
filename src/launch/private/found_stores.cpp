@@ -3,6 +3,7 @@
 #include "steam_libraries.hpp"
 #include <tge/platform.hpp>
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -11,7 +12,6 @@
 #include "registry.hpp"
 #elif defined(TGE_PLATFORM_LINUX)
 #include <expected>
-#include <optional>
 #include <string_view>
 #else
 #error "Unsupported platform"
@@ -43,23 +43,34 @@ std::vector<std::filesystem::path> ReadLibraryFolders(Query::EStoreLibraries lib
 
 //////////////////////////////////////////////////////////////////////////
 // Two ways to the same install, such as Steam's two registry values, count once.
-bool IsFound(std::vector<SFoundStore> const& found, std::string_view key, std::filesystem::path const& program)
+bool IsFound(std::vector<SFoundStore> const& found, std::string_view key, std::filesystem::path const& folder)
 {
-	return std::ranges::any_of(found, [key, &program](SFoundStore const& store)
+	return std::ranges::any_of(found, [key, &folder](SFoundStore const& store)
 	{
 		std::error_code error{};
 
-		return store.key == key && std::filesystem::equivalent(store.program, program, error) && error.value() == 0;
+		return store.key == key && std::filesystem::equivalent(store.folder, folder, error) && error.value() == 0;
 	});
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Without a program the store still counts, so a game its libraries hold can ask the user where the program is.
 void AddStore(Query::SStoreDefinition const& store, std::filesystem::path const& folder, std::filesystem::path const& program, std::vector<SFoundStore>& found)
 {
-	if (!IsFound(found, store.key, program))
+	if (!IsFound(found, store.key, folder))
 	{
-		found.emplace_back(SFoundStore{ store.key, store.name, store.arguments, store.libraries, program, ReadLibraryFolders(store.libraries, folder) });
+		found.emplace_back(SFoundStore{ store.key, store.name, store.arguments, store.libraries, program, ReadLibraryFolders(store.libraries, folder), folder });
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// One the user located, however the store file would look for it; nothing when it no longer runs.
+std::optional<std::filesystem::path> FindLocatedProgram(std::span<SLocatedProgram const> located, std::string_view key)
+{
+	auto const it{ std::ranges::find(located, key, &SLocatedProgram::key) };
+
+	return (it != located.end()) ? std::optional<std::filesystem::path>{ CheckExecutable(it->program).has_value() ? it->program : std::filesystem::path{} }
+		: std::nullopt;
 }
 
 #if defined(TGE_PLATFORM_WINDOWS)
@@ -70,8 +81,10 @@ ERegistryRoot ToRegistryRoot(Query::EStoreRegistryRoot root)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void FindOnWindows(Query::SStoreDefinition const& store, std::vector<SFoundStore>& found)
+void FindOnWindows(Query::SStoreDefinition const& store, std::span<SLocatedProgram const> located, std::vector<SFoundStore>& found)
 {
+	std::optional<std::filesystem::path> const locatedProgram{ FindLocatedProgram(located, store.key) };
+
 	for (Query::SWindowsStoreInstall const& install : store.onWindows)
 	{
 		std::filesystem::path folder{ ReadRegistryFolder(ToRegistryRoot(install.folder.root), install.folder.key, install.folder.value) };
@@ -79,9 +92,11 @@ void FindOnWindows(Query::SStoreDefinition const& store, std::vector<SFoundStore
 
 		folder.make_preferred();
 
-		if (!folder.empty() && std::filesystem::is_directory(folder, error) && CheckExecutable(folder / install.program).has_value())
+		if (!folder.empty() && std::filesystem::is_directory(folder, error))
 		{
-			AddStore(store, folder, folder / install.program, found);
+			bool const hasProgram{ CheckExecutable(folder / install.program).has_value() };
+
+			AddStore(store, folder, locatedProgram.value_or(hasProgram ? folder / install.program : std::filesystem::path{}), found);
 		}
 	}
 }
@@ -134,18 +149,20 @@ std::optional<std::filesystem::path> FindStoreProgram(std::vector<std::string> c
 }
 
 //////////////////////////////////////////////////////////////////////////
-void FindOnLinux(Query::SStoreDefinition const& store, SLaunchEnvironment const& environment, std::vector<SFoundStore>& found)
+void FindOnLinux(Query::SStoreDefinition const& store, SLaunchEnvironment const& environment, std::span<SLocatedProgram const> located,
+	std::vector<SFoundStore>& found)
 {
+	std::optional<std::filesystem::path> const locatedProgram{ FindLocatedProgram(located, store.key) };
+
 	for (Query::SLinuxStoreInstall const& install : store.onLinux)
 	{
 		std::optional<std::filesystem::path> const folder{ ExpandStorePath(install.folder, environment) };
 		std::error_code error{};
-		bool const hasFolder{ folder.has_value() && std::filesystem::is_directory(*folder, error) };
-		std::optional<std::filesystem::path> const program{ hasFolder ? FindStoreProgram(install.programs, environment) : std::nullopt };
 
-		if (program.has_value())
+		if (folder.has_value() && std::filesystem::is_directory(*folder, error))
 		{
-			AddStore(store, *folder, *program, found);
+			AddStore(store, *folder, locatedProgram.has_value() ? *locatedProgram : FindStoreProgram(install.programs, environment).value_or(std::filesystem::path{}),
+				found);
 		}
 	}
 }
@@ -156,16 +173,17 @@ void FindOnLinux(Query::SStoreDefinition const& store, SLaunchEnvironment const&
 
 //////////////////////////////////////////////////////////////////////////
 // Each install of a store pairs a folder with its own program, so a game only that install holds starts through it.
-std::vector<SFoundStore> FindStores(std::span<Query::SStoreDefinition const> stores, SLaunchEnvironment const& environment)
+std::vector<SFoundStore> FindStores(std::span<Query::SStoreDefinition const> stores, SLaunchEnvironment const& environment,
+	std::span<SLocatedProgram const> located)
 {
 	std::vector<SFoundStore> found{};
 
 	for (Query::SStoreDefinition const& store : stores)
 	{
 #if defined(TGE_PLATFORM_WINDOWS)
-		FindOnWindows(store, found);
+		FindOnWindows(store, located, found);
 #elif defined(TGE_PLATFORM_LINUX)
-		FindOnLinux(store, environment, found);
+		FindOnLinux(store, environment, located, found);
 #else
 #error "Unsupported platform"
 #endif // defined(TGE_PLATFORM_WINDOWS)

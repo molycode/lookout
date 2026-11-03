@@ -70,6 +70,7 @@ public:
 	void SetInstallCommand(Query::EGame game, uint32_t id, std::string_view command);
 	void SetInstallFolder(Query::EGame game, uint32_t id, std::string_view folder);
 	void RemoveInstall(Query::EGame game, uint32_t id);
+	void SetStoreProgram(std::string_view key, std::string_view program);
 	void SetGameListed(Query::EGame game, bool isListed);
 	void MoveGame(Query::EGame game, Query::EGame target);
 	// False, with nothing touched, when the catalog is the one that runs.
@@ -92,6 +93,7 @@ public:
 	bool IsFavourite(Query::SServerAddress const& address) const;
 	std::span<Launch::SLaunchOption const> GetLaunchOptions(Query::EGame game) const;
 	std::span<SInstallLauncher const> GetInstallLaunchers(Query::EGame game) const;
+	std::span<std::string const> GetUnstartableStores(Query::EGame game) const;
 	std::expected<Launch::SLaunchOption, Launch::ELaunchError> const& GetJoinLauncher(Query::EGame game) const;
 	std::expected<Launch::SLaunchOption, Launch::ELaunchError> ResolveLauncher(Query::EGame game, std::string_view launcherId) const;
 

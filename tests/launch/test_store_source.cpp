@@ -2,6 +2,8 @@
 #include "store_source.hpp"
 #include "temp_dir.hpp"
 #include "launch/found_store.hpp"
+#include "launch/found_stores.hpp"
+#include "query/game_definition.hpp"
 #include "query/store_id.hpp"
 #include <tge/testing/expected_log.hpp>
 #include <gtest/gtest.h>
@@ -108,6 +110,40 @@ TEST_F(CStoreSourceTest, StoreFoundTwiceOffersTheGameOnce)
 	m_stores.emplace_back(m_stores.front());
 
 	EXPECT_EQ(Find().size(), 1u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CStoreSourceTest, StoreWithoutItsProgramOffersNothing)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 0 };
+
+	m_stores.front().program.clear();
+
+	EXPECT_TRUE(Find().empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CStoreSourceTest, StoreWithoutItsProgramThatHoldsTheGameIsNamed)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 0 };
+	Query::SGameDefinition game{};
+
+	game.launch = m_hints;
+	m_stores.front().program.clear();
+
+	EXPECT_EQ(FindStoresWithoutTheirProgram(game, m_stores), std::vector<std::string>{ "steam" });
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CStoreSourceTest, StoreAnotherInstallStartsIsNotNamed)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 0 };
+	Query::SGameDefinition game{};
+
+	game.launch = m_hints;
+	m_stores.emplace_back(m_stores.front()).program.clear();
+
+	EXPECT_TRUE(FindStoresWithoutTheirProgram(game, m_stores).empty());
 }
 
 //////////////////////////////////////////////////////////////////////////

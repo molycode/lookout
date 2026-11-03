@@ -60,7 +60,7 @@ protected:
 
 	std::vector<SFoundStore> Find() const
 	{
-		return FindStores(std::span<Query::SStoreDefinition const>{ &m_store, 1 }, m_environment);
+		return FindStores(std::span<Query::SStoreDefinition const>{ &m_store, 1 }, m_environment, m_located);
 	}
 
 #if defined(TGE_PLATFORM_WINDOWS)
@@ -87,6 +87,7 @@ protected:
 	std::filesystem::path m_root{};
 	SLaunchEnvironment m_environment{};
 	Query::SStoreDefinition m_store{};
+	std::vector<SLocatedProgram> m_located{};
 };
 
 #if defined(TGE_PLATFORM_LINUX)
@@ -114,12 +115,46 @@ TEST_F(CFoundStoresTest, ProgramWithoutItsFolderIsNotFound)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CFoundStoresTest, FolderWithoutItsProgramIsNotFound)
+// So a game its libraries hold can ask where the program is.
+TEST_F(CFoundStoresTest, FolderWithoutItsProgramIsFoundWithoutOne)
 {
 	std::filesystem::create_directories(m_environment.dataHome / "Steam");
 	m_store.onLinux = { Query::SLinuxStoreInstall{ "{dataHome}/Steam", { "steam" } } };
 
-	EXPECT_TRUE(Find().empty());
+	std::vector<SFoundStore> const stores{ Find() };
+
+	ASSERT_EQ(stores.size(), 1u);
+	EXPECT_TRUE(stores.front().program.empty());
+	EXPECT_EQ(stores.front().libraryFolders, std::vector<std::filesystem::path>{ m_environment.dataHome / "Steam" });
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CFoundStoresTest, LocatedProgramWinsOverTheFilesPrograms)
+{
+	std::filesystem::create_directories(m_environment.dataHome / "Steam");
+	WriteProgram(m_root / "bin" / "steam");
+	WriteProgram(m_root / "elsewhere" / "steam.sh");
+	m_store.onLinux = { Query::SLinuxStoreInstall{ "{dataHome}/Steam", { "steam" } } };
+	m_located = { SLocatedProgram{ "steam", m_root / "elsewhere" / "steam.sh" } };
+
+	std::vector<SFoundStore> const stores{ Find() };
+
+	ASSERT_EQ(stores.size(), 1u);
+	EXPECT_EQ(stores.front().program, m_root / "elsewhere" / "steam.sh");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CFoundStoresTest, LocatedProgramThatIsGoneLeavesTheStoreWithoutOne)
+{
+	std::filesystem::create_directories(m_environment.dataHome / "Steam");
+	WriteProgram(m_root / "bin" / "steam");
+	m_store.onLinux = { Query::SLinuxStoreInstall{ "{dataHome}/Steam", { "steam" } } };
+	m_located = { SLocatedProgram{ "steam", m_root / "gone" / "steam.sh" } };
+
+	std::vector<SFoundStore> const stores{ Find() };
+
+	ASSERT_EQ(stores.size(), 1u);
+	EXPECT_TRUE(stores.front().program.empty());
 }
 
 //////////////////////////////////////////////////////////////////////////

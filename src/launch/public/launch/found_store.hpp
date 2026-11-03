@@ -15,5 +15,6 @@ struct SFoundStore final
 	Query::EStoreLibraries libraries{ Query::EStoreLibraries::Steam };
 	std::filesystem::path program{};
 	std::vector<std::filesystem::path> libraryFolders{};
+	std::filesystem::path folder{};
 };
 } // namespace Lkt::Launch

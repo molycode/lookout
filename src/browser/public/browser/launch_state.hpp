@@ -4,6 +4,7 @@
 #include "launch/launch_error.hpp"
 #include "launch/launch_option.hpp"
 #include <expected>
+#include <string>
 #include <vector>
 
 namespace Lkt::Browser
@@ -12,6 +13,7 @@ struct SLaunchState final
 {
 	std::vector<Launch::SLaunchOption> options{};
 	std::vector<SInstallLauncher> installs{};
+	std::vector<std::string> unstartableStores{};
 	std::expected<Launch::SLaunchOption, Launch::ELaunchError> joinLauncher{ std::unexpected{ Launch::ELaunchError::NoLauncher } };
 };
 } // namespace Lkt::Browser

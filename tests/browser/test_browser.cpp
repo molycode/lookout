@@ -791,6 +791,21 @@ TEST_F(CBrowserStoreTest, StoreAReloadAddsReachesTheLaunchers)
 
 	EXPECT_TRUE(std::ranges::contains(m_browser.GetLaunchOptions(Fixtures::GetGameId("kingpin")), "store:steam", &Launch::SLaunchOption::id));
 }
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserStoreTest, LocatedProgramStartsTheStoreLookoutCouldNotFind)
+{
+	Query::SStoreDefinition store{ MakeStore() };
+
+	store.onLinux.front().programs = { "steam-that-is-nowhere" };
+	InstallInSteam();
+	UseStores({ store });
+	Initialize();
+	ASSERT_EQ(m_browser.GetUnstartableStores(Fixtures::GetGameId("kingpin")).size(), 1u);
+	m_browser.SetStoreProgram("steam", m_game.string());
+
+	EXPECT_TRUE(m_browser.GetUnstartableStores(Fixtures::GetGameId("kingpin")).empty());
+	EXPECT_TRUE(std::ranges::contains(m_browser.GetLaunchOptions(Fixtures::GetGameId("kingpin")), "store:steam", &Launch::SLaunchOption::id));
+}
 #endif // defined(TGE_PLATFORM_LINUX)
 } // namespace
 } // namespace Lkt::Browser

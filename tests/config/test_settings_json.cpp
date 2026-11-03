@@ -53,6 +53,7 @@ SSettings MakeVariedSettings()
 	// Odd positions are listed below, and the first is the default.
 	settings.selectedGame = Query::GetGameCatalog()[1].game;
 	settings.autoRefreshSeconds = 45;
+	settings.locatedStores = { SLocatedStore{ "steam", std::format("{}/steam/steam.sh", FolderRoot) } };
 	std::ranges::reverse(settings.gameOrder);
 
 	for (size_t index{ 0 }; index < settings.games.size(); ++index)
@@ -121,6 +122,15 @@ TEST(SettingsJson, UnknownKeysAreIgnored)
 
 	EXPECT_EQ(document.settings, MakeDefaultSettings());
 	EXPECT_EQ(document.numInvalid, 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST(SettingsJson, LocatedProgramThatIsNotAbsoluteIsRejected)
+{
+	SSettingsDocument const document{ ReadValid(R"({ "stores": { "steam": { "program": "steam.sh" } } })") };
+
+	EXPECT_TRUE(document.settings.locatedStores.empty());
+	EXPECT_EQ(document.firstInvalidPath, "stores.steam");
 }
 
 //////////////////////////////////////////////////////////////////////////

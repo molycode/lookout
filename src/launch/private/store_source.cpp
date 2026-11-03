@@ -1,6 +1,8 @@
 #include "store_source.hpp"
 #include "steam_apps.hpp"
+#include "launch/found_stores.hpp"
 #include "launch/launcher_ids.hpp"
+#include "query/game_definition.hpp"
 #include "query/store_ids.hpp"
 #include <algorithm>
 #include <format>
@@ -68,7 +70,7 @@ std::vector<SLaunchOption> CStoreSource::Find(Query::SLaunchHints const& hints, 
 		std::string_view const id{ Query::FindStoreId(hints, store.key) };
 		std::string const launcherId{ std::format("{}{}", StoreLauncherIdPrefix, store.key) };
 		bool const isListed{ std::ranges::contains(options, launcherId, &SLaunchOption::id) };
-		std::optional<std::string> const installedName{ (!id.empty() && !isListed) ? FindInstalledName(store, id) : std::nullopt };
+		std::optional<std::string> const installedName{ (!id.empty() && !isListed && !store.program.empty()) ? FindInstalledName(store, id) : std::nullopt };
 
 		if (installedName.has_value())
 		{
@@ -85,5 +87,29 @@ std::vector<SLaunchOption> CStoreSource::Find(Query::SLaunchHints const& hints, 
 	}
 
 	return options;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Stores whose libraries hold the game but whose program was not found, unless another install of the store starts it.
+std::vector<std::string> FindStoresWithoutTheirProgram(Query::SGameDefinition const& game, std::span<SFoundStore const> stores)
+{
+	std::vector<std::string> keys{};
+
+	for (SFoundStore const& store : stores)
+	{
+		std::string_view const id{ Query::FindStoreId(game.launch, store.key) };
+		bool const isCandidate{ store.program.empty() && !id.empty() && !std::ranges::contains(keys, store.key) };
+		bool const isStartable{ isCandidate && std::ranges::any_of(stores, [&store, id](SFoundStore const& other)
+		{
+			return other.key == store.key && !other.program.empty() && FindInstalledName(other, id).has_value();
+		}) };
+
+		if (isCandidate && !isStartable && FindInstalledName(store, id).has_value())
+		{
+			keys.emplace_back(store.key);
+		}
+	}
+
+	return keys;
 }
 } // namespace Lkt::Launch

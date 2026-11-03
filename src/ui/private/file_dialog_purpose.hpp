@@ -8,6 +8,7 @@ enum class EFileDialogPurpose : uint8_t
 {
 	AddFolder,
 	ChangeFolder,
-	PickProgram
+	PickProgram,
+	LocateStore
 };
 } // namespace Lkt::Ui

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/game_settings.hpp"
+#include "config/located_store.hpp"
 #include "config/window_settings.hpp"
 #include "query/game.hpp"
 #include <cstdint>
@@ -15,6 +16,7 @@ struct SSettings final
 	std::vector<SGameSettings> games{};
 	std::vector<Query::EGame> gameOrder{};
 	uint32_t autoRefreshSeconds{ 120 };
+	std::vector<SLocatedStore> locatedStores{};
 
 	bool operator==(SSettings const&) const = default;
 };
