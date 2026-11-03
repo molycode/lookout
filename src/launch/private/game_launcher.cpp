@@ -36,6 +36,27 @@ bool OpenGameLog(Tge::Process::COutputFile& log, std::filesystem::path const& pa
 }
 
 //////////////////////////////////////////////////////////////////////////
+ELaunchError ToLaunchError(std::error_code const& error, std::string_view program)
+{
+	ELaunchError launchError{ ELaunchError::SpawnFailed };
+
+	if (error == std::errc::no_such_file_or_directory)
+	{
+		launchError = std::filesystem::path{ program }.has_parent_path() ? ELaunchError::ProgramNotFound : ELaunchError::ProgramNotInPath;
+	}
+	else if (error == std::errc::executable_format_error || error == std::errc::is_a_directory)
+	{
+		launchError = ELaunchError::ProgramNotRunnable;
+	}
+	else if (error == std::errc::permission_denied)
+	{
+		launchError = ELaunchError::ProgramAccessDenied;
+	}
+
+	return launchError;
+}
+
+//////////////////////////////////////////////////////////////////////////
 std::string FormatStatus(uint32_t status)
 {
 	return (status > LargestDecimalStatus) ? std::format("0x{:08X}", status) : std::format("{}", status);
@@ -158,7 +179,7 @@ std::expected<void, ELaunchError> CGameLauncher::Spawn(Query::SGameDefinition co
 		std::string const where{ option.workingDir.empty() ? std::string{} : std::format(" in '{}'", option.workingDir) };
 
 		gLog.Error("Cannot start {} with '{}'{}: {}", game.name, option.argv.front(), where, started.error().message());
-		result = std::unexpected{ ELaunchError::SpawnFailed };
+		result = std::unexpected{ ToLaunchError(started.error(), spec.program.string()) };
 	}
 
 	return result;

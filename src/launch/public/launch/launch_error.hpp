@@ -14,6 +14,10 @@ enum class ELaunchError : uint8_t
 	BrokenInstallFolder,
 	FolderInstallUnsupported,
 	UnsupportedPassword,
+	ProgramNotFound,
+	ProgramNotInPath,
+	ProgramNotRunnable,
+	ProgramAccessDenied,
 	SpawnFailed
 };
 

@@ -102,6 +102,22 @@ protected:
 		return m_launcher.Launch(Fixtures::GetGameByKey("kingpin"), MakeOption(options), SConnectRequest{ Server, std::move(password) });
 	}
 
+	ELaunchError LaunchProgram(std::string program)
+	{
+		SLaunchOption const option{ "test", "Fake game", {}, { std::move(program) }, {} };
+
+		return m_launcher.Launch(Fixtures::GetGameByKey("kingpin"), option, SConnectRequest{ Server, {} }).error_or(ELaunchError::NoLauncher);
+	}
+
+	std::filesystem::path WriteFile(std::string_view name) const
+	{
+		std::filesystem::path const path{ m_root / name };
+
+		std::ofstream{ path } << "plain text\n";
+
+		return path;
+	}
+
 	std::string ReadGameLog() const
 	{
 		return ReadText(m_logs / "game-kingpin.log");
@@ -176,13 +192,31 @@ TEST_F(CGameLauncherTest, CleanExitIsSilent)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CGameLauncherTest, MissingProgramIsAnError)
+TEST_F(CGameLauncherTest, MissingProgramIsNotFound)
 {
 	CExpectedLog const expected{ LaunchChannel, 0, 1 };
-	SLaunchOption const option{ "test", "Fake game", {}, { (m_root / "no-such-game").string() }, {} };
 
-	EXPECT_EQ(m_launcher.Launch(Fixtures::GetGameByKey("kingpin"), option, SConnectRequest{ Server, {} }).error_or(ELaunchError::NoLauncher),
-		ELaunchError::SpawnFailed);
+	EXPECT_EQ(LaunchProgram((m_root / "no-such-game").string()), ELaunchError::ProgramNotFound);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameLauncherTest, BareNameNoFolderOfPathHoldsIsNotInPath)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 1 };
+
+	EXPECT_EQ(LaunchProgram("lookout-no-such-game"), ELaunchError::ProgramNotInPath);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Executable on Linux, so the kernel itself refuses it; Windows refuses the extension.
+TEST_F(CGameLauncherTest, FileThatIsNoProgramIsNotRunnable)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 1 };
+	std::filesystem::path const file{ WriteFile("not-a-program.txt") };
+
+	std::filesystem::permissions(file, std::filesystem::perms::owner_exec, std::filesystem::perm_options::add);
+
+	EXPECT_EQ(LaunchProgram(file.string()), ELaunchError::ProgramNotRunnable);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -197,6 +231,14 @@ TEST_F(CGameLauncherTest, UnsupportedPasswordStartsNothing)
 }
 
 #if defined(TGE_PLATFORM_LINUX)
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CGameLauncherTest, ProgramWithoutExecutePermissionIsDenied)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 1 };
+
+	EXPECT_EQ(LaunchProgram(WriteFile("game").string()), ELaunchError::ProgramAccessDenied);
+}
+
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CGameLauncherTest, GameEndedByASignalIsAWarning)
 {

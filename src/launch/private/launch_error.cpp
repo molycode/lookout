@@ -44,6 +44,18 @@ std::string_view ToString(ELaunchError error)
 		case ELaunchError::UnsupportedPassword:
 			text = "the game cannot receive this password on its command line";
 			break;
+		case ELaunchError::ProgramNotFound:
+			text = "the program cannot be found";
+			break;
+		case ELaunchError::ProgramNotInPath:
+			text = "no folder in PATH holds the program; give its full path";
+			break;
+		case ELaunchError::ProgramNotRunnable:
+			text = "the file is not a program Lookout can start";
+			break;
+		case ELaunchError::ProgramAccessDenied:
+			text = "permission to start the program is denied";
+			break;
 		case ELaunchError::SpawnFailed:
 			text = "the game could not be started";
 			break;
