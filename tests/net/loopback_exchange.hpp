@@ -15,5 +15,6 @@ struct SLoopbackExchange final
 	std::vector<std::vector<std::byte>> replies{};
 	uint32_t numIgnored{ 0 };
 	std::chrono::milliseconds replyInterval{ 0 };
+	bool isDroppingQueued{ false };
 };
 } // namespace Lkt::Fixtures

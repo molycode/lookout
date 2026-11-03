@@ -276,9 +276,10 @@ std::vector<SLoopbackExchange> MakeUt2004Server(SUt2004ServerSetup const& setup)
 {
 	std::vector<SLoopbackExchange> exchanges{};
 
-	exchanges.emplace_back(MakeQuery(0), std::vector<std::vector<std::byte>>{ MakeInfo(setup) }, 0u, setup.packetInterval);
-	exchanges.emplace_back(MakeQuery(1), MakeRules(setup), 0u, setup.packetInterval);
-	exchanges.emplace_back(MakeQuery(2), setup.hasPlayers ? MakePlayers() : std::vector<std::vector<std::byte>>{}, 0u, setup.packetInterval);
+	exchanges.emplace_back(MakeQuery(0), std::vector<std::vector<std::byte>>{ MakeInfo(setup) }, 0u, setup.packetInterval, setup.isDroppingBursts);
+	exchanges.emplace_back(MakeQuery(1), MakeRules(setup), 0u, setup.packetInterval, setup.isDroppingBursts);
+	exchanges.emplace_back(MakeQuery(2), setup.hasPlayers ? MakePlayers() : std::vector<std::vector<std::byte>>{}, 0u, setup.packetInterval,
+		setup.isDroppingBursts);
 
 	return exchanges;
 }

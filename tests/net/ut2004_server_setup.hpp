@@ -11,5 +11,6 @@ struct SUt2004ServerSetup final
 	bool hasPlayers{ true };
 	bool hasPassword{ false };
 	std::chrono::milliseconds packetInterval{ 0 };
+	bool isDroppingBursts{ false };
 };
 } // namespace Lkt::Fixtures

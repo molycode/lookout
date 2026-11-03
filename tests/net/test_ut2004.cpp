@@ -210,6 +210,36 @@ TEST_F(CUt2004Test, EmptyServerSendsNoPlayers)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST_F(CUt2004Test, EmptyServerIsNotAskedForPlayers)
+{
+	std::optional<Query::SStatusReply> const reply{ Ask(Fixtures::SUt2004ServerSetup{ .joinPort = JoinPort, .hasPlayers = false }) };
+
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_EQ(m_server.GetNumMatches(Fixtures::Ut2004PlayersExchange), 0u);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// 20 ms apart, so a burst's later queries have queued when the server answers the first.
+TEST_F(CUt2004Test, PasswordIsSeenFromServerDroppingBursts)
+{
+	std::optional<Query::SStatusReply> const reply{ Ask(
+		Fixtures::SUt2004ServerSetup{ .joinPort = JoinPort, .hasPassword = true, .packetInterval = 20ms, .isDroppingBursts = true }) };
+
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_TRUE(Query::Summarize(GetUt2004Game(), *reply).hasPassword);
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CUt2004Test, PlayersArriveFromServerDroppingBursts)
+{
+	std::optional<Query::SStatusReply> const reply{ Ask(
+		Fixtures::SUt2004ServerSetup{ .joinPort = JoinPort, .packetInterval = 20ms, .isDroppingBursts = true }) };
+
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_EQ(reply->players.size(), 2u);
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST_F(CUt2004Test, MasterListsItsServersEndToEnd)
 {
 	ASSERT_TRUE(m_server.StartExchanges(Fixtures::MakeUt2004Server(Fixtures::SUt2004ServerSetup{ JoinPort })));

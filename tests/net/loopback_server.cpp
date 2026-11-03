@@ -125,18 +125,7 @@ void CLoopbackServer::Serve()
 			{
 				std::span<std::byte const> const request{ buffer.data(), *size };
 
-				if (m_numRequests.load(std::memory_order_acquire) == 0)
-				{
-					std::ranges::copy(request, m_firstRequest.begin());
-					m_firstRequestSize = request.size();
-				}
-				else if (!std::ranges::equal(request, std::span<std::byte const>{ m_firstRequest.data(), m_firstRequestSize }))
-				{
-					m_areRequestsAlike.store(false, std::memory_order_release);
-				}
-
-				m_numRequests.fetch_add(1, std::memory_order_acq_rel);
-				RecordClientPort(sender.port);
+				Record(request, sender.port);
 
 				auto const exchange{ std::ranges::find_if(m_exchanges, [request](SLoopbackExchange const& candidate)
 				{
@@ -151,14 +140,53 @@ void CLoopbackServer::Serve()
 
 					if (numMatches > exchange->numIgnored)
 					{
-						for (std::vector<std::byte> const& reply : exchange->replies)
+						for (size_t index{ 0 }; index < exchange->replies.size(); ++index)
 						{
 							std::this_thread::sleep_for(exchange->replyInterval);
-							static_cast<void>(m_socket.Send(sender, reply));
+
+							if (index == 0 && exchange->isDroppingQueued)
+							{
+								DropQueued(buffer);
+							}
+
+							static_cast<void>(m_socket.Send(sender, exchange->replies[index]));
 						}
 					}
 				}
 			}
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CLoopbackServer::Record(std::span<std::byte const> request, uint16_t port)
+{
+	if (m_numRequests.load(std::memory_order_acquire) == 0)
+	{
+		std::ranges::copy(request, m_firstRequest.begin());
+		m_firstRequestSize = request.size();
+	}
+	else if (!std::ranges::equal(request, std::span<std::byte const>{ m_firstRequest.data(), m_firstRequestSize }))
+	{
+		m_areRequestsAlike.store(false, std::memory_order_release);
+	}
+
+	m_numRequests.fetch_add(1, std::memory_order_acq_rel);
+	RecordClientPort(port);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Only a request sent without waiting for the answer can be queued yet, as the answer is not sent until after this.
+void CLoopbackServer::DropQueued(std::span<std::byte> buffer)
+{
+	while (Tge::Net::WaitForReadable(m_socket.GetWaitable(), std::chrono::milliseconds{ 0 }).value_or(false))
+	{
+		Tge::Net::SIpv4Endpoint sender{};
+		std::expected<size_t, std::error_code> const size{ m_socket.Receive(buffer, sender) };
+
+		if (size.has_value())
+		{
+			Record(std::span<std::byte const>{ buffer.data(), *size }, sender.port);
 		}
 	}
 }

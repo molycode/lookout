@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <thread>
 #include <vector>
 
@@ -41,6 +42,8 @@ private:
 	static constexpr size_t MaxClientPorts{ 16 };
 
 	void Serve();
+	void Record(std::span<std::byte const> request, uint16_t port);
+	void DropQueued(std::span<std::byte> buffer);
 	void RecordClientPort(uint16_t port);
 
 	Tge::Net::CUdpSocket m_socket{};
