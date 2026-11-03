@@ -19,6 +19,7 @@ enum class ELaunchError : uint8_t
 	ProgramNotInPath,
 	ProgramNotRunnable,
 	ProgramAccessDenied,
+	ProgramNeedsAdministrator,
 	SpawnFailed
 };
 

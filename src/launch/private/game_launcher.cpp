@@ -6,13 +6,27 @@
 #include <tge/assert.hpp>
 #include <tge/process/exit_status.hpp>
 #include <tge/process/output_file.hpp>
+#include <tge/platform.hpp>
 #include <tge/process/process_spec.hpp>
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <format>
 #include <optional>
+#include <span>
 #include <string>
 #include <system_error>
 #include <utility>
+
+#if defined(TGE_PLATFORM_WINDOWS)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif // WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif // NOMINMAX
+#include <windows.h>
+#endif // defined(TGE_PLATFORM_WINDOWS)
 
 namespace Lkt::Launch
 {
@@ -20,6 +34,17 @@ namespace
 {
 // Windows reports a crash as a status such as 0xC0000005, which reads only in hex.
 constexpr uint32_t LargestDecimalStatus{ 0xFFFF };
+
+// Windows' own codes for what the standard conditions leave out; Linux reports these cases through errno, which maps.
+#if defined(TGE_PLATFORM_WINDOWS)
+constexpr std::array<int, 2> NotRunnableCodes{ ERROR_BAD_EXE_FORMAT, ERROR_EXE_MACHINE_TYPE_MISMATCH };
+constexpr std::array<int, 1> AdministratorCodes{ ERROR_ELEVATION_REQUIRED };
+#elif defined(TGE_PLATFORM_LINUX)
+constexpr std::array<int, 0> NotRunnableCodes{};
+constexpr std::array<int, 0> AdministratorCodes{};
+#else
+#error "Unsupported platform"
+#endif // defined(TGE_PLATFORM_WINDOWS)
 
 //////////////////////////////////////////////////////////////////////////
 // Opened before the start rather than by it, so a log that cannot be written costs the output, not the launch.
@@ -36,6 +61,12 @@ bool OpenGameLog(Tge::Process::COutputFile& log, std::filesystem::path const& pa
 }
 
 //////////////////////////////////////////////////////////////////////////
+bool IsSystemCode(std::error_code const& error, std::span<int const> codes)
+{
+	return error.category() == std::system_category() && std::ranges::contains(codes, error.value());
+}
+
+//////////////////////////////////////////////////////////////////////////
 ELaunchError ToLaunchError(std::error_code const& error, std::string_view program)
 {
 	ELaunchError launchError{ ELaunchError::SpawnFailed };
@@ -44,9 +75,13 @@ ELaunchError ToLaunchError(std::error_code const& error, std::string_view progra
 	{
 		launchError = std::filesystem::path{ program }.has_parent_path() ? ELaunchError::ProgramNotFound : ELaunchError::ProgramNotInPath;
 	}
-	else if (error == std::errc::executable_format_error || error == std::errc::is_a_directory)
+	else if (error == std::errc::executable_format_error || error == std::errc::is_a_directory || IsSystemCode(error, NotRunnableCodes))
 	{
 		launchError = ELaunchError::ProgramNotRunnable;
+	}
+	else if (IsSystemCode(error, AdministratorCodes))
+	{
+		launchError = ELaunchError::ProgramNeedsAdministrator;
 	}
 	else if (error == std::errc::permission_denied)
 	{

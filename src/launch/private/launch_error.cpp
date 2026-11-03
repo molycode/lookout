@@ -63,6 +63,9 @@ std::string_view ToString(ELaunchError error)
 		case ELaunchError::ProgramAccessDenied:
 			text = "permission to start the program is denied";
 			break;
+		case ELaunchError::ProgramNeedsAdministrator:
+			text = "the program asks to run as administrator, which Lookout does not do";
+			break;
 		case ELaunchError::SpawnFailed:
 			text = "the game could not be started";
 			break;

@@ -234,6 +234,17 @@ TEST_F(CGameLauncherTest, UnsupportedPasswordStartsNothing)
 	EXPECT_FALSE(std::filesystem::exists(m_logs / "game-kingpin.log", error));
 }
 
+#if defined(TGE_PLATFORM_WINDOWS)
+//////////////////////////////////////////////////////////////////////////
+// Its extension passes Lookout's check, so it is Windows itself that refuses it.
+TEST_F(CGameLauncherTest, DamagedProgramIsNotRunnable)
+{
+	CExpectedLog const expected{ LaunchChannel, 0, 1 };
+
+	EXPECT_EQ(LaunchProgram(WriteFile("damaged.exe").string()), ELaunchError::ProgramNotRunnable);
+}
+#endif // defined(TGE_PLATFORM_WINDOWS)
+
 #if defined(TGE_PLATFORM_LINUX)
 //////////////////////////////////////////////////////////////////////////
 TEST_F(CGameLauncherTest, ProgramWithoutExecutePermissionIsDenied)
