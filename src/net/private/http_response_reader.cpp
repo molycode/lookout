@@ -34,10 +34,10 @@ std::string_view Trim(std::string_view text)
 }
 
 //////////////////////////////////////////////////////////////////////////
-std::optional<size_t> ParseSize(std::string_view text)
+std::optional<size_t> ParseSize(std::string_view text, int base = 10)
 {
 	size_t value{ 0 };
-	std::from_chars_result const result{ std::from_chars(text.data(), text.data() + text.size(), value) };
+	std::from_chars_result const result{ std::from_chars(text.data(), text.data() + text.size(), value, base) };
 	bool const isValid{ !text.empty() && result.ec == std::errc{} && result.ptr == text.data() + text.size() };
 
 	return isValid ? std::optional<size_t>{ value } : std::nullopt;
@@ -48,11 +48,13 @@ std::optional<size_t> ParseSize(std::string_view text)
 void CHttpResponseReader::Reset(size_t maxBodySize)
 {
 	m_headers.clear();
+	m_chunked.clear();
 	m_body.clear();
 	m_error.clear();
 	m_maxBodySize = maxBodySize;
 	m_bodySize = 0;
 	m_state = EHttpReadState::Headers;
+	m_isChunked = false;
 	m_isKeptAlive = true;
 }
 
@@ -60,6 +62,7 @@ void CHttpResponseReader::Reset(size_t maxBodySize)
 EHttpReadState CHttpResponseReader::Read(std::span<std::byte const> data)
 {
 	std::string_view text{ reinterpret_cast<char const*>(data.data()), data.size() };
+	std::string rest{};
 
 	if (m_state == EHttpReadState::Headers)
 	{
@@ -71,12 +74,10 @@ EHttpReadState CHttpResponseReader::Read(std::span<std::byte const> data)
 
 		if (end != std::string::npos)
 		{
-			std::string_view const rest{ std::string_view{ m_headers }.substr(end + HeaderEnd.size()) };
-
-			m_body.assign(rest);
+			rest.assign(std::string_view{ m_headers }.substr(end + HeaderEnd.size()));
 			m_headers.resize(end);
 			ReadHeaders(m_headers);
-			text = {};
+			text = rest;
 		}
 		else if (m_headers.size() > MaxHeaderSize)
 		{
@@ -84,7 +85,12 @@ EHttpReadState CHttpResponseReader::Read(std::span<std::byte const> data)
 		}
 	}
 
-	if (m_state == EHttpReadState::Body)
+	if (m_state == EHttpReadState::Body && m_isChunked)
+	{
+		m_chunked.append(text);
+		ReadChunks();
+	}
+	else if (m_state == EHttpReadState::Body)
 	{
 		m_body.append(text);
 
@@ -130,6 +136,7 @@ void CHttpResponseReader::ReadHeaders(std::string_view headers)
 	std::optional<size_t> contentLength{};
 	std::string_view location{};
 	std::string_view encoding{};
+	bool isChunked{ false };
 
 	m_isKeptAlive = version == "HTTP/1.1";
 
@@ -145,7 +152,11 @@ void CHttpResponseReader::ReadHeaders(std::string_view headers)
 		{
 			contentLength = ParseSize(value);
 		}
-		else if (EqualsIgnoringCase(name, "transfer-encoding") || (EqualsIgnoringCase(name, "content-encoding") && !EqualsIgnoringCase(value, "identity")))
+		else if (EqualsIgnoringCase(name, "transfer-encoding") && EqualsIgnoringCase(value, "chunked"))
+		{
+			isChunked = true;
+		}
+		else if (EqualsIgnoringCase(name, "transfer-encoding") ||(EqualsIgnoringCase(name, "content-encoding") && !EqualsIgnoringCase(value, "identity")))
 		{
 			encoding = value;
 		}
@@ -177,6 +188,11 @@ void CHttpResponseReader::ReadHeaders(std::string_view headers)
 	{
 		Fail(std::format("sent the reply {}-encoded, which Lookout does not read", encoding));
 	}
+	else if (isChunked)
+	{
+		m_isChunked = true;
+		m_state = EHttpReadState::Body;
+	}
 	else if (!contentLength.has_value())
 	{
 		Fail("did not say how long its reply is");
@@ -190,6 +206,77 @@ void CHttpResponseReader::ReadHeaders(std::string_view headers)
 		m_bodySize = *contentLength;
 		m_state = EHttpReadState::Body;
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CHttpResponseReader::ReadChunks()
+{
+	size_t at{ 0 };
+	bool isWaiting{ false };
+
+	while (m_state == EHttpReadState::Body && !isWaiting)
+	{
+		std::string_view const pending{ std::string_view{ m_chunked }.substr(at) };
+		size_t const lineEnd{ pending.find(LineEnd) };
+		std::string_view const sizeLine{ pending.substr(0, std::min(lineEnd, pending.size())) };
+		std::optional<size_t> const size{ ParseSize(Trim(sizeLine.substr(0, sizeLine.find(';'))), 16) };
+		size_t const dataStart{ lineEnd + LineEnd.size() };
+
+		if (lineEnd == std::string_view::npos && pending.size() > MaxHeaderSize)
+		{
+			Fail(std::format("sent a chunk line longer than {} KiB", MaxHeaderSize / 1024));
+		}
+		else if (lineEnd == std::string_view::npos)
+		{
+			isWaiting = true;
+		}
+		else if (!size.has_value())
+		{
+			Fail("sent a chunk size Lookout cannot read");
+		}
+		else if (*size > m_maxBodySize - m_body.size())
+		{
+			Fail(std::format("sent more than the {} bytes the file may have", m_maxBodySize));
+		}
+		else if (*size == 0)
+		{
+			// Searching from the size line's own line end finds an empty trailer too.
+			size_t const end{ pending.find(HeaderEnd, lineEnd) };
+
+			if (end == std::string_view::npos && pending.size() > MaxHeaderSize)
+			{
+				Fail(std::format("sent more than {} KiB of trailer", MaxHeaderSize / 1024));
+			}
+			else if (end == std::string_view::npos)
+			{
+				isWaiting = true;
+			}
+			else if (end + HeaderEnd.size() < pending.size())
+			{
+				Fail(std::format("sent {} bytes after its last chunk", pending.size() - end - HeaderEnd.size()));
+			}
+			else
+			{
+				at += end + HeaderEnd.size();
+				m_state = EHttpReadState::Complete;
+			}
+		}
+		else if (pending.size() < dataStart + *size + LineEnd.size())
+		{
+			isWaiting = true;
+		}
+		else if (pending.substr(dataStart + *size, LineEnd.size()) != LineEnd)
+		{
+			Fail("sent a chunk longer than its size");
+		}
+		else
+		{
+			m_body.append(pending.substr(dataStart, *size));
+			at += dataStart + *size + LineEnd.size();
+		}
+	}
+
+	m_chunked.erase(0, at);
 }
 
 //////////////////////////////////////////////////////////////////////////

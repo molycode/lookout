@@ -162,7 +162,7 @@ TEST_F(CHttpsFetcherTest, RedirectIsNotFollowed)
 }
 
 //////////////////////////////////////////////////////////////////////////
-TEST_F(CHttpsFetcherTest, ChunkedReplyIsRefused)
+TEST_F(CHttpsFetcherTest, ChunkedReplyIsRead)
 {
 	m_server.SetReply("/chunked", Fixtures::SHttpsReply{ .body = "chunks", .headers = { "Transfer-Encoding: chunked" } });
 	ASSERT_TRUE(StartFetcher(MakeOrigin()));
@@ -170,7 +170,19 @@ TEST_F(CHttpsFetcherTest, ChunkedReplyIsRefused)
 	std::vector<SFetchResult> const results{ Fetch({ { "/chunked", MaxSize } }) };
 
 	ASSERT_EQ(results.size(), 1u);
-	EXPECT_EQ(results.front().body.error_or(""), "localhost: sent the reply chunked-encoded, which Lookout does not read");
+	EXPECT_EQ(BodyOrError(results.front()), "chunks");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CHttpsFetcherTest, OtherTransferEncodingIsRefused)
+{
+	m_server.SetReply("/gzipped", Fixtures::SHttpsReply{ .body = "packed", .headers = { "Transfer-Encoding: gzip, chunked" } });
+	ASSERT_TRUE(StartFetcher(MakeOrigin()));
+
+	std::vector<SFetchResult> const results{ Fetch({ { "/gzipped", MaxSize } }) };
+
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().body.error_or(""), "localhost: sent the reply gzip, chunked-encoded, which Lookout does not read");
 }
 
 //////////////////////////////////////////////////////////////////////////

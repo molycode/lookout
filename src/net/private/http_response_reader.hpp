@@ -8,8 +8,7 @@
 
 namespace Lkt::Net
 {
-// One HTTP/1.1 response, read as it arrives. Only what raw.githubusercontent.com sends is accepted: a 200 with a
-// Content-Length and no transfer or content encoding. Redirects are never followed, so Lookout talks to one host only.
+// One HTTP/1.1 response, read as it arrives. Redirects are never followed, so Lookout talks to one host only.
 class CHttpResponseReader final
 {
 public:
@@ -25,14 +24,17 @@ public:
 private:
 
 	void ReadHeaders(std::string_view headers);
+	void ReadChunks();
 	void Fail(std::string error);
 
 	std::string m_headers{};
+	std::string m_chunked{};
 	std::string m_body{};
 	std::string m_error{};
 	size_t m_maxBodySize{ 0 };
 	size_t m_bodySize{ 0 };
 	EHttpReadState m_state{ EHttpReadState::Headers };
+	bool m_isChunked{ false };
 	bool m_isKeptAlive{ true };
 };
 } // namespace Lkt::Net
