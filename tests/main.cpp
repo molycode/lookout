@@ -2,6 +2,7 @@
 #include "games/load_games.hpp"
 #include "net/crypto_threading.hpp"
 #include "query/game_catalog.hpp"
+#include "query/store_catalog.hpp"
 #include <gtest/gtest.h>
 #include <tge/net/socket_library.hpp>
 #include <cstdio>
@@ -32,9 +33,11 @@ int main(int argc, char** argv)
 	if (areSocketsReady && downloaded.problems.empty())
 	{
 		Lkt::Query::InitializeGameCatalog(downloaded.protocols, downloaded.games);
+		Lkt::Query::InitializeStoreCatalog(downloaded.stores);
 		testing::InitGoogleTest(&argc, argv);
 		testing::AddGlobalTestEnvironment(new Lkt::Fixtures::CTgeEnvironment{});
 		result = RUN_ALL_TESTS();
+		Lkt::Query::TerminateStoreCatalog();
 		Lkt::Query::TerminateGameCatalog();
 	}
 

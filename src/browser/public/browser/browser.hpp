@@ -25,6 +25,7 @@
 #include "query/parse_error.hpp"
 #include "query/protocol_definition.hpp"
 #include "query/server_address.hpp"
+#include "query/store_definition.hpp"
 #include <tge/non_copyable.hpp>
 #include <cstdint>
 #include <expected>
@@ -71,7 +72,8 @@ public:
 	void SetGameListed(Query::EGame game, bool isListed);
 	void MoveGame(Query::EGame game, Query::EGame target);
 	// False, with nothing touched, when the catalog is the one that runs.
-	bool ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games);
+	bool ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SStoreDefinition> stores,
+		std::vector<Query::SGameDefinition> games);
 	void SetGameProblems(std::vector<Query::SGameProblem> problems);
 
 	Query::EGame GetSelectedGame() const;

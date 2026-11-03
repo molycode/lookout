@@ -146,9 +146,9 @@ SGameContent CheckGameFolder(std::filesystem::path const& folder)
 	std::error_code error{};
 	bool const hasGames{ std::filesystem::is_directory(folder / "games", error) };
 
-	if (!hasGames && !std::filesystem::is_directory(folder / "protocols", error))
+	if (!hasGames && !std::filesystem::is_directory(folder / "protocols", error) && !std::filesystem::is_directory(folder / "stores", error))
 	{
-		content.problems.emplace_back(Query::SGameProblem{ std::format("{}: holds neither games/ nor protocols/", layer), {} });
+		content.problems.emplace_back(Query::SGameProblem{ std::format("{}: holds no games/, protocols/ or stores/", layer), {} });
 	}
 
 	if (hasGames)

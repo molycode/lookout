@@ -17,6 +17,14 @@ TEST(LoaderInput, GamesProtocolsAndTheirFoldersCount)
 }
 
 //////////////////////////////////////////////////////////////////////////
+TEST(LoaderInput, StoresAndTheirFolderCount)
+{
+	EXPECT_TRUE(IsLoaderInput("stores"));
+	EXPECT_TRUE(IsLoaderInput("stores/steam.json"));
+	EXPECT_FALSE(IsLoaderInput("stores/steam/inside"));
+}
+
+//////////////////////////////////////////////////////////////////////////
 TEST(LoaderInput, DownloadedCountsButNotWhatIsInside)
 {
 	EXPECT_TRUE(IsLoaderInput("downloaded"));

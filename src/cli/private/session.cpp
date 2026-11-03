@@ -18,6 +18,7 @@
 #include "net/query_engine.hpp"
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
+#include "query/store_catalog.hpp"
 #include <tge/assert.hpp>
 #include <tge/logging/log_system.hpp>
 #include <tge/module/runtime.hpp>
@@ -141,12 +142,14 @@ void CSession::Initialize()
 	}
 
 	Query::InitializeGameCatalog(content.protocols, content.games);
+	Query::InitializeStoreCatalog(content.stores);
 	m_gameProblems = std::move(content.problems);
 }
 
 //////////////////////////////////////////////////////////////////////////
 void CSession::Terminate()
 {
+	Query::TerminateStoreCatalog();
 	Query::TerminateGameCatalog();
 	m_socketLibrary.Terminate();
 	m_cryptoThreading.Terminate();
@@ -202,7 +205,7 @@ void CSession::ReloadGames(Browser::CBrowser& browser)
 	Games::SGameContent content{ Games::LoadGames(Games::GetDownloadedDir(m_userDir), m_userDir) };
 	size_t const numGames{ content.games.size() };
 	bool const hasNewProblems{ !std::ranges::equal(content.problems, browser.GetGameProblems()) };
-	bool const isReplaced{ browser.ReplaceCatalog(std::move(content.protocols), std::move(content.games)) };
+	bool const isReplaced{ browser.ReplaceCatalog(std::move(content.protocols), std::move(content.stores), std::move(content.games)) };
 
 	if (isReplaced || hasNewProblems)
 	{

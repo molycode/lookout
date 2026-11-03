@@ -33,6 +33,9 @@ constexpr std::string_view UserGame{ R"json({
 		"password": { "maxLength": 63 } }
 })json" };
 
+constexpr std::string_view Store{ R"json({ "format": 1, "name": "Steam", "arguments": [ "-applaunch", "{id}" ], "libraries": "steam",
+	"linux": [ { "folder": "{dataHome}/Steam", "programs": [ "steam" ] } ] })json" };
+
 //////////////////////////////////////////////////////////////////////////
 Query::SGameDefinition const* FindGame(SGameContent const& content, std::string_view key)
 {
@@ -358,6 +361,60 @@ TEST_F(CLoadGamesTest, ProtocolThatCannotListIsAProblem)
 	EXPECT_TRUE(content.problems.front().text.contains("no list here")) << content.problems.front().text;
 	EXPECT_EQ(content.problems.front().key, "mygame");
 	EXPECT_EQ(FindGame(content, "mygame"), nullptr);
+}
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, DownloadedStoreIsLoaded)
+{
+	WriteFile("downloaded/stores/steam.json", Store);
+
+	SGameContent const content{ LoadGames(m_dir / "downloaded", m_dir / "user") };
+
+	EXPECT_TRUE(content.problems.empty());
+	ASSERT_EQ(content.stores.size(), 1u);
+	EXPECT_EQ(content.stores.front().key, "steam");
+	EXPECT_EQ(content.stores.front().name, "Steam");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, UserStoreReplacesTheDownloadedOne)
+{
+	std::string mine{ Store };
+
+	mine.replace(mine.find("\"Steam\""), 7, "\"My Steam\"");
+	WriteFile("downloaded/stores/steam.json", Store);
+	WriteFile("user/stores/steam.json", mine);
+
+	SGameContent const content{ LoadGames(m_dir / "downloaded", m_dir / "user") };
+
+	EXPECT_TRUE(content.problems.empty());
+	ASSERT_EQ(content.stores.size(), 1u);
+	EXPECT_EQ(content.stores.front().name, "My Steam");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, BrokenUserStoreKeepsTheDownloadedOne)
+{
+	WriteFile("downloaded/stores/steam.json", Store);
+	WriteFile("user/stores/steam.json", R"json({ "format": 1 })json");
+
+	SGameContent const content{ LoadGames(m_dir / "downloaded", m_dir / "user") };
+
+	ASSERT_EQ(content.problems.size(), 1u);
+	EXPECT_TRUE(content.problems.front().text.starts_with("stores/steam.json: ")) << content.problems.front().text;
+	ASSERT_EQ(content.stores.size(), 1u);
+	EXPECT_EQ(content.stores.front().name, "Steam");
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CLoadGamesTest, StoreFileNameThatIsNotAKeyIsAProblem)
+{
+	WriteFile("user/stores/Steam.json", Store);
+
+	SGameContent const content{ LoadGames({}, m_dir / "user") };
+
+	ASSERT_EQ(content.problems.size(), 1u);
+	EXPECT_TRUE(content.problems.front().text.starts_with("stores/Steam.json: ")) << content.problems.front().text;
+	EXPECT_TRUE(content.stores.empty());
 }
 } // namespace
 } // namespace Lkt::Games

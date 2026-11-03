@@ -178,7 +178,7 @@ TEST_F(CCheckFolderTest, FolderWithoutGamesOrProtocolsIsAProblem)
 	SGameContent const content{ CheckGameFolder(m_dir / "games") };
 
 	ASSERT_EQ(content.problems.size(), 1u);
-	EXPECT_EQ(content.problems.front().text, "games: holds neither games/ nor protocols/");
+	EXPECT_EQ(content.problems.front().text, "games: holds no games/, protocols/ or stores/");
 }
 } // namespace
 } // namespace Lkt::Games

@@ -5,7 +5,7 @@ namespace Lkt::Games
 {
 //////////////////////////////////////////////////////////////////////////
 // Whether a change at this path, relative to the user folder, can change what the loader reads: a game's files, a
-// protocol, the folders holding them, and downloaded itself (a download reloads what it changes inside). Dot entries
+// protocol, a store, the folders holding them, and downloaded itself (a download reloads what it changes inside). Dot entries
 // are left out, as the loader leaves them: editors' swap files and a checkout's .git change all the time. On Windows
 // the settings file sits beside the games, and it must not reload them.
 bool IsLoaderInput(std::filesystem::path const& relative)
@@ -24,9 +24,9 @@ bool IsLoaderInput(std::filesystem::path const& relative)
 	}
 
 	bool const isGames{ first == "games" };
-	bool const isProtocols{ first == "protocols" };
+	bool const isFileFolder{ first == "protocols" || first == "stores" };
 
-	return !hasDotPart && ((numParts == 1 && (isGames || isProtocols || first == "downloaded")) || (numParts == 2 && (isGames || isProtocols))
+	return !hasDotPart && ((numParts == 1 && (isGames || isFileFolder || first == "downloaded")) || (numParts == 2 && (isGames || isFileFolder))
 		|| (numParts == 3 && isGames));
 }
 } // namespace Lkt::Games

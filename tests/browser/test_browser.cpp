@@ -11,6 +11,8 @@
 #include "query/master_endpoint.hpp"
 #include "query/protocol_definition.hpp"
 #include "query/protocol_origin.hpp"
+#include "query/store_catalog.hpp"
+#include "query/store_definition.hpp"
 #include "temp_dir.hpp"
 #include <tge/platform.hpp>
 #include <tge/testing/expected_log.hpp>
@@ -458,9 +460,11 @@ protected:
 	{
 		std::span<Query::SGameDefinition const> const games{ Query::GetGameCatalog() };
 		std::span<Query::SProtocolDefinition const> const protocols{ Query::GetProtocolCatalog() };
+		std::span<Query::SStoreDefinition const> const stores{ Query::GetStoreCatalog() };
 
 		m_savedGames.assign(games.begin(), games.end());
 		m_protocols.assign(protocols.begin(), protocols.end());
+		m_stores.assign(stores.begin(), stores.end());
 		m_games = m_savedGames;
 
 		for (Query::SGameDefinition& game : m_games)
@@ -480,6 +484,8 @@ protected:
 	{
 		CBrowserTest::TearDown();
 		Install(m_savedGames);
+		Query::TerminateStoreCatalog();
+		Query::InitializeStoreCatalog(m_stores);
 	}
 	// ~testing::Test
 
@@ -547,6 +553,7 @@ protected:
 	}
 
 	std::vector<Query::SProtocolDefinition> m_protocols{};
+	std::vector<Query::SStoreDefinition> m_stores{};
 	std::vector<Query::SGameDefinition> m_savedGames{};
 	std::vector<Query::SGameDefinition> m_games{};
 };
@@ -558,7 +565,7 @@ TEST_F(CBrowserCatalogTest, UnchangedGameKeepsItsList)
 	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
-	m_browser.ReplaceCatalog(m_protocols, m_games);
+	m_browser.ReplaceCatalog(m_protocols, m_stores, m_games);
 
 	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
 
@@ -573,7 +580,7 @@ TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenOnlyWhereItsProtocolComesFromCha
 	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
-	m_browser.ReplaceCatalog(ChangeProtocolOrigin("kingpin"), m_games);
+	m_browser.ReplaceCatalog(ChangeProtocolOrigin("kingpin"), m_stores, m_games);
 
 	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
 
@@ -588,7 +595,7 @@ TEST_F(CBrowserCatalogTest, GameKeepsItsListWhenProtocolsMove)
 	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
-	m_browser.ReplaceCatalog(ReverseProtocols(), FollowReversedProtocols());
+	m_browser.ReplaceCatalog(ReverseProtocols(), m_stores, FollowReversedProtocols());
 
 	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
 
@@ -603,7 +610,7 @@ TEST_F(CBrowserCatalogTest, ChangedProtocolStartsTheListAgain)
 	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
-	m_browser.ReplaceCatalog(ChangeProtocolSource("gamespy1"), m_games);
+	m_browser.ReplaceCatalog(ChangeProtocolSource("gamespy1"), m_stores, m_games);
 
 	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
 
@@ -618,7 +625,7 @@ TEST_F(CBrowserCatalogTest, ProtocolOriginChangeReachesTheCatalog)
 
 	ASSERT_TRUE(StartWithServer());
 
-	EXPECT_TRUE(m_browser.ReplaceCatalog(ChangeProtocolOrigin("kingpin"), m_games));
+	EXPECT_TRUE(m_browser.ReplaceCatalog(ChangeProtocolOrigin("kingpin"), m_stores, m_games));
 	EXPECT_EQ(Query::GetProtocol(protocol).origin, Query::EProtocolOrigin::UserOverDownloaded);
 }
 
@@ -628,7 +635,7 @@ TEST_F(CBrowserCatalogTest, SameCatalogKeepsARunningRefresh)
 	ASSERT_TRUE(StartWithServer());
 	m_browser.Refresh();
 
-	EXPECT_FALSE(m_browser.ReplaceCatalog(m_protocols, m_games));
+	EXPECT_FALSE(m_browser.ReplaceCatalog(m_protocols, m_stores, m_games));
 	EXPECT_TRUE(m_browser.GetStatus(m_browser.GetSelectedGame()).isRefreshing);
 }
 
@@ -639,7 +646,7 @@ TEST_F(CBrowserCatalogTest, ChangedGameStartsItsListAgain)
 	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
-	m_browser.ReplaceCatalog(m_protocols, ChangeGame("kingpin"));
+	m_browser.ReplaceCatalog(m_protocols, m_stores, ChangeGame("kingpin"));
 
 	SServerEntry const* const pRow{ FindRow(m_server.GetAddress()) };
 
@@ -654,7 +661,7 @@ TEST_F(CBrowserCatalogTest, ServersAreAskedAgainAfterAReplace)
 	ASSERT_TRUE(m_browser.AddServer(FormatJoinAddress()).has_value());
 	ASSERT_TRUE(WaitUntilOnline());
 
-	m_browser.ReplaceCatalog(m_protocols, ChangeGame("kingpin"));
+	m_browser.ReplaceCatalog(m_protocols, m_stores, ChangeGame("kingpin"));
 
 	EXPECT_TRUE(WaitUntilOnline());
 }
@@ -690,7 +697,7 @@ TEST_F(CBrowserCatalogTest, FirstGamesSelectTheSavedGame)
 	Install({});
 	ASSERT_TRUE(StartWithServer());
 
-	m_browser.ReplaceCatalog(m_protocols, m_games);
+	m_browser.ReplaceCatalog(m_protocols, m_stores, m_games);
 
 	EXPECT_EQ(m_browser.GetSelectedGame(), Fixtures::GetGameId("kingpin"));
 	EXPECT_TRUE(m_browser.GetStatus(m_browser.GetSelectedGame()).isRefreshing);
@@ -701,7 +708,7 @@ TEST_F(CBrowserCatalogTest, LastGameGoingSelectsNoGame)
 {
 	ASSERT_TRUE(StartWithServer());
 
-	m_browser.ReplaceCatalog(m_protocols, {});
+	m_browser.ReplaceCatalog(m_protocols, m_stores, {});
 	m_browser.Update();
 
 	EXPECT_EQ(m_browser.GetSelectedGame(), Query::NoGame);
@@ -715,10 +722,23 @@ TEST_F(CBrowserCatalogTest, RemovedGameFindsItsInstallsWhenItReturns)
 
 	std::erase_if(withoutKingpin, [](Query::SGameDefinition const& game) { return game.key == "kingpin"; });
 	Initialize();
-	m_browser.ReplaceCatalog(m_protocols, withoutKingpin);
-	m_browser.ReplaceCatalog(m_protocols, m_games);
+	m_browser.ReplaceCatalog(m_protocols, m_stores, withoutKingpin);
+	m_browser.ReplaceCatalog(m_protocols, m_stores, m_games);
 
 	EXPECT_EQ(m_browser.GetInstallLaunchers(Fixtures::GetGameId("kingpin")).size(), 1u);
 }
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CBrowserCatalogTest, ChangedStoresAloneReplaceTheStoreCatalog)
+{
+	Initialize();
+
+	std::vector<Query::SStoreDefinition> stores{ m_stores };
+
+	stores.emplace_back(Query::SStoreDefinition{ "teststore", "Test Store", { "{id}" } });
+
+	EXPECT_TRUE(m_browser.ReplaceCatalog(m_protocols, stores, m_games));
+	EXPECT_NE(Query::FindStore("teststore"), nullptr);
+}
+
 } // namespace
 } // namespace Lkt::Browser

@@ -14,6 +14,7 @@
 #include "query/game_catalog.hpp"
 #include "query/game_definition.hpp"
 #include "query/join_address.hpp"
+#include "query/store_catalog.hpp"
 #include <tge/assert.hpp>
 #include <algorithm>
 #include <optional>
@@ -465,16 +466,25 @@ void CBrowser::MoveGame(Query::EGame game, Query::EGame target)
 
 //////////////////////////////////////////////////////////////////////////
 // Swapping stops the engine, which would end a refresh for nothing.
-bool CBrowser::ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SGameDefinition> games)
+// Stores are swapped on their own, as the engine never reads them.
+bool CBrowser::ReplaceCatalog(std::vector<Query::SProtocolDefinition> protocols, std::vector<Query::SStoreDefinition> stores,
+	std::vector<Query::SGameDefinition> games)
 {
-	bool const isChanged{ !IsRunning(protocols, games) };
+	bool const areGamesChanged{ !IsRunning(protocols, games) };
+	bool const areStoresChanged{ !std::ranges::equal(stores, Query::GetStoreCatalog()) };
 
-	if (isChanged)
+	if (areStoresChanged)
+	{
+		Query::TerminateStoreCatalog();
+		Query::InitializeStoreCatalog(stores);
+	}
+
+	if (areGamesChanged)
 	{
 		SwapCatalog(std::move(protocols), std::move(games));
 	}
 
-	return isChanged;
+	return areGamesChanged || areStoresChanged;
 }
 
 //////////////////////////////////////////////////////////////////////////

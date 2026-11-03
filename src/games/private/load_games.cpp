@@ -2,6 +2,7 @@
 #include "game_json.hpp"
 #include "layer_name.hpp"
 #include "merge_patch.hpp"
+#include "store_json.hpp"
 #include "try_conversations.hpp"
 #include "user_file_size.hpp"
 #include "games/game_files.hpp"
@@ -30,6 +31,7 @@ namespace
 using Scripts = std::vector<std::unique_ptr<Script::CProtocolScript>>;
 
 constexpr std::string_view ProtocolExtension{ ".lua" };
+constexpr std::string_view StoreExtension{ ".json" };
 constexpr std::string_view KeyRule{ "its name must use only lower-case letters, digits, '-' and '_'" };
 
 //////////////////////////////////////////////////////////////////////////
@@ -85,21 +87,21 @@ std::string Shown(std::string_view layer, std::string_view path)
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Its protocols/<name>.lua by name; nothing from an empty folder path.
-std::map<std::string, std::string> ReadProtocolSources(std::filesystem::path const& folder, std::string_view layer,
+// Its <kind>/<name><extension> files by name, such as protocols/quake2.lua; nothing from an empty folder path.
+std::map<std::string, std::string> ReadSources(std::filesystem::path const& folder, std::string_view kind, std::string_view extension, std::string_view layer,
 	std::vector<Query::SGameProblem>& problems)
 {
 	std::map<std::string, std::string> sources{};
 	std::vector<std::filesystem::directory_entry> const entries{ folder.empty() ? std::vector<std::filesystem::directory_entry>{}
-		: ListFolder(folder / "protocols", Shown(layer, "protocols"), problems) };
+		: ListFolder(folder / kind, Shown(layer, kind), problems) };
 
 	for (std::filesystem::directory_entry const& entry : entries)
 	{
 		std::filesystem::path const& path{ entry.path() };
-		std::string const shownAs{ Shown(layer, std::format("protocols/{}", path.filename().string())) };
+		std::string const shownAs{ Shown(layer, std::format("{}/{}", kind, path.filename().string())) };
 		std::string const name{ path.stem().string() };
 
-		if (path.extension() == ProtocolExtension)
+		if (path.extension() == extension)
 		{
 			std::expected<std::optional<std::string>, std::string> text{ IsValidKey(name) ? ReadUserFile(path, shownAs)
 				: std::unexpected{ std::format("{}: {}", shownAs, KeyRule) } };
@@ -210,6 +212,60 @@ void LoadProtocols(std::map<std::string, std::string> const& downloaded, std::st
 				std::vector<Query::SProtocolOption>{ options.begin(), options.end() }, isUserInUse ? userOrigin : Query::EProtocolOrigin::Downloaded,
 				downloadedVersion });
 			scripts.emplace_back(std::move(pScript));
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::optional<Query::SStoreDefinition> ReadStore(std::string_view key, std::string_view text, std::string_view shownAs, std::vector<Query::SGameProblem>& problems)
+{
+	std::expected<Query::SStoreDefinition, std::string> store{ ReadStoreJson(text) };
+	std::optional<Query::SStoreDefinition> result{};
+
+	if (store.has_value())
+	{
+		store->key = key;
+		result = std::move(*store);
+	}
+	else
+	{
+		problems.emplace_back(Query::SGameProblem{ std::format("{}: {}", shownAs, store.error()), {} });
+	}
+
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// A user file replaces the downloaded one of its key; when it cannot be read, the downloaded one stays. The downloaded
+// one is read either way, for its problems.
+void LoadStores(std::map<std::string, std::string> const& downloaded, std::string_view layer, std::map<std::string, std::string> const& user,
+	SGameContent& content)
+{
+	std::set<std::string> keys{};
+
+	for (auto const& [key, text] : downloaded)
+	{
+		keys.insert(key);
+	}
+
+	for (auto const& [key, text] : user)
+	{
+		keys.insert(key);
+	}
+
+	for (std::string const& key : keys)
+	{
+		std::string const fileName{ std::format("stores/{}{}", key, StoreExtension) };
+		auto const userText{ user.find(key) };
+		auto const downloadedText{ downloaded.find(key) };
+		std::optional<Query::SStoreDefinition> const fromUser{ (userText != user.end())
+			? ReadStore(key, userText->second, fileName, content.problems) : std::nullopt };
+		std::optional<Query::SStoreDefinition> const fromDownloaded{ (downloadedText != downloaded.end())
+			? ReadStore(key, downloadedText->second, Shown(layer, fileName), content.problems) : std::nullopt };
+
+		if (fromUser.has_value() || fromDownloaded.has_value())
+		{
+			content.stores.emplace_back(fromUser.has_value() ? *fromUser : *fromDownloaded);
 		}
 	}
 }
@@ -326,10 +382,13 @@ SGameContent LoadGames(std::filesystem::path const& downloadedDir, std::filesyst
 	SGameContent content{};
 	Scripts scripts{};
 	std::string const layer{ NameLayer(downloadedDir) };
-	std::map<std::string, std::string> const downloadedProtocols{ ReadProtocolSources(downloadedDir, layer, content.problems) };
-	std::map<std::string, std::string> const userProtocols{ ReadProtocolSources(userDir, {}, content.problems) };
+	std::map<std::string, std::string> const downloadedProtocols{ ReadSources(downloadedDir, "protocols", ProtocolExtension, layer, content.problems) };
+	std::map<std::string, std::string> const userProtocols{ ReadSources(userDir, "protocols", ProtocolExtension, {}, content.problems) };
+	std::map<std::string, std::string> const downloadedStores{ ReadSources(downloadedDir, "stores", StoreExtension, layer, content.problems) };
+	std::map<std::string, std::string> const userStores{ ReadSources(userDir, "stores", StoreExtension, {}, content.problems) };
 
 	LoadProtocols(downloadedProtocols, layer, userProtocols, content, scripts);
+	LoadStores(downloadedStores, layer, userStores, content);
 
 	std::map<std::string, std::filesystem::path> const downloadedGames{ ListGameFolders(downloadedDir, layer, content.problems) };
 	std::map<std::string, std::filesystem::path> const userGames{ ListGameFolders(userDir, {}, content.problems) };
