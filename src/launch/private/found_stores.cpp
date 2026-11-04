@@ -5,17 +5,13 @@
 #include <algorithm>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <vector>
 
-#if defined(TGE_PLATFORM_WINDOWS)
-#include "registry.hpp"
-#elif defined(TGE_PLATFORM_LINUX)
+#if defined(TGE_PLATFORM_LINUX)
 #include <expected>
-#include <string_view>
-#else
-#error "Unsupported platform"
-#endif // defined(TGE_PLATFORM_WINDOWS)
+#endif // defined(TGE_PLATFORM_LINUX)
 
 namespace Lkt::Launch
 {
@@ -75,19 +71,15 @@ std::optional<std::filesystem::path> FindLocatedProgram(std::span<SLocatedProgra
 
 #if defined(TGE_PLATFORM_WINDOWS)
 //////////////////////////////////////////////////////////////////////////
-ERegistryRoot ToRegistryRoot(Query::EStoreRegistryRoot root)
-{
-	return (root == Query::EStoreRegistryRoot::LocalMachine) ? ERegistryRoot::LocalMachine : ERegistryRoot::CurrentUser;
-}
-
-//////////////////////////////////////////////////////////////////////////
-void FindOnWindows(Query::SStoreDefinition const& store, std::span<SLocatedProgram const> located, std::vector<SFoundStore>& found)
+void FindOnWindows(Query::SStoreDefinition const& store, SLaunchEnvironment const& environment, std::span<SLocatedProgram const> located,
+	std::vector<SFoundStore>& found)
 {
 	std::optional<std::filesystem::path> const locatedProgram{ FindLocatedProgram(located, store.key) };
 
 	for (Query::SWindowsStoreInstall const& install : store.onWindows)
 	{
-		std::filesystem::path folder{ ReadRegistryFolder(ToRegistryRoot(install.folder.root), install.folder.key, install.folder.value) };
+		// No reader, no registry: a test's environment must never find, and start, the machine's real store.
+		std::filesystem::path folder{ (environment.readStoreFolder != nullptr) ? environment.readStoreFolder(install.folder) : std::filesystem::path{} };
 		std::error_code error{};
 
 		folder.make_preferred();
@@ -181,7 +173,7 @@ std::vector<SFoundStore> FindStores(std::span<Query::SStoreDefinition const> sto
 	for (Query::SStoreDefinition const& store : stores)
 	{
 #if defined(TGE_PLATFORM_WINDOWS)
-		FindOnWindows(store, located, found);
+		FindOnWindows(store, environment, located, found);
 #elif defined(TGE_PLATFORM_LINUX)
 		FindOnLinux(store, environment, located, found);
 #else

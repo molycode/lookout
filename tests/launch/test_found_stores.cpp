@@ -47,6 +47,9 @@ protected:
 		m_environment.dataHome = m_root / "data";
 		m_environment.searchPath = (m_root / "bin").string();
 		m_store = Query::SStoreDefinition{ "steam", "Steam", { "-applaunch", "{id}" }, Query::EStoreLibraries::Steam, {}, {} };
+#if defined(TGE_PLATFORM_WINDOWS)
+		m_environment.readStoreFolder = ReadLaunchEnvironment().readStoreFolder;
+#endif // defined(TGE_PLATFORM_WINDOWS)
 	}
 
 	void TearDown() override
@@ -211,6 +214,19 @@ TEST_F(CFoundStoresTest, RegistryFolderWithItsProgramIsFound)
 TEST_F(CFoundStoresTest, MissingRegistryValueFindsNothing)
 {
 	m_store.onWindows = { Query::SWindowsStoreInstall{ Query::SStoreRegistryValue{ Query::EStoreRegistryRoot::CurrentUser, m_key, "SteamPath" }, "steam.exe" } };
+
+	EXPECT_TRUE(Find().empty());
+}
+
+//////////////////////////////////////////////////////////////////////////
+TEST_F(CFoundStoresTest, EnvironmentWithoutAReaderLeavesTheRegistryAlone)
+{
+	std::filesystem::path const folder{ m_root / "Steam" };
+
+	WriteProgram(folder / "steam.exe");
+	WriteFolderValue(folder);
+	m_store.onWindows = { Query::SWindowsStoreInstall{ Query::SStoreRegistryValue{ Query::EStoreRegistryRoot::CurrentUser, m_key, "SteamPath" }, "steam.exe" } };
+	m_environment.readStoreFolder = nullptr;
 
 	EXPECT_TRUE(Find().empty());
 }

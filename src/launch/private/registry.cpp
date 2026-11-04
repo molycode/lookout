@@ -3,6 +3,7 @@
 
 #if defined(TGE_PLATFORM_WINDOWS)
 #include "loggers.hpp"
+#include "query/store_registry_value.hpp"
 #include <charconv>
 #include <cstdint>
 #include <cwchar>
@@ -91,6 +92,12 @@ void AddGogInstall(HKEY games, std::wstring const& subkey, std::vector<SGogInsta
 		installs.emplace_back(number, std::filesystem::path{ *folder }, ToUtf8(name.value_or(std::wstring{})));
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////
+ERegistryRoot ToRegistryRoot(Query::EStoreRegistryRoot root)
+{
+	return (root == Query::EStoreRegistryRoot::LocalMachine) ? ERegistryRoot::LocalMachine : ERegistryRoot::CurrentUser;
+}
 } // namespace
 
 //////////////////////////////////////////////////////////////////////////
@@ -106,6 +113,12 @@ std::filesystem::path ReadRegistryFolder(ERegistryRoot root, std::string_view ke
 	}
 
 	return folder;
+}
+
+//////////////////////////////////////////////////////////////////////////
+std::filesystem::path ReadStoreFolder(Query::SStoreRegistryValue const& folder)
+{
+	return ReadRegistryFolder(ToRegistryRoot(folder.root), folder.key, folder.value);
 }
 
 //////////////////////////////////////////////////////////////////////////

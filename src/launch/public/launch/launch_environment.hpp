@@ -5,6 +5,11 @@
 #include <string>
 #include <vector>
 
+namespace Lkt::Query
+{
+struct SStoreRegistryValue;
+} // namespace Lkt::Query
+
 namespace Lkt::Launch
 {
 struct SLaunchEnvironment final
@@ -20,6 +25,7 @@ struct SLaunchEnvironment final
 	std::filesystem::path systemDrive{};
 	std::vector<std::filesystem::path> steamLibraries{};
 	std::vector<SGogInstall> gogInstalls{};
+	std::filesystem::path (*readStoreFolder)(Query::SStoreRegistryValue const&){ nullptr };
 };
 
 SLaunchEnvironment ReadLaunchEnvironment();

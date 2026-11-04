@@ -88,6 +88,7 @@ SLaunchEnvironment ReadLaunchEnvironment()
 	environment.systemDrive = ReadKnownFolder(FOLDERID_Windows, "Windows").root_path();
 	environment.steamLibraries = ReadSteamLibraries(steamFolder.make_preferred());
 	environment.gogInstalls = ReadGogInstalls(ERegistryRoot::LocalMachine, "SOFTWARE\\GOG.com\\Games");
+	environment.readStoreFolder = ReadStoreFolder;
 #elif defined(TGE_PLATFORM_LINUX)
 	std::filesystem::path const home{ GetEnvironment("HOME") };
 	std::filesystem::path const dataHome{ GetEnvironment("XDG_DATA_HOME") };
